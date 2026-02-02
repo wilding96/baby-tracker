@@ -1,20 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
+// 👇 1. 引入组件
+import MobileNav from "@/components/layout/mobile-nav"; 
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "丁小宝成长日记",
-  description: "一个记录丁小宝成长的日记",
+  title: "Baby Tracker",
+  description: "记录宝宝成长的每一刻",
 };
 
 export default function RootLayout({
@@ -23,11 +17,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+    <html lang="zh-CN">
+      <body className={inter.className}>
+        <div className="min-h-screen bg-gray-50 pb-20"> {/* 👇 2. 加个 pb-20 防止内容被底部栏遮挡 */}
+          {children}
+        </div>
+        
+        {/* 👇 3. 放入底部导航 */}
+        <MobileNav />
       </body>
     </html>
   );

@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
+import avatar from "@/assets/images/avatar.png"
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -61,8 +63,19 @@ export default function ProfilePage() {
     }
   };
 
+
   return (
     <main className="container mx-auto max-w-md p-4">
+      {/* 图片，展示宝宝头像 */}
+      <div className="flex justify-center mb-8">
+        <Image
+          src={avatar}
+          alt="宝宝头像"
+          width={128}
+          height={128}
+          className="rounded-full"
+        />
+      </div>
       {/* 顶部导航 */}
       <div className="flex items-center gap-2 mb-8">
         <Link href="/settings" className="p-2 -ml-2 hover:bg-gray-100 rounded-full">

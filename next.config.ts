@@ -1,21 +1,17 @@
-import type { NextConfig } from "next";
-// import withPWAInit from "@ducanh2912/next-pwa";
+import withSerwistInit from "@serwist/next";
 
-// const withPWA = withPWAInit({
-//   dest: "public", // Service Worker 输出目录
-//   cacheOnFrontEndNav: true, // 前端导航缓存
-//   aggressiveFrontEndNavCaching: true,
-//   reloadOnOnline: true, // 网络恢复时刷新
-//   disable: process.env.NODE_ENV === "development", // ⚠️ 开发环境禁用 PWA，否则会有缓存导致你改代码不生效！
-//   workboxOptions: {
-//     disableDevLogs: true,
-//   },
-// });
+const withSerwist = withSerwistInit({
+  // 这里的 swSrc 就是我们刚才建的文件路径
+  swSrc: "src/app/sw.ts",
+  // 输出路径
+  swDest: "public/sw.js",
+  // 开发环境禁用
+  disable: process.env.NODE_ENV === "development",
+});
 
-const nextConfig: NextConfig = {
-  /* config options here */
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // 其他配置保持不变
 };
 
-export default nextConfig;
-
-// export default withPWA(nextConfig);
+export default withSerwist(nextConfig);

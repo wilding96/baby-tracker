@@ -2,17 +2,18 @@ import { defaultCache } from "@serwist/next/worker";
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
 import { Serwist } from "serwist";
 
-// 定义 Service Worker 的类型
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
-    __WB_MANIFEST: (PrecacheEntry | string)[] | undefined;
+    // ⚠️ 注意这里：必须叫 __SW_MANIFEST，不能叫别的
+    __SW_MANIFEST: (PrecacheEntry | string)[] | undefined;
   }
 }
 
 declare const self: ServiceWorkerGlobalScope;
 
 const serwist = new Serwist({
-  precacheEntries: self.__WB_MANIFEST,
+  // ⚠️ 这里也要改
+  precacheEntries: self.__SW_MANIFEST,
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,

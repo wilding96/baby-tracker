@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import avatar from "@/assets/images/avatar.png"
+import avatar from "@/assets/images/avatar.png";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -25,8 +25,12 @@ export default function ProfilePage() {
   // 1. 页面加载时：获取宝宝信息
   useEffect(() => {
     const fetchBaby = async () => {
-      const { data, error } = await supabase.from("babies").select("*").limit(1).single();
-      
+      const { data, error } = await supabase
+        .from("babies")
+        .select("*")
+        .limit(1)
+        .single();
+
       if (data) {
         setFormData({
           id: data.id,
@@ -46,10 +50,10 @@ export default function ProfilePage() {
 
     const { error } = await supabase
       .from("babies")
-      .update({ 
-        name: formData.name, 
+      .update({
+        name: formData.name,
         birthday: formData.birthday,
-        gender: formData.gender 
+        gender: formData.gender,
       })
       .eq("id", formData.id); // ⚠️ 必须指定 ID，否则不知道更新谁
 
@@ -63,23 +67,19 @@ export default function ProfilePage() {
     }
   };
 
-
   return (
     <main className="container mx-auto max-w-md p-4">
       {/* 图片，展示宝宝头像 */}
-      <div className="flex justify-center mb-8">
-        <Image
-          src={avatar}
-          alt="宝宝头像"
-          width={128}
-          height={128}
-          className="rounded-full"
-        />
+      <div className="flex justify-center">
+        <Image src={avatar} alt="宝宝头像" width={300} height={200} />
       </div>
       {/* 顶部导航 */}
       <div className="flex items-center gap-2 mb-8">
-        <Link href="/settings" className="p-2 -ml-2 hover:bg-gray-100 rounded-full">
-            <ArrowLeft size={24} />
+        <Link
+          href="/settings"
+          className="p-2 -ml-2 hover:bg-gray-100 rounded-full"
+        >
+          <ArrowLeft size={24} />
         </Link>
         <h1 className="text-xl font-bold">编辑宝宝资料</h1>
       </div>
@@ -88,22 +88,24 @@ export default function ProfilePage() {
         {/* 名字输入 */}
         <div className="space-y-2">
           <Label htmlFor="name">宝宝小名</Label>
-          <Input 
-            id="name" 
-            value={formData.name} 
-            onChange={(e) => setFormData({...formData, name: e.target.value})}
-            placeholder="例如：毛豆" 
+          <Input
+            id="name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            placeholder="例如：毛豆"
           />
         </div>
 
         {/* 生日选择 (使用原生 date picker，移动端体验最好) */}
         <div className="space-y-2">
-          <Label htmlFor="birthday">出生日期</Label>
-          <Input 
-            id="birthday" 
+          <Label htmlFor="birthday">出生日期(预产期）</Label>
+          <Input
+            id="birthday"
             type="date"
-            value={formData.birthday} 
-            onChange={(e) => setFormData({...formData, birthday: e.target.value})}
+            value={formData.birthday}
+            onChange={(e) =>
+              setFormData({ ...formData, birthday: e.target.value })
+            }
           />
         </div>
 
@@ -112,14 +114,16 @@ export default function ProfilePage() {
           <Label>性别</Label>
           <div className="flex gap-4">
             {["男", "女"].map((g) => (
-              <div 
+              <div
                 key={g}
-                onClick={() => setFormData({...formData, gender: g})}
+                onClick={() => setFormData({ ...formData, gender: g })}
                 className={`
                   flex-1 py-3 text-center rounded-lg border cursor-pointer transition-all
-                  ${formData.gender === g 
-                    ? "bg-black text-white border-black" 
-                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"}
+                  ${
+                    formData.gender === g
+                      ? "bg-black text-white border-black"
+                      : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                  }
                 `}
               >
                 {g}
@@ -129,10 +133,10 @@ export default function ProfilePage() {
         </div>
 
         {/* 保存按钮 */}
-        <Button 
-          className="w-full mt-8" 
-          size="lg" 
-          onClick={handleSave} 
+        <Button
+          className="w-full mt-8"
+          size="lg"
+          onClick={handleSave}
           disabled={loading}
         >
           {loading ? "正在保存..." : "保存修改"}

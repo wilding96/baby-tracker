@@ -59,7 +59,9 @@ export default function SettingsPage() {
         .single();
 
       if (data && data.babies) {
+        // @ts-ignore
         setBabyName(data.babies.name || "未命名宝宝");
+        // @ts-ignore
         setInviteCode(data.babies.invite_code || "无");
       }
     };

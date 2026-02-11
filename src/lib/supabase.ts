@@ -1,8 +1,9 @@
-import { createClient} from '@supabase/supabase-js'
+// src/lib/supabase.ts
+import { createBrowserClient } from "@supabase/ssr";
 
-// 读取环境变量
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-
-// 创建并导出客户端实例
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// ⚠️ 必须用 createBrowserClient，它会自动把 Session 写入 Cookies
+// 如果你用的是普通的 createClient，Middleware 是读不到登录状态的！
+export const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);

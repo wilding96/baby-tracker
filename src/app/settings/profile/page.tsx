@@ -54,11 +54,14 @@ export default function ProfilePage() {
 
       if (data && data.babies) {
         const baby = data.babies;
-        // @ts-ignore
         setFormData({
+          // @ts-ignore
           id: baby.id,
+          // @ts-ignore
           name: baby.name || "",
+          // @ts-ignore
           birthday: baby.birthday || "",
+          // @ts-ignore
           gender: baby.gender || "male", // 确保回显正确
         });
       } else {

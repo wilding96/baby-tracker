@@ -48,7 +48,7 @@ export default function LoginPage() {
           <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto text-blue-600">
             <Baby size={32} />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">毛豆成长记录</h1>
+          <h1 className="text-2xl font-bold text-gray-900">宝宝成长记录</h1>
           <p className="text-gray-500 text-sm">记录宝宝成长的每一刻</p>
         </div>
 
@@ -63,7 +63,7 @@ export default function LoginPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label>密码</Label>
+            <Label>密码（6位以上）</Label>
             <Input
               type="password"
               placeholder="••••••••"
@@ -73,8 +73,9 @@ export default function LoginPage() {
           </div>
         </div>
 
+        {/* 注册背景是绿色，登录是蓝色 */}
         <Button
-          className="w-full bg-blue-600 hover:bg-blue-700"
+          className={`w-full ${isSignUp ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700"}`}
           onClick={handleAuth}
           disabled={loading}
         >

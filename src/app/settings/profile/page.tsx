@@ -92,7 +92,7 @@ export default function ProfilePage() {
             id="name"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="例如：毛豆"
+            placeholder="例如：宝宝"
           />
         </div>
 

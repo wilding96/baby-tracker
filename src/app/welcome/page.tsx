@@ -167,7 +167,7 @@ export default function WelcomePage() {
         <div className="w-full max-w-sm space-y-4">
           <h2 className="text-xl font-bold text-center">给宝宝起个名字</h2>
           <Input
-            placeholder="例如：毛豆"
+            placeholder="例如：宝宝"
             value={babyName}
             onChange={(e) => setBabyName(e.target.value)}
             className="text-center text-lg h-12"

@@ -1,6 +1,6 @@
 {
   "name": "Baby Tracker",
-  "short_name": "毛豆成长",
+  "short_name": "宝宝成长",
   "description": "记录宝宝成长的每一刻",
   "start_url": "/",
   "display": "standalone",

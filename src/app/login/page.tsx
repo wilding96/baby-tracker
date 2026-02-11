@@ -85,6 +85,9 @@ export default function LoginPage() {
               placeholder="name@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="email"
             />
           </div>
           <div className="space-y-2">
@@ -94,6 +97,9 @@ export default function LoginPage() {
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="current-password"
             />
           </div>
         </div>

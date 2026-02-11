@@ -197,7 +197,7 @@ export default function WelcomePage() {
                 type="date"
                 value={birthday}
                 onChange={(e) => setBirthday(e.target.value)}
-                className="pl-10" // 给图标留位置
+                className="pl-10 w-full" // 给图标留位置
               />
               <Calendar
                 className="absolute left-3 top-2.5 text-gray-400"

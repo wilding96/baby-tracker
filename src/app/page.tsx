@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   format,
   differenceInMinutes,
   startOfDay,
   differenceInDays,
-  addDays,
 } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { supabase } from "@/lib/supabase";
@@ -20,7 +19,6 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,6 +47,7 @@ interface LogRecord {
   end_time: string | null;
   details: LogDetails | null;
   created_at: string;
+  baby_id: string; // 确保包含 baby_id
 }
 
 interface DashboardData {
@@ -69,14 +68,15 @@ interface DiaperStats {
 
 export default function Home() {
   const [babyName, setBabyName] = useState<string>("加载中...");
-  const [babyBirthday, setBabyBirthday] = useState<string | null>(null); // 新增：存生日
+  const [babyBirthday, setBabyBirthday] = useState<string | null>(null);
+  const [currentBabyId, setCurrentBabyId] = useState<string | null>(null); // 新增：存ID用于后续操作
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshKey, setRefreshKey] = useState<number>(0);
 
   // --- 编辑/删除相关的状态 ---
-  const [selectedLog, setSelectedLog] = useState<LogRecord | null>(null); // 当前选中的记录
-  const [isDialogOpen, setIsDialogOpen] = useState(false); // 对话框开关
-  const [editTime, setEditTime] = useState(""); // 编辑时间用的临时状态
+  const [selectedLog, setSelectedLog] = useState<LogRecord | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editTime, setEditTime] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
   const [data, setData] = useState<DashboardData>({
@@ -94,39 +94,73 @@ export default function Home() {
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        // 1. 获取宝宝名字和生日
-        const { data: baby } = await supabase
-          .from("babies")
-          .select("name, birthday") // 多查一个 birthday
-          .limit(1)
-          .single<{ name: string; birthday: string }>();
-
-        if (baby) {
-          setBabyName(baby.name);
-          setBabyBirthday(baby.birthday);
+        // 1. 获取当前登录用户
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          setBabyName("未登录");
+          setLoading(false);
+          return;
         }
 
-        // 2. 获取最近一次喂奶
+        // 2. 🔥 关键修改：通过关系表查找关联的宝宝
+        const { data: relation, error: relationError } = await supabase
+          .from("baby_users")
+          .select(
+            `
+            baby_id,
+            babies (
+              id,
+              name,
+              birthday
+            )
+          `,
+          )
+          .eq("user_id", user.id)
+          .single();
+
+        // 3. 处理宝宝信息
+        if (relationError || !relation || !relation.babies) {
+          console.log("未找到关联宝宝", relationError);
+          setBabyName("未绑定宝宝");
+          setLoading(false);
+          return;
+        }
+
+        const babyData = relation.babies;
+        // @ts-ignore (忽略类型推断问题，确保拿到数据)
+        setBabyName(babyData.name);
+        // @ts-ignore (忽略类型推断问题，确保拿到数据)
+        setBabyBirthday(babyData.birthday);
+        // @ts-ignore (忽略类型推断问题，确保拿到数据)
+        setCurrentBabyId(babyData.id);
+        // @ts-ignore (忽略类型推断问题，确保拿到数据)
+        const babyId = babyData.id; // 暂存ID用于下面的查询
+
+        // 4. 获取最近一次喂奶 (🔥 必须过滤 baby_id)
         const { data: lastFeed } = await supabase
           .from("logs")
           .select("*")
+          .eq("baby_id", babyId) // <--- 关键过滤
           .eq("type", "feeding")
           .order("start_time", { ascending: false })
           .limit(1)
-          .single<LogRecord>();
+          .maybeSingle<LogRecord>();
 
-        // 3. 获取今天记录
+        // 5. 获取今天记录 (🔥 必须过滤 baby_id)
         const todayStart = startOfDay(new Date()).toISOString();
         const { data: todayLogs } = await supabase
           .from("logs")
           .select("*")
+          .eq("baby_id", babyId) // <--- 关键过滤
           .gte("start_time", todayStart)
           .order("start_time", { ascending: false })
           .returns<LogRecord[]>();
 
         const safeTodayLogs = todayLogs || [];
 
-        // 统计逻辑
+        // 统计逻辑 (保持不变)
         const sleepLogs = safeTodayLogs.filter((l) => l.type === "sleep");
         const totalSleepMinutes = sleepLogs.reduce(
           (acc, log) => acc + (log.details?.duration_minutes || 0),
@@ -168,23 +202,18 @@ export default function Home() {
     const today = new Date();
     const days = differenceInDays(today, birthDate);
 
-    // 如果是未来 (预产期)
     if (days < 0) {
       return `预计还有 ${Math.abs(days)} 天出生`;
     }
-    // 如果是今天
     if (days === 0) {
       return "今天出生 🎉";
     }
-    // 已经出生
-    return `第 ${days + 1} 天`; // 出生当天算第1天
+    return `第 ${days + 1} 天`;
   };
 
   // 2. 打开编辑窗口
   const handleLogClick = (log: LogRecord) => {
     setSelectedLog(log);
-    // 把记录的时间格式化好填入输入框，方便修改
-    // input type="datetime-local" 需要 yyyy-MM-ddThh:mm 格式
     setEditTime(format(new Date(log.start_time), "yyyy-MM-dd'T'HH:mm"));
     setIsDialogOpen(true);
   };
@@ -198,21 +227,20 @@ export default function Home() {
     const { error } = await supabase
       .from("logs")
       .delete()
-      .eq("id", selectedLog.id);
+      .eq("id", selectedLog.id); // ID 是唯一的，这里其实不需要 baby_id，但 RLS 会自动校验
+
     setActionLoading(false);
     setIsDialogOpen(false);
 
     if (error) alert("删除失败");
-    else setRefreshKey((k) => k + 1); // 刷新列表
+    else setRefreshKey((k) => k + 1);
   };
 
-  // 4. 执行更新 (只允许改时间，改类型太复杂建议删了重记)
+  // 4. 执行更新
   const handleUpdate = async () => {
     if (!selectedLog) return;
     setActionLoading(true);
 
-    // 如果是睡觉，还需要重新计算时长，这里简化处理，只改开始时间
-    // 真实的更新逻辑可能很复杂，MVP阶段建议只提供“修改开始时间”
     const { error } = await supabase
       .from("logs")
       .update({ start_time: new Date(editTime).toISOString() })
@@ -233,14 +261,26 @@ export default function Home() {
       : { val: (m / 60).toFixed(1), unit: "小时" };
   })();
 
+  // 如果还没加载完，或者未绑定宝宝，简单显示
+  if (!loading && babyName === "未绑定宝宝") {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
+        <h2 className="text-xl font-bold mb-2">👋 欢迎</h2>
+        <p className="text-gray-500 mb-6">您还没有绑定任何宝宝档案。</p>
+        <Link href="/settings/profile">
+          <Button>去设置页创建或加入</Button>
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <main className="container mx-auto max-w-md p-4 space-y-4 pb-24 min-h-screen">
-      {/* Header: 显示天数 */}
+      {/* Header */}
       <header className="flex items-center justify-between py-1">
         <div>
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             👋 {babyName}
-            {/* ✨ 修正1: 显示天数徽标 */}
             {babyBirthday && (
               <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-normal border border-yellow-200">
                 {getBabyAgeText()}
@@ -258,8 +298,9 @@ export default function Home() {
           >
             <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
           </button>
-          <Link href="/settings/profile">
-            <div className="h-10 w-10 rounded-full bg-gray-100 border-2 border-white shadow-sm flex items-center justify-center">
+          <Link href="/settings">
+            <div className="h-10 w-10 rounded-full bg-gray-100 border-2 border-white shadow-sm flex items-center justify-center overflow-hidden">
+              {/* 这里放个图标或者头像 */}
               <Baby size={20} className="text-gray-400" />
             </div>
           </Link>
@@ -333,7 +374,6 @@ export default function Home() {
                 </span>
                 <span className="ml-1 text-xs text-gray-600">次</span>
               </div>
-              {/* ✨ 修正2: 加上混合(Mixed)的显示 */}
               <p className="text-[10px] text-gray-500 mt-0.5 flex gap-1">
                 <span>{data.todayDiaperDetails.dirty}💩</span>
                 <span>/</span>
@@ -358,7 +398,6 @@ export default function Home() {
           <div className="group flex items-center justify-between bg-white border border-gray-200 p-3 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-[0.98]">
             <div className="flex items-center gap-3">
               <div className="bg-gray-50 p-1.5 rounded-lg group-hover:bg-gray-100 transition-colors">
-                {/* 这里的 BarChart 图标记得从 lucide-react 引入，或者直接用 ChevronRight 也行 */}
                 <ChevronRight size={16} className="text-gray-500" />
               </div>
               <div>
@@ -366,14 +405,12 @@ export default function Home() {
                 <p className="text-[10px] text-gray-400">分析生长曲线与规律</p>
               </div>
             </div>
-            {/* 右边加个小图标装饰 */}
             <div className="text-gray-300">
               <ChevronRight size={16} />
             </div>
           </div>
         </Link>
       </section>
-      {/* 成长统计 */}
 
       {/* 列表 */}
       <section>
@@ -398,7 +435,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ✨ 修正3: 编辑/删除 弹窗 */}
+      {/* 编辑/删除 弹窗 */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-xs rounded-2xl">
           <DialogHeader>
@@ -447,7 +484,7 @@ export default function Home() {
   );
 }
 
-// LogItem 组件保持不变，为了节省篇幅我简化了展示，直接用你之前的即可
+// LogItem 组件
 function LogItem({ log }: { log: LogRecord }) {
   const timeStr = format(new Date(log.start_time), "HH:mm");
   let icon, title, desc, colorClass;

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import avatar from "@/assets/images/avatar.png";
+import { InstallPrompt } from "@/components/InstallPrompt";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -32,6 +33,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false); // 用于退出登录
   const [copied, setCopied] = useState(false); // 用于复制反馈
   const [notifications, setNotifications] = useState(true);
+  // 新增控制安装弹窗的 state
+  const [showInstall, setShowInstall] = useState(false);
 
   // ✨ 核心逻辑更新：获取宝宝信息 + 邀请码
   useEffect(() => {
@@ -80,6 +83,8 @@ export default function SettingsPage() {
 
   return (
     <main className="min-h-screen bg-[#F2F2F7] pb-24">
+      {/* 3. 把弹窗组件放在最下面 (不可见，只有触发时才显示) */}
+      <InstallPrompt open={showInstall} onOpenChange={setShowInstall} />
       {/* 1. 顶部大标题 */}
       <div className="pt-14 pb-6 px-6">
         <h1 className="text-3xl font-bold text-gray-900">设置</h1>
@@ -177,12 +182,17 @@ export default function SettingsPage() {
               <Switch checked={false} />
             </div>
 
-            <div className="flex items-center justify-between p-4 active:bg-gray-50 cursor-pointer">
+            <div
+              className="flex items-center justify-between p-4 active:bg-gray-50 cursor-pointer"
+              onClick={() => setShowInstall(true)}
+            >
               <div className="flex items-center gap-3">
                 <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
                   <Smartphone size={20} />
                 </div>
-                <span className="font-medium text-gray-700">桌面小组件</span>
+                <span className="font-medium text-gray-700">
+                  安装到桌面 (App)
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400">去添加</span>

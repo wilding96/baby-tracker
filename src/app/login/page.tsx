@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -137,6 +138,10 @@ export default function LoginPage() {
                   <ArrowRight size={18} className="opacity-70" />
                 </span>
               )}
+            </Button>
+
+            <Button asChild variant="outline" className="w-full h-11 rounded-xl bg-white/60">
+              <Link href="/board">不登录，先去留言板</Link>
             </Button>
 
             <div className="relative">

@@ -11,7 +11,7 @@ export default function MobileNav() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const hideOnPaths = ["/login", "/welcome", "/auth/callback"];
+  const hideOnPaths = ["/login", "/welcome", "/auth/callback", "/board"];
   const shouldHide = hideOnPaths.includes(pathname);
 
   if (shouldHide) {

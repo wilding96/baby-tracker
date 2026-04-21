@@ -379,8 +379,9 @@ export default function Home() {
         </CardContent>
       </Card>
 
-      <section className="pt-1">
-        <p className="mb-2 text-xs text-gray-500">原功能入口</p>
+      <section className="pt-1 space-y-2">
+        <p className="text-xs text-gray-500">原功能入口</p>
+
         <div className="rounded-2xl border bg-white/90 p-3 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -389,6 +390,18 @@ export default function Home() {
             </div>
             <Button asChild className="h-10 px-4">
               <Link href="/record">去记录</Link>
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border bg-white/90 p-3 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">留言板</p>
+              <p className="text-xs text-gray-500 mt-0.5">给家人留句话，记录当下心情</p>
+            </div>
+            <Button asChild variant="outline" className="h-10 px-4">
+              <Link href="/board">去留言</Link>
             </Button>
           </div>
         </div>

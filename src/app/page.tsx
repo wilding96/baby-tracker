@@ -1,13 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  format,
-  differenceInMinutes,
-  startOfDay,
-  differenceInDays,
-} from "date-fns";
+import { format, parseISO, differenceInCalendarDays, startOfDay } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,524 +10,453 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  ChevronRight,
-  Droplets,
-  Clock,
-  Moon,
-  Baby,
-  RefreshCw,
+  CalendarClock,
+  Syringe,
+  Stethoscope,
+  Sparkles,
   Trash2,
-  Pencil,
 } from "lucide-react";
 
-// --- 类型定义 ---
-interface LogDetails {
-  sub_type?: string;
-  amount?: number;
-  duration_minutes?: number;
-}
+type GrowthEventType = "checkup" | "vaccine" | "milestone" | "custom";
 
-interface LogRecord {
+interface GrowthEvent {
   id: string;
-  type: "feeding" | "sleep" | "diaper";
-  start_time: string;
-  end_time: string | null;
-  details: LogDetails | null;
+  title: string;
+  date: string;
+  type: GrowthEventType;
+  notes: string;
+  createdAt: string;
+}
+
+interface GrowthEventRow {
+  id: string;
+  title: string;
+  event_date: string;
+  type: GrowthEventType;
+  notes: string | null;
   created_at: string;
-  baby_id: string; // 确保包含 baby_id
 }
 
-interface DashboardData {
-  lastFeedTime: string | null;
-  lastFeedAmount: number | null;
-  todaySleepMinutes: number;
-  todaySleepCount: number;
-  todayDiaperCount: number;
-  todayDiaperDetails: { wet: number; dirty: number; mixed: number };
-  recentLogs: LogRecord[];
-}
-
-interface DiaperStats {
-  wet: number;
-  dirty: number;
-  mixed: number;
-}
+const eventTypeMap: Record<
+  GrowthEventType,
+  {
+    label: string;
+    badgeClass: string;
+    icon: typeof Stethoscope;
+  }
+> = {
+  checkup: {
+    label: "体检",
+    badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
+    icon: Stethoscope,
+  },
+  vaccine: {
+    label: "疫苗",
+    badgeClass: "bg-green-50 text-green-700 border-green-200",
+    icon: Syringe,
+  },
+  milestone: {
+    label: "大事件",
+    badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
+    icon: Sparkles,
+  },
+  custom: {
+    label: "其他",
+    badgeClass: "bg-gray-50 text-gray-700 border-gray-200",
+    icon: CalendarClock,
+  },
+};
 
 export default function Home() {
-  const [babyName, setBabyName] = useState<string>("加载中...");
-  const [babyBirthday, setBabyBirthday] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [refreshKey, setRefreshKey] = useState<number>(0);
+  const [babyName, setBabyName] = useState("宝宝");
+  const [babyId, setBabyId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [events, setEvents] = useState<GrowthEvent[]>([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
-  // --- 编辑/删除相关的状态 ---
-  const [selectedLog, setSelectedLog] = useState<LogRecord | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editTime, setEditTime] = useState("");
-  const [actionLoading, setActionLoading] = useState(false);
+  const [eventType, setEventType] = useState<GrowthEventType>("checkup");
+  const [eventTitle, setEventTitle] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [eventNotes, setEventNotes] = useState("");
 
-  const [data, setData] = useState<DashboardData>({
-    lastFeedTime: null,
-    lastFeedAmount: null,
-    todaySleepMinutes: 0,
-    todaySleepCount: 0,
-    todayDiaperCount: 0,
-    todayDiaperDetails: { wet: 0, dirty: 0, mixed: 0 },
-    recentLogs: [],
-  });
-
-  // --- 核心数据获取 ---
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      setLoading(true);
-      try {
-        // 1. 获取当前登录用户
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          setBabyName("未登录");
-          setLoading(false);
-          return;
-        }
+    const init = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-        // 2. 🔥 关键修改：通过关系表查找关联的宝宝
-        const { data: relation, error: relationError } = await supabase
-          .from("baby_users")
-          .select(
-            `
-            baby_id,
+      if (!user) {
+        setEvents([]);
+        return;
+      }
+
+      setUserId(user.id);
+
+      const { data: relationData, error: relationError } = await supabase
+        .from("baby_users")
+        .select(
+          `
             babies (
               id,
-              name,
-              birthday
+              name
             )
           `,
-          )
-          .eq("user_id", user.id)
-          .single();
+        )
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-        // 3. 处理宝宝信息
-        if (relationError || !relation || !relation.babies) {
-          console.log("未找到关联宝宝", relationError);
-          setBabyName("未绑定宝宝");
-          setLoading(false);
-          return;
-        }
-
-        const babyRaw = relation.babies as
-          | { id: string; name: string; birthday: string | null }
-          | { id: string; name: string; birthday: string | null }[]
-          | null;
-        const babyData = Array.isArray(babyRaw) ? babyRaw[0] : babyRaw;
-
-        if (!babyData) {
-          setBabyName("未绑定宝宝");
-          setLoading(false);
-          return;
-        }
-
-        setBabyName(babyData.name);
-        setBabyBirthday(babyData.birthday);
-        const babyId = babyData.id;
-
-        // 4/5. 并行拉取最近喂奶和今日记录
-        const todayStart = startOfDay(new Date()).toISOString();
-        const [{ data: lastFeed }, { data: todayLogs }] = await Promise.all([
-          supabase
-            .from("logs")
-            .select("*")
-            .eq("baby_id", babyId)
-            .eq("type", "feeding")
-            .order("start_time", { ascending: false })
-            .limit(1)
-            .maybeSingle<LogRecord>(),
-          supabase
-            .from("logs")
-            .select("*")
-            .eq("baby_id", babyId)
-            .gte("start_time", todayStart)
-            .order("start_time", { ascending: false })
-            .returns<LogRecord[]>(),
-        ]);
-
-        const safeTodayLogs = todayLogs || [];
-
-        // 统计逻辑 (保持不变)
-        const sleepLogs = safeTodayLogs.filter((l) => l.type === "sleep");
-        const totalSleepMinutes = sleepLogs.reduce(
-          (acc, log) => acc + (log.details?.duration_minutes || 0),
-          0,
-        );
-
-        const diaperLogs = safeTodayLogs.filter((l) => l.type === "diaper");
-        const diaperStats: DiaperStats = { wet: 0, dirty: 0, mixed: 0 };
-        diaperLogs.forEach((log) => {
-          const type = log.details?.sub_type as keyof DiaperStats;
-          if (type && diaperStats[type] !== undefined) diaperStats[type]++;
-        });
-
-        setData({
-          lastFeedTime: lastFeed?.start_time || null,
-          lastFeedAmount: lastFeed?.details?.amount || null,
-          todaySleepMinutes: totalSleepMinutes,
-          todaySleepCount: sleepLogs.length,
-          todayDiaperCount: diaperLogs.length,
-          todayDiaperDetails: diaperStats,
-          recentLogs: safeTodayLogs,
-        });
-      } catch (error) {
-        console.error("Fetch error:", error);
-      } finally {
-        setLoading(false);
+      if (relationError) {
+        console.error("加载宝宝信息失败", relationError);
+        setEvents([]);
+        return;
       }
+
+      const babyRaw = relationData?.babies as
+        | { id: string; name: string }
+        | { id: string; name: string }[]
+        | null;
+      const baby = Array.isArray(babyRaw) ? babyRaw[0] : babyRaw;
+
+      if (!baby?.id) {
+        setEvents([]);
+        return;
+      }
+
+      setBabyId(baby.id);
+      setBabyName(baby.name);
+
+      const { data: rows, error: eventsError } = await supabase
+        .from("growth_events")
+        .select("id,title,event_date,type,notes,created_at")
+        .eq("baby_id", baby.id)
+        .order("event_date", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (eventsError) {
+        console.error("加载成长事件失败", eventsError);
+        setEvents([]);
+        return;
+      }
+
+      const normalizedRows = (rows || []) as GrowthEventRow[];
+
+      setEvents(
+        normalizedRows.map((row) => ({
+          id: row.id,
+          title: row.title,
+          date: row.event_date,
+          type: row.type,
+          notes: row.notes || "",
+          createdAt: row.created_at,
+        })),
+      );
     };
 
-    fetchDashboardData();
-  }, [refreshKey]);
+    init();
+  }, []);
 
-  // --- 功能函数 ---
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-  // 1. 计算宝宝天数
-  const getBabyAgeText = () => {
-    if (!babyBirthday) return "";
-    const birthDate = new Date(babyBirthday);
-    const today = new Date();
-    const days = differenceInDays(today, birthDate);
-
-    if (days < 0) {
-      return `预计还有 ${Math.abs(days)} 天出生`;
+    const shouldOpen = sessionStorage.getItem("openGrowthEvent") === "1";
+    if (shouldOpen) {
+      sessionStorage.removeItem("openGrowthEvent");
+      requestAnimationFrame(() => setDialogOpen(true));
     }
-    if (days === 0) {
-      return "今天出生 🎉";
-    }
-    return `第 ${days + 1} 天`;
+
+    const openHandler = () => setDialogOpen(true);
+    window.addEventListener("open-growth-event", openHandler);
+
+    return () => {
+      window.removeEventListener("open-growth-event", openHandler);
+    };
+  }, []);
+
+  const sortedDesc = useMemo(
+    () =>
+      [...events].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      ),
+    [events],
+  );
+
+  const nextEvent = useMemo(() => {
+    const today = startOfDay(new Date()).getTime();
+    const upcoming = events
+      .filter((event) => new Date(event.date).getTime() >= today)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return upcoming[0] || null;
+  }, [events]);
+
+  const daysLeft = nextEvent
+    ? differenceInCalendarDays(parseISO(nextEvent.date), startOfDay(new Date()))
+    : null;
+
+  const upcomingCount = useMemo(() => {
+    const today = startOfDay(new Date()).getTime();
+    return events.filter((event) => new Date(event.date).getTime() >= today).length;
+  }, [events]);
+
+  const resetForm = () => {
+    setEventType("checkup");
+    setEventTitle("");
+    setEventDate("");
+    setEventNotes("");
   };
 
-  // 2. 打开编辑窗口
-  const handleLogClick = (log: LogRecord) => {
-    setSelectedLog(log);
-    setEditTime(format(new Date(log.start_time), "yyyy-MM-dd'T'HH:mm"));
-    setIsDialogOpen(true);
+  const handleCreateEvent = async () => {
+    if (!eventTitle.trim() || !eventDate) {
+      alert("请填写事件标题和日期");
+      return;
+    }
+
+    if (!babyId || !userId) {
+      alert("请先绑定宝宝后再记录事件");
+      return;
+    }
+
+    const payload = {
+      baby_id: babyId,
+      title: eventTitle.trim(),
+      event_date: eventDate,
+      type: eventType,
+      notes: eventNotes.trim() || null,
+      created_by: userId,
+    };
+
+    const { data, error } = await supabase
+      .from("growth_events")
+      .insert(payload)
+      .select("id,title,event_date,type,notes,created_at")
+      .single<GrowthEventRow>();
+
+    if (error || !data) {
+      alert(`保存失败：${error?.message || "请检查表结构"}`);
+      return;
+    }
+
+    const event: GrowthEvent = {
+      id: data.id,
+      title: data.title,
+      date: data.event_date,
+      type: data.type,
+      notes: data.notes || "",
+      createdAt: data.created_at,
+    };
+
+    setEvents((prev) => [event, ...prev]);
+    setDialogOpen(false);
+    resetForm();
   };
 
-  // 3. 执行删除
-  const handleDelete = async () => {
-    if (!selectedLog) return;
-    if (!confirm("确定要删除这条记录吗？无法恢复哦。")) return;
-
-    setActionLoading(true);
+  const handleDeleteEvent = async (id: string) => {
     const { error } = await supabase
-      .from("logs")
+      .from("growth_events")
       .delete()
-      .eq("id", selectedLog.id); // ID 是唯一的，这里其实不需要 baby_id，但 RLS 会自动校验
+      .eq("id", id)
+      .eq("baby_id", babyId || "");
 
-    setActionLoading(false);
-    setIsDialogOpen(false);
+    if (error) {
+      alert(`删除失败：${error.message}`);
+      return;
+    }
 
-    if (error) alert("删除失败");
-    else setRefreshKey((k) => k + 1);
+    setEvents((prev) => prev.filter((event) => event.id !== id));
   };
-
-  // 4. 执行更新
-  const handleUpdate = async () => {
-    if (!selectedLog) return;
-    setActionLoading(true);
-
-    const { error } = await supabase
-      .from("logs")
-      .update({ start_time: new Date(editTime).toISOString() })
-      .eq("id", selectedLog.id);
-
-    setActionLoading(false);
-    setIsDialogOpen(false);
-
-    if (error) alert("更新失败");
-    else setRefreshKey((k) => k + 1);
-  };
-
-  const timeSince = (() => {
-    if (!data.lastFeedTime) return { val: "--", unit: "无记录" };
-    const m = differenceInMinutes(new Date(), new Date(data.lastFeedTime));
-    return m < 60
-      ? { val: m, unit: "分钟" }
-      : { val: (m / 60).toFixed(1), unit: "小时" };
-  })();
-
-  // 如果还没加载完，或者未绑定宝宝，简单显示
-  if (!loading && babyName === "未绑定宝宝") {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
-        <h2 className="text-xl font-bold mb-2">👋 欢迎</h2>
-        <p className="text-gray-500 mb-6">您还没有绑定任何宝宝档案。</p>
-        <Link href="/settings/profile">
-          <Button>去设置页创建或加入</Button>
-        </Link>
-      </div>
-    );
-  }
 
   return (
-    <main className="container mx-auto max-w-md p-4 space-y-4 pb-24 min-h-screen">
-      {/* Header */}
-      <header className="flex items-center justify-between py-1">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            👋 {babyName}
-            {babyBirthday && (
-              <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-normal border border-yellow-200">
-                {getBabyAgeText()}
-              </span>
-            )}
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">
-            {format(new Date(), "yyyy年MM月dd日 EEEE", { locale: zhCN })}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setRefreshKey((k) => k + 1)}
-            className="p-2 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200"
-          >
-            <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
-          </button>
-          <Link href="/settings">
-            <div className="h-10 w-10 rounded-full bg-gray-100 border-2 border-white shadow-sm flex items-center justify-center overflow-hidden">
-              {/* 这里放个图标或者头像 */}
-              <Baby size={20} className="text-gray-400" />
-            </div>
-          </Link>
+    <main className="relative container mx-auto max-w-md p-4 space-y-4 pb-24 min-h-screen overflow-hidden bg-gradient-to-b from-sky-50 via-gray-50 to-white">
+      <div className="pointer-events-none absolute -top-16 -right-10 h-40 w-40 rounded-full bg-cyan-200/35 blur-3xl" />
+      <div className="pointer-events-none absolute top-40 -left-12 h-36 w-36 rounded-full bg-blue-200/25 blur-3xl" />
+
+      <header className="relative space-y-1">
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{babyName} 的成长记录</h1>
+        <p className="text-xs text-gray-500">
+          {format(new Date(), "yyyy年MM月dd日 EEEE", { locale: zhCN })}
+        </p>
+        <div className="mt-3 flex gap-2">
+          <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] text-gray-600 border shadow-sm">
+            共 {events.length} 条事件
+          </span>
+          <span className="rounded-full bg-blue-50 px-3 py-1 text-[11px] text-blue-700 border border-blue-100 shadow-sm">
+            待进行 {upcomingCount} 条
+          </span>
         </div>
       </header>
 
-      {/* 核心卡片 */}
-      <section className="space-y-3">
-        <Card className="bg-blue-50 border-blue-100 shadow-sm relative overflow-hidden">
-          <div className="absolute right-[-10px] top-[-15px] opacity-10">
-            <Droplets size={80} className="text-blue-500" />
-          </div>
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="flex items-center gap-2 text-xs font-medium text-blue-600 uppercase tracking-wider">
-              <Clock size={14} /> 距离上次喂奶
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            <div className="flex items-baseline justify-between">
-              <div>
-                <span className="text-3xl font-bold text-gray-800 tracking-tight">
-                  {timeSince.val}
-                </span>
-                <span className="ml-1 text-sm text-gray-600">
-                  {timeSince.unit}
-                </span>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] text-gray-500 mb-0.5">上次记录</p>
-                <p className="text-sm font-medium text-gray-700">
-                  {data.lastFeedTime
-                    ? format(new Date(data.lastFeedTime), "HH:mm")
-                    : "--:--"}
-                  {data.lastFeedAmount ? ` (${data.lastFeedAmount}ml)` : ""}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Card className="bg-purple-50 border-purple-100 shadow-sm">
-            <CardHeader className="p-3 pb-1">
-              <CardTitle className="text-xs font-medium text-purple-600 flex items-center gap-1.5">
-                <Moon size={14} /> 今日睡眠
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0">
-              <div className="mt-0.5">
-                <span className="text-xl font-bold text-gray-800">
-                  {Math.floor(data.todaySleepMinutes / 60)}h{" "}
-                  {data.todaySleepMinutes % 60}m
-                </span>
-              </div>
-              <p className="text-[10px] text-gray-500 mt-0.5">
-                共小睡 {data.todaySleepCount} 次
+      <Card className="relative overflow-hidden border-0 bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg">
+        <div className="absolute right-0 top-0 h-20 w-20 rounded-full bg-white/10 blur-2xl" />
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium opacity-90">下一个事件</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {nextEvent ? (
+            <div className="space-y-2">
+              <p className="text-lg font-bold">{nextEvent.title}</p>
+              <p className="text-sm opacity-90">
+                {format(parseISO(nextEvent.date), "MM月dd日")} ·
+                {eventTypeMap[nextEvent.type].label}
               </p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-orange-50 border-orange-100 shadow-sm">
-            <CardHeader className="p-3 pb-1">
-              <CardTitle className="text-xs font-medium text-orange-600 flex items-center gap-1.5">
-                <span className="text-sm">🧻</span> 换尿布
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0">
-              <div className="mt-0.5">
-                <span className="text-xl font-bold text-gray-800">
-                  {data.todayDiaperCount}
-                </span>
-                <span className="ml-1 text-xs text-gray-600">次</span>
-              </div>
-              <p className="text-[10px] text-gray-500 mt-0.5 flex gap-1">
-                <span>{data.todayDiaperDetails.dirty}💩</span>
-                <span>/</span>
-                <span>{data.todayDiaperDetails.wet}💧</span>
-                {data.todayDiaperDetails.mixed > 0 && (
-                  <>
-                    <span>/</span>
-                    <span className="text-orange-700 font-bold">
-                      {data.todayDiaperDetails.mixed}🤢
-                    </span>
-                  </>
-                )}
+              <p className="text-xs opacity-90">
+                {daysLeft === 0
+                  ? "就在今天"
+                  : daysLeft && daysLeft > 0
+                    ? `还有 ${daysLeft} 天`
+                    : "已过期，请更新计划"}
               </p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+            </div>
+          ) : (
+            <p className="text-sm opacity-90">暂无未来事件，点击下方中间“+”开始添加。</p>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* 成长统计 */}
-      <section>
-        <Link href="/stats">
-          <div className="group flex items-center justify-between bg-white border border-gray-200 p-3 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-[0.98]">
-            <div className="flex items-center gap-3">
-              <div className="bg-gray-50 p-1.5 rounded-lg group-hover:bg-gray-100 transition-colors">
-                <ChevronRight size={16} className="text-gray-500" />
-              </div>
-              <div>
-                <p className="font-bold text-xs text-gray-800">查看成长统计</p>
-                <p className="text-[10px] text-gray-400">分析生长曲线与规律</p>
-              </div>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">成长时间线</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {sortedDesc.length === 0 ? (
+            <div className="rounded-xl border border-dashed p-6 text-center text-sm text-gray-500">
+              暂无事件，先添加第一条体检/疫苗/大事件吧。
             </div>
-            <div className="text-gray-300">
-              <ChevronRight size={16} />
-            </div>
-          </div>
-        </Link>
-      </section>
+          ) : (
+            <div className="relative pl-4">
+              <div className="absolute left-[7px] top-1 bottom-1 w-px bg-gray-200" />
+              <div className="space-y-4">
+                {sortedDesc.map((event) => {
+                  const typeMeta = eventTypeMap[event.type];
+                  const Icon = typeMeta.icon;
 
-      {/* 列表 */}
-      <section>
-        <h2 className="mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">
-          今日记录 (点击管理)
-        </h2>
-        <div className="space-y-2.5">
-          {data.recentLogs.map((log) => (
-            <div
-              key={log.id}
-              onClick={() => handleLogClick(log)}
-              className="cursor-pointer active:opacity-60 transition-opacity"
-            >
-              <LogItem log={log} />
-            </div>
-          ))}
-          {data.recentLogs.length === 0 && (
-            <div className="text-center py-8 text-gray-400 text-sm border border-dashed rounded-xl">
-              今天暂无记录
+                  return (
+                    <div key={event.id} className="relative rounded-xl border bg-white p-3 shadow-sm">
+                      <span className="absolute -left-[13px] top-4 h-3 w-3 rounded-full bg-blue-500" />
+
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Icon size={14} className="text-gray-500" />
+                            <p className="font-semibold text-sm text-gray-900">{event.title}</p>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {format(parseISO(event.date), "yyyy年MM月dd日")}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEvent(event.id)}
+                          className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-red-500"
+                          aria-label="删除事件"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border ${typeMeta.badgeClass}`}>
+                          {typeMeta.label}
+                        </span>
+                        {event.notes ? (
+                          <p className="text-xs text-gray-500 line-clamp-1">备注：{event.notes}</p>
+                        ) : (
+                          <p className="text-xs text-gray-400">无备注</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <section className="pt-1">
+        <p className="mb-2 text-xs text-gray-500">原功能入口</p>
+        <div className="rounded-2xl border bg-white/90 p-3 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">继续记录喂养数据</p>
+              <p className="text-xs text-gray-500 mt-0.5">进入原有喂养记录流程</p>
+            </div>
+            <Button asChild className="h-10 px-4">
+              <Link href="/record">去记录</Link>
+            </Button>
+          </div>
         </div>
       </section>
 
-      {/* 编辑/删除 弹窗 */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-xs rounded-2xl">
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
-            <DialogTitle>管理记录</DialogTitle>
-            <DialogDescription>你可以修改时间或删除这条记录</DialogDescription>
+            <DialogTitle>新增成长事件</DialogTitle>
+            <DialogDescription>记录体检、疫苗和宝宝成长大事件。</DialogDescription>
           </DialogHeader>
 
-          <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <Label>开始时间</Label>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="event-title">事件标题</Label>
               <Input
-                type="datetime-local"
-                value={editTime}
-                onChange={(e) => setEditTime(e.target.value)}
+                id="event-title"
+                value={eventTitle}
+                onChange={(e) => setEventTitle(e.target.value)}
+                placeholder="例如：6月龄体检"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="event-date">日期</Label>
+              <Input
+                id="event-date"
+                type="date"
+                value={eventDate}
+                onChange={(e) => setEventDate(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="event-type">事件类型</Label>
+              <select
+                id="event-type"
+                value={eventType}
+                onChange={(e) => setEventType(e.target.value as GrowthEventType)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+              >
+                <option value="checkup">体检</option>
+                <option value="vaccine">疫苗</option>
+                <option value="milestone">大事件</option>
+                <option value="custom">其他</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="event-notes">备注</Label>
+              <textarea
+                id="event-notes"
+                value={eventNotes}
+                onChange={(e) => setEventNotes(e.target.value)}
+                className="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                placeholder="例如：身高68cm，体重8.3kg"
               />
             </div>
           </div>
 
-          <DialogFooter className="flex-col gap-2 sm:flex-col">
-            <Button
-              onClick={handleUpdate}
-              disabled={actionLoading}
-              className="w-full bg-black text-white"
-            >
-              {actionLoading ? (
-                "保存中..."
-              ) : (
-                <>
-                  <Pencil size={16} className="mr-2" /> 保存修改
-                </>
-              )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              取消
             </Button>
-
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={actionLoading}
-              className="w-full bg-red-50 text-red-600 hover:bg-red-100 border-none shadow-none"
-            >
-              <Trash2 size={16} className="mr-2" /> 删除此记录
-            </Button>
+            <Button onClick={handleCreateEvent}>保存事件</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </main>
-  );
-}
-
-// LogItem 组件
-function LogItem({ log }: { log: LogRecord }) {
-  const timeStr = format(new Date(log.start_time), "HH:mm");
-  let icon, title, desc, colorClass;
-
-  if (log.type === "feeding") {
-    const isFormula = log.details?.sub_type === "formula";
-    icon = <Droplets size={16} />;
-    colorClass = "bg-blue-100 text-blue-600";
-    title = isFormula ? "配方奶" : "母乳";
-    desc = isFormula ? `${log.details?.amount}ml` : "亲喂";
-  } else if (log.type === "diaper") {
-    const subType = log.details?.sub_type || "wet";
-    const map: Record<string, string> = {
-      wet: "嘘嘘",
-      dirty: "便便",
-      mixed: "混合",
-    };
-    icon = <span className="text-sm">🧻</span>;
-    colorClass = "bg-orange-100 text-orange-600";
-    title = "换尿布";
-    desc = map[subType];
-  } else {
-    const duration = log.details?.duration_minutes || 0;
-    icon = <Moon size={16} />;
-    colorClass = "bg-purple-100 text-purple-600";
-    title = "睡觉";
-    desc = `${Math.floor(duration / 60)}h ${duration % 60}m`;
-  }
-
-  return (
-    <div className="flex items-center justify-between rounded-xl bg-white p-3 shadow-sm border border-gray-100">
-      <div className="flex items-center gap-3">
-        <div
-          className={`flex h-9 w-9 items-center justify-center rounded-full ${colorClass}`}
-        >
-          {icon}
-        </div>
-        <div>
-          <p className="text-sm font-medium text-gray-900">{title}</p>
-          <p className="text-[10px] text-gray-500">{timeStr}</p>
-        </div>
-      </div>
-      <span className="font-bold text-sm text-gray-700">{desc}</span>
-    </div>
   );
 }

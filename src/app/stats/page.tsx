@@ -71,10 +71,33 @@ export default function StatsPage() {
           });
         }
 
-        // 3. 从数据库拉取数据
+        // 3. 获取当前用户与宝宝ID，避免跨宝宝统计
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          setChartData(initialStats);
+          return;
+        }
+
+        const { data: relation, error: relationError } = await supabase
+          .from("baby_users")
+          .select("baby_id")
+          .eq("user_id", user.id)
+          .maybeSingle<{ baby_id: string }>();
+
+        if (relationError) throw relationError;
+
+        if (!relation?.baby_id) {
+          setChartData(initialStats);
+          return;
+        }
+
+        // 4. 从数据库拉取当前宝宝数据
         const { data: logs, error } = await supabase
           .from("logs")
           .select("*")
+          .eq("baby_id", relation.baby_id)
           .gte("start_time", sevenDaysAgo.toISOString())
           .order("start_time", { ascending: true })
           .returns<LogRecord[]>();

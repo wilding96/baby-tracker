@@ -69,7 +69,6 @@ interface DiaperStats {
 export default function Home() {
   const [babyName, setBabyName] = useState<string>("加载中...");
   const [babyBirthday, setBabyBirthday] = useState<string | null>(null);
-  const [currentBabyId, setCurrentBabyId] = useState<string | null>(null); // 新增：存ID用于后续操作
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshKey, setRefreshKey] = useState<number>(0);
 
@@ -128,35 +127,41 @@ export default function Home() {
           return;
         }
 
-        const babyData = relation.babies;
-        // @ts-ignore (忽略类型推断问题，确保拿到数据)
+        const babyRaw = relation.babies as
+          | { id: string; name: string; birthday: string | null }
+          | { id: string; name: string; birthday: string | null }[]
+          | null;
+        const babyData = Array.isArray(babyRaw) ? babyRaw[0] : babyRaw;
+
+        if (!babyData) {
+          setBabyName("未绑定宝宝");
+          setLoading(false);
+          return;
+        }
+
         setBabyName(babyData.name);
-        // @ts-ignore (忽略类型推断问题，确保拿到数据)
         setBabyBirthday(babyData.birthday);
-        // @ts-ignore (忽略类型推断问题，确保拿到数据)
-        setCurrentBabyId(babyData.id);
-        // @ts-ignore (忽略类型推断问题，确保拿到数据)
-        const babyId = babyData.id; // 暂存ID用于下面的查询
+        const babyId = babyData.id;
 
-        // 4. 获取最近一次喂奶 (🔥 必须过滤 baby_id)
-        const { data: lastFeed } = await supabase
-          .from("logs")
-          .select("*")
-          .eq("baby_id", babyId) // <--- 关键过滤
-          .eq("type", "feeding")
-          .order("start_time", { ascending: false })
-          .limit(1)
-          .maybeSingle<LogRecord>();
-
-        // 5. 获取今天记录 (🔥 必须过滤 baby_id)
+        // 4/5. 并行拉取最近喂奶和今日记录
         const todayStart = startOfDay(new Date()).toISOString();
-        const { data: todayLogs } = await supabase
-          .from("logs")
-          .select("*")
-          .eq("baby_id", babyId) // <--- 关键过滤
-          .gte("start_time", todayStart)
-          .order("start_time", { ascending: false })
-          .returns<LogRecord[]>();
+        const [{ data: lastFeed }, { data: todayLogs }] = await Promise.all([
+          supabase
+            .from("logs")
+            .select("*")
+            .eq("baby_id", babyId)
+            .eq("type", "feeding")
+            .order("start_time", { ascending: false })
+            .limit(1)
+            .maybeSingle<LogRecord>(),
+          supabase
+            .from("logs")
+            .select("*")
+            .eq("baby_id", babyId)
+            .gte("start_time", todayStart)
+            .order("start_time", { ascending: false })
+            .returns<LogRecord[]>(),
+        ]);
 
         const safeTodayLogs = todayLogs || [];
 

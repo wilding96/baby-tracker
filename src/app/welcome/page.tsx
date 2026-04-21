@@ -36,6 +36,7 @@ export default function WelcomePage() {
       const { data: relations } = await supabase
         .from("baby_users")
         .select("baby_id")
+        .eq("user_id", user.id)
         .limit(1);
       if (relations && relations.length > 0) {
         router.replace("/");

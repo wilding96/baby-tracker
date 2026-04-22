@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { format, parseISO, differenceInCalendarDays, startOfDay } from "date-fns";
+import {
+  format,
+  parseISO,
+  differenceInCalendarDays,
+  startOfDay,
+} from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -202,7 +207,8 @@ export default function Home() {
 
   const upcomingCount = useMemo(() => {
     const today = startOfDay(new Date()).getTime();
-    return events.filter((event) => new Date(event.date).getTime() >= today).length;
+    return events.filter((event) => new Date(event.date).getTime() >= today)
+      .length;
   }, [events]);
 
   const resetForm = () => {
@@ -278,8 +284,10 @@ export default function Home() {
       <div className="pointer-events-none absolute top-40 -left-12 h-36 w-36 rounded-full bg-blue-200/25 blur-3xl" />
 
       <header className="relative space-y-1">
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{babyName} 的成长记录</h1>
-        <p className="text-xs text-gray-500">
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+          {babyName} 的成长记录
+        </h1>
+        <p className="text-xs text-gray-500" suppressHydrationWarning>
           {format(new Date(), "yyyy年MM月dd日 EEEE", { locale: zhCN })}
         </p>
         <div className="mt-3 flex gap-2">
@@ -295,7 +303,9 @@ export default function Home() {
       <Card className="relative overflow-hidden border-0 bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg">
         <div className="absolute right-0 top-0 h-20 w-20 rounded-full bg-white/10 blur-2xl" />
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium opacity-90">下一个事件</CardTitle>
+          <CardTitle className="text-sm font-medium opacity-90">
+            下一个事件
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {nextEvent ? (
@@ -314,7 +324,9 @@ export default function Home() {
               </p>
             </div>
           ) : (
-            <p className="text-sm opacity-90">暂无未来事件，点击下方中间“+”开始添加。</p>
+            <p className="text-sm opacity-90">
+              暂无未来事件，点击下方中间“+”开始添加。
+            </p>
           )}
         </CardContent>
       </Card>
@@ -337,14 +349,19 @@ export default function Home() {
                   const Icon = typeMeta.icon;
 
                   return (
-                    <div key={event.id} className="relative rounded-xl border bg-white p-3 shadow-sm">
+                    <div
+                      key={event.id}
+                      className="relative rounded-xl border bg-white p-3 shadow-sm"
+                    >
                       <span className="absolute -left-[13px] top-4 h-3 w-3 rounded-full bg-blue-500" />
 
                       <div className="flex items-start justify-between gap-2">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <Icon size={14} className="text-gray-500" />
-                            <p className="font-semibold text-sm text-gray-900">{event.title}</p>
+                            <p className="font-semibold text-sm text-gray-900">
+                              {event.title}
+                            </p>
                           </div>
                           <p className="text-xs text-gray-500">
                             {format(parseISO(event.date), "yyyy年MM月dd日")}
@@ -361,11 +378,15 @@ export default function Home() {
                       </div>
 
                       <div className="mt-2 flex items-center justify-between gap-2">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full border ${typeMeta.badgeClass}`}>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full border ${typeMeta.badgeClass}`}
+                        >
                           {typeMeta.label}
                         </span>
                         {event.notes ? (
-                          <p className="text-xs text-gray-500 line-clamp-1">备注：{event.notes}</p>
+                          <p className="text-xs text-gray-500 line-clamp-1">
+                            备注：{event.notes}
+                          </p>
                         ) : (
                           <p className="text-xs text-gray-400">无备注</p>
                         )}
@@ -385,8 +406,12 @@ export default function Home() {
         <div className="rounded-2xl border bg-white/90 p-3 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-gray-900">继续记录喂养数据</p>
-              <p className="text-xs text-gray-500 mt-0.5">进入原有喂养记录流程</p>
+              <p className="text-sm font-semibold text-gray-900">
+                继续记录喂养数据
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                进入原有喂养记录流程
+              </p>
             </div>
             <Button asChild className="h-10 px-4">
               <Link href="/record">去记录</Link>
@@ -398,7 +423,9 @@ export default function Home() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-gray-900">留言板</p>
-              <p className="text-xs text-gray-500 mt-0.5">给家人留句话，记录当下心情</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                给家人留句话，记录当下心情
+              </p>
             </div>
             <Button asChild variant="outline" className="h-10 px-4">
               <Link href="/board">去留言</Link>
@@ -411,7 +438,9 @@ export default function Home() {
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
             <DialogTitle>新增成长事件</DialogTitle>
-            <DialogDescription>记录体检、疫苗和宝宝成长大事件。</DialogDescription>
+            <DialogDescription>
+              记录体检、疫苗和宝宝成长大事件。
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
@@ -440,7 +469,9 @@ export default function Home() {
               <select
                 id="event-type"
                 value={eventType}
-                onChange={(e) => setEventType(e.target.value as GrowthEventType)}
+                onChange={(e) =>
+                  setEventType(e.target.value as GrowthEventType)
+                }
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
               >
                 <option value="checkup">体检</option>

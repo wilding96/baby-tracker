@@ -70,7 +70,7 @@ export default function LoginPage() {
             <div className="bg-[#f7cd67] w-16 h-16 rounded-3xl flex items-center justify-center mx-auto shadow-lg text-[#725d42] mb-4 transform transition-transform hover:scale-110 duration-300 border-2 border-[#d4c9b4]">
               {isSignUp ? <Sparkles size={32} /> : <Baby size={32} />}
             </div>
-            <p className="text-xs font-bold text-[#6fba2c]">Baby Island</p>
+            <p className="text-xs font-bold text-[#6fba2c]">Baby Tracker</p>
             <h1 className="text-2xl font-black text-[#725d42] tracking-tight">
               {isSignUp ? "加入大家庭" : "欢迎回来"}
             </h1>

@@ -16,6 +16,13 @@ type BoardMessage = {
   created_at: string;
 };
 
+const messageToneList = [
+  { background: "#fff7dc", border: "#f0d992" },
+  { background: "#eef8e8", border: "#cfe6bd" },
+  { background: "#eef7ff", border: "#c9ddf2" },
+  { background: "#fff0ec", border: "#efc8bb" },
+];
+
 export default function BoardPage() {
   const [nickname, setNickname] = useState("");
   const [content, setContent] = useState("");
@@ -139,24 +146,32 @@ export default function BoardPage() {
               </p>
             ) : (
               <ul className="space-y-3">
-                {messages.map((msg) => (
-                  <li
-                    key={msg.id}
-                    className="rounded-3xl border-2 border-[#e8dcc8] bg-[#fffdf5] p-3 shadow-sm"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-[#725d42]">
-                        {msg.nickname || "匿名用户"}
+                {messages.map((msg, index) => {
+                  const tone = messageToneList[index % messageToneList.length];
+
+                  return (
+                    <li
+                      key={msg.id}
+                      className="rounded-3xl border-2 p-3 shadow-sm transition-transform hover:-translate-y-0.5"
+                      style={{
+                        backgroundColor: tone.background,
+                        borderColor: tone.border,
+                      }}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-[#725d42]">
+                          {msg.nickname || "匿名用户"}
+                        </p>
+                        <p className="text-xs text-[#9f927d]">
+                          {new Date(msg.created_at).toLocaleString("zh-CN")}
+                        </p>
+                      </div>
+                      <p className="mt-1 text-sm text-[#725d42] whitespace-pre-wrap break-words">
+                        {msg.content}
                       </p>
-                      <p className="text-xs text-[#9f927d]">
-                        {new Date(msg.created_at).toLocaleString("zh-CN")}
-                      </p>
-                    </div>
-                    <p className="mt-1 text-sm text-[#725d42] whitespace-pre-wrap break-words">
-                      {msg.content}
-                    </p>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </CardContent>

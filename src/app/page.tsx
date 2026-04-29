@@ -10,7 +10,7 @@ import {
 } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { supabase } from "@/lib/supabase";
-import { Divider, Modal } from "animal-island-ui";
+import { Divider, Modal, Time } from "animal-island-ui";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -286,8 +286,11 @@ export default function Home() {
         <div className="pointer-events-none absolute -top-16 -right-10 h-40 w-40 rounded-full bg-[#f7cd67]/30 blur-3xl" />
         <div className="pointer-events-none absolute top-40 -left-12 h-36 w-36 rounded-full bg-[#8ac68a]/25 blur-3xl" />
 
-        <header className="relative space-y-1">
-          <p className="text-xs font-bold text-[#6fba2c]">Baby Island</p>
+        <header className="relative space-y-1 pr-28">
+          {/* <div className="absolute right-0 top-0 origin-top-right scale-[0.55]">
+            <Time />
+          </div> */}
+          <p className="text-xs font-bold text-[#6fba2c]">Baby Tracker</p>
           <h1 className="text-2xl font-black text-[#725d42] tracking-tight">
             {babyName} 的成长记录
           </h1>
@@ -304,39 +307,69 @@ export default function Home() {
           </div>
         </header>
 
-        <Card className="island-card relative overflow-hidden bg-[#f7cd67] text-[#725d42]">
-          <div className="absolute right-0 top-0 h-16 w-16 rounded-full bg-white/20 blur-2xl" />
-          <CardHeader className="pb-1">
-            <CardTitle className="text-xs font-black opacity-90">
+        <Card
+          color="app-yellow"
+          className="island-card relative overflow-hidden text-[#725d42]"
+        >
+          <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/25" />
+          <div className="absolute -bottom-10 left-8 h-20 w-20 rounded-full bg-[#fff7dc]/45" />
+          <CardHeader className="relative z-10 pb-2">
+            <CardTitle className="flex items-center gap-2 text-xs font-black text-[#725d42]">
+              <CalendarClock size={14} className="text-[#9a6a1f]" />
               下一个事件
             </CardTitle>
           </CardHeader>
-          <CardContent className="pb-4 pt-1">
+          <CardContent className="relative z-10 pb-4 pt-0">
             {loading ? (
-              <div className="animate-pulse space-y-2">
-                <div className="h-4 w-2/3 rounded-full bg-white/45" />
-                <div className="h-3 w-24 rounded-full bg-white/35" />
-                <div className="h-2 w-16 rounded-full bg-white/30" />
+              <div className="animate-pulse space-y-2 rounded-3xl bg-white/40 p-3">
+                <div className="h-4 w-2/3 rounded-full bg-white/55" />
+                <div className="h-3 w-24 rounded-full bg-white/45" />
+                <div className="h-2 w-16 rounded-full bg-white/40" />
               </div>
             ) : nextEvent ? (
-              <div className="space-y-1">
-                <p className="text-sm font-bold leading-snug">
-                  {nextEvent.title}
-                </p>
-                <p className="text-xs opacity-90">
-                  {format(parseISO(nextEvent.date), "MM月d日")} ·{" "}
-                  {eventTypeMap[nextEvent.type].label}
-                </p>
-                <p className="text-[10px] opacity-90">
-                  {daysLeft === 0
-                    ? "就在今天"
-                    : daysLeft && daysLeft > 0
-                      ? `还有 ${daysLeft} 天`
-                      : "已过期，请更新计划"}
-                </p>
+              <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-3xl bg-white/45 p-3 ring-1 ring-white/45">
+                <div className="min-w-0 space-y-2">
+                  <div className="space-y-1">
+                    <p className="truncate text-sm font-black leading-snug text-[#725d42]">
+                      {nextEvent.title}
+                    </p>
+                    <p className="text-xs font-semibold text-[#8a7358]">
+                      {format(parseISO(nextEvent.date), "MM月d日")} ·{" "}
+                      {eventTypeMap[nextEvent.type].label}
+                    </p>
+                  </div>
+                  <p className="inline-flex rounded-full bg-[#fff7dc] px-2.5 py-1 text-[11px] font-bold text-[#9a6a1f] ring-1 ring-[#efd28a]">
+                    {daysLeft === 0
+                      ? "今天就要完成啦"
+                      : daysLeft !== null && daysLeft > 0
+                        ? `距离计划还有 ${daysLeft} 天`
+                        : "已过期，请更新计划"}
+                  </p>
+                </div>
+
+                <div className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-[1.75rem] bg-[#fffdf5] text-center shadow-[0_6px_0_rgba(154,106,31,0.18)] ring-2 ring-white/70">
+                  {daysLeft === 0 ? (
+                    <span className="text-xl font-black text-[#d07044]">
+                      今天
+                    </span>
+                  ) : daysLeft !== null && daysLeft > 0 ? (
+                    <>
+                      <span className="text-3xl font-black leading-none text-[#d07044]">
+                        {daysLeft}
+                      </span>
+                      <span className="mt-1 text-[11px] font-black tracking-widest text-[#9a6a1f]">
+                        DAYS
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-lg font-black text-[#d07044]">
+                      待更新
+                    </span>
+                  )}
+                </div>
               </div>
             ) : (
-              <p className="text-xs opacity-90">
+              <p className="rounded-3xl bg-white/45 p-3 text-xs font-semibold text-[#8a7358] ring-1 ring-white/45">
                 暂无未来事件，点击下方中间 + 开始添加。
               </p>
             )}
@@ -345,16 +378,16 @@ export default function Home() {
 
         <Divider type="wave-yellow" />
 
-        <Card className="island-card bg-[#fffdf5]">
+        <Card color="app-green" className="island-card text-white">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-[#725d42] flex items-center gap-2">
-              <Sparkles size={14} className="text-[#f7cd67]" />
+            <CardTitle className="text-sm text-white flex items-center gap-2 drop-shadow-sm">
+              <Sparkles size={14} className="text-white/90" />
               成长时间线
             </CardTitle>
           </CardHeader>
           <CardContent className="p-1">
             {sortedDesc.length === 0 ? (
-              <div className="rounded-3xl border-2 border-dashed border-[#d4c9b4] bg-[#faf8f2] p-6 text-center text-sm text-[#9f927d]">
+              <div className="rounded-3xl border-2 border-dashed border-white/55 bg-white/70 p-6 text-center text-sm font-semibold text-[#725d42]">
                 暂无事件，先添加第一条体检/疫苗/大事件吧。
               </div>
             ) : (
@@ -372,12 +405,12 @@ export default function Home() {
                     >
                       <div className="relative flex justify-center">
                         {!isFirst && (
-                          <div className="absolute -top-4 left-1/2 h-[calc(1rem+1.875rem)] -translate-x-1/2 border-l-2 border-dashed border-[#8ac68a]/45" />
+                          <div className="absolute -top-4 left-1/2 h-[calc(1rem+1.875rem)] -translate-x-1/2 border-l-2 border-dashed border-white/70" />
                         )}
                         {!isLast && (
-                          <div className="absolute left-1/2 top-[1.875rem] -bottom-4 -translate-x-1/2 border-l-2 border-dashed border-[#8ac68a]/45" />
+                          <div className="absolute left-1/2 top-[1.875rem] -bottom-4 -translate-x-1/2 border-l-2 border-dashed border-white/70" />
                         )}
-                        <div className="relative z-10 mt-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#8ac68a] bg-[#fffdf5] text-[#8ac68a] shadow-[0_4px_10px_rgba(138,198,138,0.24)] ring-4 ring-[#fffdf5]">
+                        <div className="relative z-10 mt-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#f7cd67] bg-[#fff7dc] text-[#9a6a1f] shadow-[0_4px_10px_rgba(247,205,103,0.34)] ring-4 ring-white/70">
                           <Icon size={15} />
                         </div>
                       </div>
@@ -453,56 +486,69 @@ export default function Home() {
         <section className="pt-1 space-y-2">
           <p className="text-xs text-[#9f927d]">快捷入口</p>
 
-          <div className="island-soft-panel p-3">
+          <Card color="app-blue" className="island-card p-3 text-white">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-[#725d42]">
+                <p className="text-sm font-semibold text-white drop-shadow-sm">
                   继续记录喂养数据
                 </p>
-                <p className="text-xs text-[#9f927d] mt-0.5">
+                <p className="text-xs text-white/85 mt-0.5">
                   进入原有喂养记录流程
                 </p>
               </div>
-              <Button asChild className="h-10 px-4">
+              <Button
+                asChild
+                className="h-10 border-white/70 bg-white/90 px-4 text-[#5c6fca] shadow-[0_5px_rgba(80,96,180,0.45)] hover:border-white hover:bg-white hover:text-[#4f63c6]"
+              >
                 <Link href="/record">去记录</Link>
               </Button>
             </div>
-          </div>
+          </Card>
 
-          <div className="island-soft-panel p-3">
+          <Card color="app-teal" className="island-card p-3 text-white">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-[#dff0d5] p-2 text-[#5a7f38]">
+                <div className="rounded-2xl bg-white/25 p-2 text-white shadow-sm ring-1 ring-white/35">
                   <BarChart3 size={18} />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-[#725d42]">
+                  <p className="text-sm font-semibold text-white drop-shadow-sm">
                     喂养情况总览
                   </p>
-                  <p className="text-xs text-[#9f927d] mt-0.5">
+                  <p className="text-xs text-white/85 mt-0.5">
                     查看奶量和睡眠趋势
                   </p>
                 </div>
               </div>
-              <Button asChild variant="outline" className="h-10 px-4">
+              <Button
+                asChild
+                variant="outline"
+                className="h-10 border-white/70 bg-white/90 px-4 text-[#2f8f78] shadow-[0_5px_rgba(57,145,123,0.45)] hover:border-white hover:bg-white hover:text-[#247b67]"
+              >
                 <Link href="/stats">看总览</Link>
               </Button>
             </div>
-          </div>
+          </Card>
 
-          <div className="island-soft-panel p-3">
+          <Card color="warm-peach-pink" className="island-card p-3 text-white">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-[#725d42]">留言板</p>
-                <p className="text-xs text-[#9f927d] mt-0.5">
+                <p className="text-sm font-semibold text-white drop-shadow-sm">
+                  留言板
+                </p>
+                <p className="text-xs text-white/85 mt-0.5">
                   给家人留句话，记录当下心情
                 </p>
               </div>
-              <Button asChild variant="outline" className="h-10 px-4">
+              <Button
+                asChild
+                variant="outline"
+                className="h-10 border-white/70 bg-white/90 px-4 text-[#b75f45] shadow-[0_5px_rgba(171,88,62,0.45)] hover:border-white hover:bg-white hover:text-[#9f4d35]"
+              >
                 <Link href="/board">去留言</Link>
               </Button>
             </div>
-          </div>
+          </Card>
         </section>
 
         <Modal

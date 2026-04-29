@@ -352,37 +352,38 @@ export default function Home() {
               成长时间线
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-1">
             {sortedDesc.length === 0 ? (
               <div className="rounded-3xl border-2 border-dashed border-[#d4c9b4] bg-[#faf8f2] p-6 text-center text-sm text-[#9f927d]">
                 暂无事件，先添加第一条体检/疫苗/大事件吧。
               </div>
             ) : (
-              <div className="relative">
-                {/* 使用更美观的虚线连接 */}
-                <div className="absolute left-2 top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#8ac68a] via-[#8ac68a]/50 to-transparent" />
-                <div className="space-y-3">
-                  {sortedDesc.map((event) => {
-                    const typeMeta = eventTypeMap[event.type];
-                    const Icon = typeMeta.icon;
+              <div className="space-y-4">
+                {sortedDesc.map((event, index) => {
+                  const typeMeta = eventTypeMap[event.type];
+                  const Icon = typeMeta.icon;
+                  const isFirst = index === 0;
+                  const isLast = index === sortedDesc.length - 1;
 
-                    return (
-                      <div
-                        key={event.id}
-                        className="relative pl-10 rounded-xl border border-[#e8dcc8] bg-[#fffdf5] p-3.5 shadow-sm hover:shadow-md transition-all"
-                      >
-                        {/* 连接线 */}
-                        <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#8ac68a] via-[#8ac68a]/30 to-transparent" />
-
-                        {/* 更精致的时间节点 */}
-                        <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
-                          <div className="h-8 w-8 rounded-full border-2 border-[#8ac68a] bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1)]">
-                            <Icon
-                              size={14}
-                              className="text-[#8ac68a] m-auto mt-1.5"
-                            />
-                          </div>
+                  return (
+                    <div
+                      key={event.id}
+                      className="relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-3"
+                    >
+                      <div className="relative flex justify-center">
+                        {!isFirst && (
+                          <div className="absolute -top-4 left-1/2 h-[calc(1rem+1.875rem)] -translate-x-1/2 border-l-2 border-dashed border-[#8ac68a]/45" />
+                        )}
+                        {!isLast && (
+                          <div className="absolute left-1/2 top-[1.875rem] -bottom-4 -translate-x-1/2 border-l-2 border-dashed border-[#8ac68a]/45" />
+                        )}
+                        <div className="relative z-10 mt-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#8ac68a] bg-[#fffdf5] text-[#8ac68a] shadow-[0_4px_10px_rgba(138,198,138,0.24)] ring-4 ring-[#fffdf5]">
+                          <Icon size={15} />
                         </div>
+                      </div>
+
+                      <div className="relative rounded-2xl border border-[#e8dcc8] bg-[#fffdf5] p-3.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(114,93,66,0.1)]">
+                        <div className="absolute left-0 top-[1.875rem] h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-l border-[#e8dcc8] bg-[#fffdf5]" />
 
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 space-y-1.5">
@@ -441,9 +442,9 @@ export default function Home() {
                           )}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>

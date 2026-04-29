@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, ReactNode } from "react";
+import { useState, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { format, differenceInMinutes } from "date-fns";
 import { supabase } from "@/lib/supabase";
@@ -17,7 +17,6 @@ import {
   ArrowLeft,
   Clock,
   Check,
-  Baby,
   Sun,
   Utensils,
 } from "lucide-react";
@@ -177,55 +176,54 @@ export default function RecordPage() {
     return (
       <main className="island-page min-h-screen pb-24">
         <div className="island-shell flex min-h-screen flex-col justify-center gap-6">
-        <div className="text-center">
-          <p className="text-xs font-bold text-[#6fba2c]">Quick Care</p>
-          <h1 className="text-2xl font-black text-[#725d42]">
-          {/* 显示一下给谁记录，增加确定感 */}给 {baby?.name} 记一笔
-          </h1>
-        </div>
-        <Divider type="wave-yellow" />
-
-        {/* 喂奶 */}
-        <div
-          onClick={() => handleSwitchView("feeding")}
-          className="island-card bg-[#dff0d5] border-2 border-[#b8d9a8] rounded-3xl p-6 flex flex-col items-center justify-center gap-4 active:scale-95 transition-transform cursor-pointer h-40"
-        >
-          <div className="bg-[#8ac68a] text-white p-4 rounded-full shadow-lg">
-            <Droplets size={32} />
+          <div className="text-center">
+            <p className="text-xs font-bold text-[#6fba2c]">Quick Care</p>
+            <h1 className="text-2xl font-black text-[#725d42]">
+              给 {baby?.name} 记一笔
+            </h1>
           </div>
-          <span className="font-black text-[#3d7335] text-lg">喂奶 / 喝水</span>
-        </div>
+          <Divider type="wave-yellow" />
 
-        <div className="grid grid-cols-2 gap-4">
-          {/* 睡觉 */}
           <div
-            onClick={() => handleSwitchView("sleep")}
-            className="island-card bg-[#eef0e6] border-2 border-[#d4c9b4] rounded-3xl p-6 flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform cursor-pointer h-36"
+            onClick={() => handleSwitchView("feeding")}
+            className="island-card bg-[#dff0d5] border-2 border-[#b8d9a8] rounded-3xl p-6 flex flex-col items-center justify-center gap-4 active:scale-95 transition-transform cursor-pointer h-40"
           >
-            <div className="bg-[#9a835a] text-white p-3 rounded-full">
-              <Moon size={24} />
+            <div className="bg-[#8ac68a] text-white p-4 rounded-full shadow-lg">
+              <Droplets size={32} />
             </div>
-            <span className="font-black text-[#725d42]">睡觉</span>
+            <span className="font-black text-[#3d7335] text-lg">
+              喂奶 / 喝水
+            </span>
           </div>
-          {/* 尿布 */}
-          <div
-            onClick={() => handleSwitchView("diaper")}
-            className="island-card bg-[#ffe7b2] border-2 border-[#e6c679] rounded-3xl p-6 flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform cursor-pointer h-36"
-          >
-            <div className="bg-[#e59266] text-white p-3 rounded-full">
-              <Utensils size={24} className="rotate-90" />
-            </div>
-            <span className="font-black text-[#8a5a13]">换尿布</span>
-          </div>
-        </div>
 
-        <Button
-          variant="ghost"
-          className="mt-8 text-gray-400"
-          onClick={() => router.back()}
-        >
-          取消
-        </Button>
+          <div className="grid grid-cols-2 gap-4">
+            <div
+              onClick={() => handleSwitchView("sleep")}
+              className="island-card bg-[#eef0e6] border-2 border-[#d4c9b4] rounded-3xl p-6 flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform cursor-pointer h-36"
+            >
+              <div className="bg-[#9a835a] text-white p-3 rounded-full">
+                <Moon size={24} />
+              </div>
+              <span className="font-black text-[#725d42]">睡觉</span>
+            </div>
+            <div
+              onClick={() => handleSwitchView("diaper")}
+              className="island-card bg-[#ffe7b2] border-2 border-[#e6c679] rounded-3xl p-6 flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform cursor-pointer h-36"
+            >
+              <div className="bg-[#e59266] text-white p-3 rounded-full">
+                <Utensils size={24} className="rotate-90" />
+              </div>
+              <span className="font-black text-[#8a5a13]">换尿布</span>
+            </div>
+          </div>
+
+          <Button
+            variant="ghost"
+            className="mt-8 text-gray-400"
+            onClick={() => router.back()}
+          >
+            取消
+          </Button>
         </div>
       </main>
     );
@@ -413,16 +411,16 @@ function FormLayout({ title, color, onBack, children }: FormLayoutProps) {
   return (
     <main className="island-page min-h-screen pb-40">
       <div className="island-shell p-6">
-      <div className="flex items-center justify-between mb-8">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft />
-        </Button>
-        <h2 className={`text-xl font-black ${color}`}>{title}</h2>
-        <div className="w-10"></div>
-      </div>
-      <Card className="island-card p-6 space-y-6 bg-[#fffdf5]">
-        {children}
-      </Card>
+        <div className="flex items-center justify-between mb-8">
+          <Button variant="ghost" size="icon" onClick={onBack}>
+            <ArrowLeft />
+          </Button>
+          <h2 className={`text-xl font-black ${color}`}>{title}</h2>
+          <div className="w-10" />
+        </div>
+        <Card className="island-card flex min-h-[calc(100vh-14rem)] flex-col gap-6 p-6 bg-[#fffdf5]">
+          {children}
+        </Card>
       </div>
     </main>
   );
@@ -430,7 +428,7 @@ function FormLayout({ title, color, onBack, children }: FormLayoutProps) {
 
 function SaveButton({ loading, onClick }: SaveButtonProps) {
   return (
-    <div className="fixed bottom-24 left-0 right-0 px-6 z-40">
+    <div className="mt-auto pt-2">
       <Button
         size="lg"
         className="island-action-button w-full text-lg h-14"

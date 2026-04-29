@@ -46,10 +46,11 @@ export default function SettingsPage() {
       if (!user) return router.replace("/login");
 
       // 级联查询：通过 baby_users 表找到 babies 表的 name 和 invite_code
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("baby_users")
         .select(
           `
+          baby_id,
           babies (
             name,
             invite_code
@@ -57,13 +58,37 @@ export default function SettingsPage() {
         `,
         )
         .eq("user_id", user.id)
-        .single();
+        .limit(1)
+        .maybeSingle();
 
-      if (data && data.babies) {
-        // @ts-ignore
-        setBabyName(data.babies.name || "未命名宝宝");
-        // @ts-ignore
-        setInviteCode(data.babies.invite_code || "无");
+      if (error) {
+        console.error("加载家庭信息失败", error);
+        setBabyName("加载失败");
+        setInviteCode("加载失败");
+        return;
+      }
+
+      const relation = data as
+        | {
+            baby_id: string | null;
+            babies:
+              | { name: string | null; invite_code: string | null }
+              | { name: string | null; invite_code: string | null }[]
+              | null;
+          }
+        | null;
+
+      if (!relation?.baby_id) {
+        router.replace("/welcome");
+        return;
+      }
+
+      const babyRaw = relation.babies;
+      const baby = Array.isArray(babyRaw) ? babyRaw[0] : babyRaw;
+
+      if (baby) {
+        setBabyName(baby.name || "未命名宝宝");
+        setInviteCode(baby.invite_code || "无");
       }
     };
     getData();

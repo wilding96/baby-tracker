@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   format,
   parseISO,
@@ -75,6 +76,7 @@ const eventTypeMap: Record<
 };
 
 export default function Home() {
+  const router = useRouter();
   const [babyName, setBabyName] = useState("宝宝");
   const [babyId, setBabyId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -95,7 +97,7 @@ export default function Home() {
         } = await supabase.auth.getUser();
 
         if (!user) {
-          setEvents([]);
+          router.replace("/login");
           return;
         }
 
@@ -105,6 +107,7 @@ export default function Home() {
           .from("baby_users")
           .select(
             `
+            baby_id,
             babies (
               id,
               name
@@ -112,6 +115,7 @@ export default function Home() {
           `,
           )
           .eq("user_id", user.id)
+          .limit(1)
           .maybeSingle();
 
         if (relationError) {
@@ -120,24 +124,33 @@ export default function Home() {
           return;
         }
 
-        const babyRaw = relationData?.babies as
-          | { id: string; name: string }
-          | { id: string; name: string }[]
+        const relation = relationData as
+          | {
+              baby_id: string | null;
+              babies:
+                | { id: string; name: string }
+                | { id: string; name: string }[]
+                | null;
+            }
           | null;
+        const babyRaw = relation?.babies;
         const baby = Array.isArray(babyRaw) ? babyRaw[0] : babyRaw;
+        const currentBabyId = relation?.baby_id || baby?.id;
 
-        if (!baby?.id) {
-          setEvents([]);
+        if (!currentBabyId) {
+          router.replace("/welcome");
           return;
         }
 
-        setBabyId(baby.id);
-        setBabyName(baby.name);
+        setBabyId(currentBabyId);
+        if (baby?.name) {
+          setBabyName(baby.name);
+        }
 
         const { data: rows, error: eventsError } = await supabase
           .from("growth_events")
           .select("id,title,event_date,type,notes,created_at")
-          .eq("baby_id", baby.id)
+          .eq("baby_id", currentBabyId)
           .order("event_date", { ascending: false })
           .order("created_at", { ascending: false });
 
@@ -168,7 +181,7 @@ export default function Home() {
     };
 
     init();
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

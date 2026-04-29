@@ -37,27 +37,60 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  // --- 这里的逻辑保持不变 ---
-  console.log("Middleware running on:", request.nextUrl.pathname);
-  // 1. 获取用户信息 (这会刷新 Session)
+  const pathname = request.nextUrl.pathname;
+  const isLoginRoute = pathname.startsWith("/login");
+  const isAuthRoute = pathname.startsWith("/auth");
+  const isBoardRoute = pathname.startsWith("/board");
+  const isWelcomeRoute = pathname.startsWith("/welcome");
+  const needsFamily =
+    pathname === "/" ||
+    pathname.startsWith("/settings") ||
+    pathname.startsWith("/record") ||
+    pathname.startsWith("/stats") ||
+    pathname.startsWith("/legacy");
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  console.log("User status:", user ? "Logged In" : "Guest");
-  // 2. 路由保护逻辑
-  // 如果用户未登录，且访问的不是登录页或注册相关的页，强制跳回 /login
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth") &&
-    !request.nextUrl.pathname.startsWith("/board")
-  ) {
+
+  if (!user && !isLoginRoute && !isAuthRoute && !isBoardRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // 3. 如果已登录，但访问的是登录页，踢回首页
-  if (user && request.nextUrl.pathname.startsWith("/login")) {
-    return NextResponse.redirect(new URL("/", request.url));
+  const getHasFamily = async () => {
+    if (!user) return false;
+
+    const { data, error } = await supabase
+      .from("baby_users")
+      .select("baby_id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle<{ baby_id: string | null }>();
+
+    if (error) {
+      console.error("检查家庭关联失败", error);
+      return true;
+    }
+
+    return Boolean(data?.baby_id);
+  };
+
+  if (user && isLoginRoute) {
+    return NextResponse.redirect(
+      new URL((await getHasFamily()) ? "/" : "/welcome", request.url),
+    );
+  }
+
+  if (user && isWelcomeRoute) {
+    if (await getHasFamily()) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+
+    return response;
+  }
+
+  if (user && needsFamily && !(await getHasFamily())) {
+    return NextResponse.redirect(new URL("/welcome", request.url));
   }
 
   return response;

@@ -42,6 +42,7 @@ export default function ProfilePage() {
         .from("baby_users")
         .select(
           `
+          baby_id,
           babies (
             id,
             name,
@@ -51,22 +52,52 @@ export default function ProfilePage() {
         `,
         )
         .eq("user_id", user.id)
-        .single();
+        .limit(1)
+        .maybeSingle();
 
-      if (data && data.babies) {
-        const baby = data.babies;
+      if (error) {
+        console.error("加载宝宝资料失败", error);
+        setPageLoading(false);
+        return;
+      }
+
+      const relation = data as
+        | {
+            baby_id: string | null;
+            babies:
+              | {
+                  id: string;
+                  name: string | null;
+                  birthday: string | null;
+                  gender: string | null;
+                }
+              | {
+                  id: string;
+                  name: string | null;
+                  birthday: string | null;
+                  gender: string | null;
+                }[]
+              | null;
+          }
+        | null;
+
+      if (!relation?.baby_id) {
+        router.replace("/welcome");
+        return;
+      }
+
+      const babyRaw = relation.babies;
+      const baby = Array.isArray(babyRaw) ? babyRaw[0] : babyRaw;
+
+      if (baby) {
         setFormData({
-          // @ts-ignore
           id: baby.id,
-          // @ts-ignore
           name: baby.name || "",
-          // @ts-ignore
           birthday: baby.birthday || "",
-          // @ts-ignore
-          gender: baby.gender || "male", // 确保回显正确
+          gender: baby.gender || "male",
         });
       } else {
-        console.error("未找到关联宝宝", error);
+        console.error("未找到关联宝宝");
       }
       setPageLoading(false);
     };
@@ -76,6 +107,10 @@ export default function ProfilePage() {
 
   // 2. 保存修改
   const handleSave = async () => {
+    if (!formData.id) {
+      router.replace("/welcome");
+      return;
+    }
     if (!formData.name) return alert("宝宝名字不能为空");
     setLoading(true);
 

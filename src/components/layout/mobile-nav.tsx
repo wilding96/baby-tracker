@@ -49,14 +49,14 @@ export default function MobileNav() {
         />
       )}
 
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t pb-safe shadow-[0_-1px_10px_rgba(0,0,0,0.05)]">
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t-2 border-[#d4c9b4] bg-[#fffdf5]/95 pb-safe shadow-[0_-8px_24px_rgba(61,52,40,0.10)] backdrop-blur">
         <div className="relative flex h-16 items-center justify-between px-12">
           <Link
             href="/"
             onClick={() => setMenuOpen(false)}
             className={cn(
               "flex flex-col items-center justify-center gap-1 transition-colors w-12",
-              isHome ? "text-black" : "text-gray-400",
+              isHome ? "text-[#5a7f38]" : "text-[#a0936e]",
             )}
           >
             <Home
@@ -79,12 +79,12 @@ export default function MobileNav() {
               <button
                 type="button"
                 onClick={openGrowthEvent}
-                className="flex h-16 w-16 items-center justify-center rounded-full border bg-white text-blue-600 shadow-lg"
+                className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#d4c9b4] bg-[#f7cd67] text-[#725d42] shadow-lg"
                 aria-label="记录时间事件"
               >
                 <CalendarClock size={30} />
               </button>
-              <span className="text-center rounded-full bg-white/95 px-2 py-0.5 text-[11px] font-medium text-blue-700 shadow-md border border-blue-100 whitespace-nowrap">
+              <span className="text-center rounded-full bg-[#fffdf5]/95 px-2 py-0.5 text-[11px] font-medium text-[#725d42] shadow-md border border-[#e8dcc8] whitespace-nowrap">
                 记录事件
               </span>
             </div>
@@ -100,12 +100,12 @@ export default function MobileNav() {
               <button
                 type="button"
                 onClick={openRecord}
-                className="flex h-16 w-16 items-center justify-center rounded-full border bg-white text-emerald-600 shadow-lg"
+                className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#d4c9b4] bg-[#8ac68a] text-white shadow-lg"
                 aria-label="喂养记录"
               >
                 <Droplets size={30} />
               </button>
-              <span className="text-center rounded-full bg-white/95 px-2 py-0.5 text-[11px] font-medium text-emerald-700 shadow-md border border-emerald-100 whitespace-nowrap">
+              <span className="text-center rounded-full bg-[#fffdf5]/95 px-2 py-0.5 text-[11px] font-medium text-[#5a7f38] shadow-md border border-[#e8dcc8] whitespace-nowrap">
                 喂养记录
               </span>
             </div>
@@ -113,7 +113,7 @@ export default function MobileNav() {
             <button
               type="button"
               onClick={() => setMenuOpen((prev) => !prev)}
-              className="relative z-10 flex h-16 w-16 items-center justify-center rounded-full bg-black text-white shadow-xl transition-transform active:scale-95 border-[4px] border-white"
+              className="relative z-10 flex h-16 w-16 items-center justify-center rounded-full bg-[#725d42] text-white shadow-xl transition-transform active:scale-95 border-[5px] border-[#fffdf5]"
               aria-label="打开快捷菜单"
             >
               <Plus
@@ -132,7 +132,7 @@ export default function MobileNav() {
             onClick={() => setMenuOpen(false)}
             className={cn(
               "flex flex-col items-center justify-center gap-1 transition-colors w-12",
-              isSettings ? "text-black" : "text-gray-400",
+              isSettings ? "text-[#5a7f38]" : "text-[#a0936e]",
             )}
           >
             <Settings

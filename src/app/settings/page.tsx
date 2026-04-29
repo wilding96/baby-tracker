@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation"; // ✨ 新增: 路由跳转
 import { supabase } from "@/lib/supabase";
+import { Divider } from "animal-island-ui";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -84,64 +85,66 @@ export default function SettingsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#F2F2F7] pb-24">
+    <main className="island-page min-h-screen pb-24">
       {/* 3. 把弹窗组件放在最下面 (不可见，只有触发时才显示) */}
       <InstallPrompt open={showInstall} onOpenChange={setShowInstall} />
       {/* 1. 顶部大标题 */}
-      <div className="pt-14 pb-6 px-6">
-        <h1 className="text-3xl font-bold text-gray-900">设置</h1>
+      <div className="island-shell pt-14 pb-3">
+        <p className="text-xs font-bold text-[#6fba2c]">Family Island</p>
+        <h1 className="text-3xl font-black text-[#725d42]">设置</h1>
+        <Divider type="wave-yellow" className="mt-4" />
       </div>
 
       {/* 2. 个人信息卡片 */}
-      <div className="px-4 mb-6">
+      <div className="island-shell pt-0 mb-2">
         <Link href="/settings/profile">
-          <div className="bg-white rounded-2xl p-4 flex items-center gap-4 shadow-sm active:scale-[0.98] transition-transform">
-            <Avatar className="h-16 w-16 border-2 border-white shadow-sm">
+          <div className="island-card bg-[#fffdf5] rounded-3xl p-4 flex items-center gap-4 active:scale-[0.98] transition-transform">
+            <Avatar className="h-16 w-16 border-4 border-[#f7cd67] shadow-sm">
               <Image src={avatar} alt="宝宝头像" className="rounded-full" />
             </Avatar>
             <div className="flex-1">
-              <h2 className="text-xl font-bold text-gray-900">{babyName}</h2>
-              <p className="text-sm text-gray-500">点击编辑宝宝资料</p>
+              <h2 className="text-xl font-black text-[#725d42]">{babyName}</h2>
+              <p className="text-sm text-[#9f927d]">点击编辑宝宝资料</p>
             </div>
-            <div className="bg-gray-50 p-2 rounded-full">
-              <ChevronRight size={20} className="text-gray-400" />
+            <div className="bg-[#f0e8d8] p-2 rounded-full">
+              <ChevronRight size={20} className="text-[#9f927d]" />
             </div>
           </div>
         </Link>
       </div>
 
       {/* 3. 功能列表区域 */}
-      <div className="space-y-6 px-4">
+      <div className="island-shell space-y-6 pt-0">
         {/* ✨ 新增 Group: 家庭共享 (插入在这里最显眼) */}
         <section className="space-y-2">
-          <h3 className="text-xs font-semibold text-gray-500 ml-4 uppercase tracking-wider">
+          <h3 className="text-xs font-bold text-[#6fba2c] ml-4 uppercase tracking-wider">
             家庭共享
           </h3>
-          <div className="bg-white rounded-xl overflow-hidden shadow-sm p-4">
+          <div className="island-card bg-[#fffdf5] rounded-3xl overflow-hidden p-4">
             <div className="flex items-center gap-3 mb-3">
-              <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
+              <div className="bg-[#dff0d5] p-2 rounded-2xl text-[#5a7f38]">
                 <Users size={20} />
               </div>
               <div>
-                <h4 className="font-medium text-gray-900">邀请家人</h4>
-                <p className="text-xs text-gray-500">让另一半同步记录数据</p>
+                <h4 className="font-bold text-[#725d42]">邀请家人</h4>
+                <p className="text-xs text-[#9f927d]">让另一半同步记录数据</p>
               </div>
             </div>
 
             {/* 邀请码复制区 */}
             <div
               onClick={copyToClipboard}
-              className="bg-gray-50 border border-gray-100 rounded-lg p-3 flex items-center justify-between cursor-pointer active:bg-gray-100 transition-colors"
+              className="bg-[#faf8f2] border-2 border-[#e8dcc8] rounded-3xl p-3 flex items-center justify-between cursor-pointer active:bg-[#f0e8d8] transition-colors"
             >
               <div className="flex flex-col">
-                <span className="text-[10px] text-gray-400 uppercase tracking-wider">
+                <span className="text-[10px] text-[#9f927d] uppercase tracking-wider">
                   邀请码
                 </span>
-                <span className="text-xl font-mono font-bold text-gray-800 tracking-widest">
+                <span className="text-xl font-mono font-black text-[#725d42] tracking-widest">
                   {inviteCode}
                 </span>
               </div>
-              <div className="text-gray-400">
+              <div className="text-[#9f927d]">
                 {copied ? (
                   <div className="flex items-center gap-1 text-green-600">
                     <span className="text-xs font-bold">已复制</span>
@@ -157,16 +160,16 @@ export default function SettingsPage() {
 
         {/* Group 1: 常规设置 */}
         <section className="space-y-2">
-          <h3 className="text-xs font-semibold text-gray-500 ml-4 uppercase tracking-wider">
+          <h3 className="text-xs font-bold text-[#6fba2c] ml-4 uppercase tracking-wider">
             通用
           </h3>
-          <div className="bg-white rounded-xl overflow-hidden shadow-sm divide-y divide-gray-100">
+          <div className="island-card bg-[#fffdf5] rounded-3xl overflow-hidden divide-y divide-[#e8dcc8]">
             <div className="flex items-center justify-between p-4">
               <div className="flex items-center gap-3">
-                <div className="bg-orange-100 p-2 rounded-lg text-orange-600">
+                <div className="bg-[#ffe7b2] p-2 rounded-2xl text-[#8a5a13]">
                   <Bell size={20} />
                 </div>
-                <span className="font-medium text-gray-700">推送通知</span>
+                <span className="font-bold text-[#725d42]">推送通知</span>
               </div>
               <Switch
                 checked={notifications}
@@ -176,29 +179,29 @@ export default function SettingsPage() {
 
             <div className="flex items-center justify-between p-4">
               <div className="flex items-center gap-3">
-                <div className="bg-purple-100 p-2 rounded-lg text-purple-600">
+                <div className="bg-[#eef0e6] p-2 rounded-2xl text-[#725d42]">
                   <Moon size={20} />
                 </div>
-                <span className="font-medium text-gray-700">深色模式</span>
+                <span className="font-bold text-[#725d42]">深色模式</span>
               </div>
               <Switch checked={false} />
             </div>
 
             <div
-              className="flex items-center justify-between p-4 active:bg-gray-50 cursor-pointer"
+              className="flex items-center justify-between p-4 active:bg-[#faf8f2] cursor-pointer"
               onClick={() => setShowInstall(true)}
             >
               <div className="flex items-center gap-3">
-                <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
+                <div className="bg-[#dff0d5] p-2 rounded-2xl text-[#5a7f38]">
                   <Smartphone size={20} />
                 </div>
-                <span className="font-medium text-gray-700">
+                <span className="font-bold text-[#725d42]">
                   安装到桌面 (App)
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">去添加</span>
-                <ChevronRight size={18} className="text-gray-300" />
+                <span className="text-xs text-[#9f927d]">去添加</span>
+                <ChevronRight size={18} className="text-[#c4b89e]" />
               </div>
             </div>
           </div>
@@ -206,40 +209,40 @@ export default function SettingsPage() {
 
         {/* Group 2: 数据与支持 */}
         <section className="space-y-2">
-          <h3 className="text-xs font-semibold text-gray-500 ml-4 uppercase tracking-wider">
+          <h3 className="text-xs font-bold text-[#6fba2c] ml-4 uppercase tracking-wider">
             数据与支持
           </h3>
-          <div className="bg-white rounded-xl overflow-hidden shadow-sm divide-y divide-gray-100">
-            <div className="flex items-center justify-between p-4 active:bg-gray-50 cursor-pointer">
+          <div className="island-card bg-[#fffdf5] rounded-3xl overflow-hidden divide-y divide-[#e8dcc8]">
+            <div className="flex items-center justify-between p-4 active:bg-[#faf8f2] cursor-pointer">
               <div className="flex items-center gap-3">
-                <div className="bg-green-100 p-2 rounded-lg text-green-600">
+                <div className="bg-[#dff0d5] p-2 rounded-2xl text-[#5a7f38]">
                   <FileText size={20} />
                 </div>
-                <span className="font-medium text-gray-700">
+                <span className="font-bold text-[#725d42]">
                   导出数据 (Excel)
                 </span>
               </div>
-              <ChevronRight size={18} className="text-gray-300" />
+              <ChevronRight size={18} className="text-[#c4b89e]" />
             </div>
 
-            <div className="flex items-center justify-between p-4 active:bg-gray-50 cursor-pointer">
+            <div className="flex items-center justify-between p-4 active:bg-[#faf8f2] cursor-pointer">
               <div className="flex items-center gap-3">
-                <div className="bg-gray-100 p-2 rounded-lg text-gray-600">
+                <div className="bg-[#f0e8d8] p-2 rounded-2xl text-[#725d42]">
                   <HelpCircle size={20} />
                 </div>
-                <span className="font-medium text-gray-700">帮助与反馈</span>
+                <span className="font-bold text-[#725d42]">帮助与反馈</span>
               </div>
-              <ChevronRight size={18} className="text-gray-300" />
+              <ChevronRight size={18} className="text-[#c4b89e]" />
             </div>
 
-            <div className="flex items-center justify-between p-4 active:bg-gray-50 cursor-pointer">
+            <div className="flex items-center justify-between p-4 active:bg-[#faf8f2] cursor-pointer">
               <div className="flex items-center gap-3">
-                <div className="bg-gray-100 p-2 rounded-lg text-gray-600">
+                <div className="bg-[#f0e8d8] p-2 rounded-2xl text-[#725d42]">
                   <Shield size={20} />
                 </div>
-                <span className="font-medium text-gray-700">隐私政策</span>
+                <span className="font-bold text-[#725d42]">隐私政策</span>
               </div>
-              <ChevronRight size={18} className="text-gray-300" />
+              <ChevronRight size={18} className="text-[#c4b89e]" />
             </div>
           </div>
         </section>
@@ -250,12 +253,12 @@ export default function SettingsPage() {
             variant="outline"
             onClick={handleLogout}
             disabled={loading}
-            className="w-full bg-white text-red-500 hover:text-red-600 hover:bg-red-50 border-none shadow-sm h-12 rounded-xl text-base font-medium"
+            className="w-full text-red-500 hover:text-red-600 h-12 text-base font-bold"
           >
             <LogOut size={18} className="mr-2" />
             {loading ? "正在退出..." : "退出登录"}
           </Button>
-          <p className="text-center text-xs text-gray-400 mt-4">
+          <p className="text-center text-xs text-[#9f927d] mt-4">
             Baby Tracker v1.0.0
           </p>
         </div>

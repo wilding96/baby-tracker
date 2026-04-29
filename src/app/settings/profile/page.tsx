@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { Divider } from "animal-island-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -101,14 +102,15 @@ export default function ProfilePage() {
 
   if (pageLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="island-page min-h-screen flex items-center justify-center text-[#725d42]">
         加载中...
       </div>
     );
   }
 
   return (
-    <main className="container mx-auto max-w-md p-4 min-h-screen bg-gray-50">
+    <main className="island-page min-h-screen">
+      <div className="island-shell p-4">
       {/* 顶部导航 */}
       <div className="flex items-center gap-2 mb-6 pt-2">
         <Button
@@ -119,13 +121,17 @@ export default function ProfilePage() {
         >
           <ArrowLeft size={24} />
         </Button>
-        <h1 className="text-xl font-bold">编辑宝宝资料</h1>
+        <div>
+          <p className="text-xs font-bold text-[#6fba2c]">Baby Profile</p>
+          <h1 className="text-xl font-black text-[#725d42]">编辑宝宝资料</h1>
+        </div>
       </div>
+      <Divider type="wave-yellow" className="mb-6" />
 
       {/* 图片展示 */}
       <div className="flex justify-center mb-8">
         <div className="relative">
-          <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-md">
+          <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-[#f7cd67] shadow-md">
             <Image
               src={avatar}
               alt="宝宝头像"
@@ -135,13 +141,13 @@ export default function ProfilePage() {
             />
           </div>
           {/* 这里是个装饰性的小图标，模拟“点击更换头像”的功能(暂未实现) */}
-          <div className="absolute bottom-0 right-0 bg-blue-500 p-1.5 rounded-full border-2 border-white">
+          <div className="absolute bottom-0 right-0 bg-[#8ac68a] p-1.5 rounded-full border-2 border-[#fffdf5]">
             <Save size={12} className="text-white" />
           </div>
         </div>
       </div>
 
-      <div className="space-y-6 bg-white p-6 rounded-2xl shadow-sm">
+      <div className="island-card space-y-6 bg-[#fffdf5] p-6 rounded-3xl">
         {/* 名字输入 */}
         <div className="space-y-2">
           <Label htmlFor="name">宝宝小名</Label>
@@ -177,8 +183,8 @@ export default function ProfilePage() {
                 flex-1 py-3 text-center rounded-xl border-2 cursor-pointer transition-all font-medium
                 ${
                   formData.gender === "male"
-                    ? "bg-blue-50 text-blue-600 border-blue-500"
-                    : "bg-white text-gray-500 border-gray-100 hover:bg-gray-50"
+                    ? "bg-[#dff0d5] text-[#3d7335] border-[#8ac68a]"
+                    : "bg-[#fffdf5] text-[#9f927d] border-[#e8dcc8] hover:bg-[#faf8f2]"
                 }
               `}
             >
@@ -192,8 +198,8 @@ export default function ProfilePage() {
                 flex-1 py-3 text-center rounded-xl border-2 cursor-pointer transition-all font-medium
                 ${
                   formData.gender === "female"
-                    ? "bg-pink-50 text-pink-600 border-pink-500"
-                    : "bg-white text-gray-500 border-gray-100 hover:bg-gray-50"
+                    ? "bg-[#ffe7b2] text-[#8a5a13] border-[#e59266]"
+                    : "bg-[#fffdf5] text-[#9f927d] border-[#e8dcc8] hover:bg-[#faf8f2]"
                 }
               `}
             >
@@ -204,12 +210,13 @@ export default function ProfilePage() {
 
         {/* 保存按钮 */}
         <Button
-          className="w-full mt-8 bg-black hover:bg-gray-800 text-white h-12 rounded-xl text-base"
+          className="w-full mt-8 h-12 text-base"
           onClick={handleSave}
           disabled={loading}
         >
           {loading ? "正在保存..." : "保存修改"}
         </Button>
+      </div>
       </div>
     </main>
   );

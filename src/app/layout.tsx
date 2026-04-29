@@ -1,10 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import "animal-island-ui/style";
 import "./globals.css";
 // 👇 引入组件
 import MobileNav from "@/components/layout/mobile-nav";
-
-const inter = Inter({ subsets: ["latin"] });
 
 // 👇 定义 Metadata，关联 manifest.json
 export const metadata: Metadata = {
@@ -38,8 +36,8 @@ export default function RootLayout({
         {/* iOS 状态栏样式：default(白底黑字) / black(黑底白字) / black-translucent(沉浸式) */}
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
-      <body className={inter.className}>
-        <div className="min-h-screen bg-gray-50 pb-20">
+      <body>
+        <div className="min-h-screen bg-[#f7f3df] pb-20 text-[#725d42]">
           {" "}
           {/* 👇 2. 加个 pb-20 防止内容被底部栏遮挡 */}
           {children}

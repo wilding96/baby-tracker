@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { Divider } from "animal-island-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,38 +63,27 @@ export default function LoginPage() {
   };
 
   return (
-    // 背景底色稍微调冷一点点 (gray-100)
-    <div className="relative min-h-screen w-full flex items-center justify-center bg-gray-100 overflow-hidden">
-      {/* ✨ 帅气的冷色调呼吸背景 */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
-        {/* 1. 左上：深蓝色 (代替紫色) */}
-        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-40 animate-blob"></div>
-        {/* 2. 右上：青色/湖蓝色 (代替黄色) - 增加科技感 */}
-        <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-cyan-400 rounded-full mix-blend-multiply filter blur-[128px] opacity-40 animate-blob animation-delay-2000"></div>
-        {/* 3. 左下：靛青色 (代替粉色) - 增加深邃感 */}
-        <div className="absolute bottom-[-20%] left-[20%] w-96 h-96 bg-indigo-500 rounded-full mix-blend-multiply filter blur-[128px] opacity-40 animate-blob animation-delay-4000"></div>
-      </div>
-
-      {/* 🧊 毛玻璃卡片 (增加一点点边框清晰度) */}
+    <div className="island-page relative min-h-screen w-full flex items-center justify-center overflow-hidden">
       <div className="relative z-10 w-full max-w-sm px-4 animate-fade-in-up">
-        <div className="bg-white/30 backdrop-blur-xl border border-white/60 shadow-2xl rounded-3xl p-8 space-y-6">
-          {/* Logo 区域 (渐变色也同步调整为冷色) */}
+        <div className="island-card bg-[#fffdf5]/95 rounded-3xl p-8 space-y-6">
           <div className="text-center space-y-2">
-            <div className="bg-gradient-to-tr from-blue-600 to-cyan-500 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-lg text-white mb-4 transform transition-transform hover:scale-110 duration-300">
+            <div className="bg-[#f7cd67] w-16 h-16 rounded-3xl flex items-center justify-center mx-auto shadow-lg text-[#725d42] mb-4 transform transition-transform hover:scale-110 duration-300 border-2 border-[#d4c9b4]">
               {isSignUp ? <Sparkles size={32} /> : <Baby size={32} />}
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+            <p className="text-xs font-bold text-[#6fba2c]">Baby Island</p>
+            <h1 className="text-2xl font-black text-[#725d42] tracking-tight">
               {isSignUp ? "加入大家庭" : "欢迎回来"}
             </h1>
-            <p className="text-gray-600 text-sm">
+            <p className="text-[#9f927d] text-sm">
               {isSignUp ? "开始记录宝宝成长的每一刻" : "继续书写爱的篇章"}
             </p>
           </div>
+          <Divider type="wave-yellow" />
 
           {/* 表单区域 */}
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-gray-700 font-medium">邮箱</Label>
+              <Label className="text-[#725d42] font-bold">邮箱</Label>
               <Input
                 type="email"
                 placeholder="name@example.com"
@@ -101,12 +91,11 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 autoCapitalize="none"
                 autoCorrect="off"
-                // 聚焦时的边框色改为冷蓝色
-                className="bg-white/50 border-white/50 focus:bg-white focus:border-blue-500 transition-all h-11 rounded-xl backdrop-blur-sm"
+                className="h-11"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-gray-700 font-medium">密码</Label>
+              <Label className="text-[#725d42] font-bold">密码</Label>
               <Input
                 type="password"
                 placeholder="••••••••"
@@ -114,7 +103,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 autoCapitalize="none"
                 autoCorrect="off"
-                className="bg-white/50 border-white/50 focus:bg-white focus:border-blue-500 transition-all h-11 rounded-xl backdrop-blur-sm"
+                className="h-11"
               />
             </div>
           </div>
@@ -122,8 +111,7 @@ export default function LoginPage() {
           {/* 按钮区域 */}
           <div className="space-y-4 pt-2">
             <Button
-              // 按钮保持黑色，最酷
-              className="w-full h-12 rounded-xl bg-gray-950 hover:bg-gray-800 text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] font-medium text-base"
+              className="w-full h-12 text-base"
               onClick={handleAuth}
               disabled={loading}
             >
@@ -140,23 +128,23 @@ export default function LoginPage() {
               )}
             </Button>
 
-            <Button asChild variant="outline" className="w-full h-11 rounded-xl bg-white/60">
+            <Button asChild variant="outline" className="w-full h-11">
               <Link href="/board">不登录，先去留言板</Link>
             </Button>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-gray-400/30" />
+                <span className="w-full border-t border-[#d4c9b4]" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-transparent px-2 text-gray-500 backdrop-blur-sm rounded-md">
+                <span className="bg-[#fffdf5] px-2 text-[#9f927d] rounded-md">
                   或者
                 </span>
               </div>
             </div>
 
             <p
-              className="text-center text-sm text-gray-600 cursor-pointer hover:text-blue-600 transition-colors select-none"
+              className="text-center text-sm text-[#725d42] cursor-pointer hover:text-[#6fba2c] transition-colors select-none"
               onClick={() => {
                 setIsSignUp(!isSignUp);
                 setLoading(false);
@@ -166,14 +154,14 @@ export default function LoginPage() {
                 // 下划线颜色统一改为冷色调
                 <>
                   已有账号？{" "}
-                  <span className="font-bold underline decoration-blue-400 decoration-2 underline-offset-2">
+                  <span className="font-bold underline decoration-[#8ac68a] decoration-2 underline-offset-2">
                     去登录
                   </span>
                 </>
               ) : (
                 <>
                   没有账号？{" "}
-                  <span className="font-bold underline decoration-cyan-400 decoration-2 underline-offset-2">
+                  <span className="font-bold underline decoration-[#f7cd67] decoration-2 underline-offset-2">
                     注册一个
                   </span>
                 </>
@@ -183,7 +171,7 @@ export default function LoginPage() {
         </div>
 
         {/* 底部版权 */}
-        <p className="text-center text-gray-500/80 text-xs mt-8">
+        <p className="text-center text-[#9f927d] text-xs mt-8">
           © 2026 BabyTracker. Designed for Dylan.
         </p>
       </div>

@@ -1,5 +1,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
+import { Button as AnimalButton } from "animal-island-ui"
+import type { ButtonProps as AnimalButtonProps } from "animal-island-ui"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
@@ -43,19 +45,61 @@ function Button({
   variant = "default",
   size = "default",
   asChild = false,
+  type: htmlType = "button",
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
   }) {
-  const Comp = asChild ? Slot : "button"
+  const animalType: AnimalButtonProps["type"] =
+    variant === "link"
+      ? "link"
+      : variant === "ghost"
+        ? "text"
+        : variant === "outline" || variant === "secondary"
+          ? "default"
+          : variant === "destructive"
+            ? "primary"
+            : "primary"
+  const animalSize: AnimalButtonProps["size"] =
+    size === "lg" ? "large" : size === "sm" || size === "xs" ? "small" : "middle"
+
+  if (!asChild) {
+    return (
+      <AnimalButton
+        data-slot="button"
+        data-variant={variant}
+        data-size={size}
+        type={animalType}
+        size={animalSize}
+        htmlType={htmlType}
+        danger={variant === "destructive"}
+        className={className}
+        {...props}
+      />
+    )
+  }
+
+  const Comp = Slot
+  const linkButtonClass = cn(
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full border-2 font-bold transition-all",
+    "border-[#aaa69d] bg-[#f8f8f0] text-[#794f27] shadow-[0_5px_#bdaea0]",
+    "hover:-translate-y-0.5 hover:border-[#19c8b9] hover:text-[#19c8b9]",
+    "active:translate-y-0.5 active:shadow-[0_1px_#bdaea0]",
+    "disabled:pointer-events-none disabled:opacity-50",
+    size === "lg" ? "h-12 px-8 text-base" : size === "sm" || size === "xs" ? "h-8 px-4 text-xs" : "h-10 px-5 text-sm",
+    variant === "ghost" && "border-transparent bg-transparent shadow-none",
+    variant === "link" && "border-transparent bg-transparent text-[#19c8b9] shadow-none",
+    variant === "destructive" && "border-[#e05a5a] bg-[#e05a5a] text-white shadow-[0_5px_#c94444]",
+    className,
+  )
 
   return (
     <Comp
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={linkButtonClass}
       {...props}
     />
   )

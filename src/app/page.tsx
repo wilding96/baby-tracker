@@ -10,20 +10,14 @@ import {
 } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { supabase } from "@/lib/supabase";
+import { Divider, Modal } from "animal-island-ui";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   CalendarClock,
+  BarChart3,
   Syringe,
   Stethoscope,
   Sparkles,
@@ -279,31 +273,33 @@ export default function Home() {
   };
 
   return (
-    <main className="relative container mx-auto max-w-md p-4 space-y-4 pb-24 min-h-screen overflow-hidden bg-gradient-to-b from-sky-50 via-gray-50 to-white">
-      <div className="pointer-events-none absolute -top-16 -right-10 h-40 w-40 rounded-full bg-cyan-200/35 blur-3xl" />
-      <div className="pointer-events-none absolute top-40 -left-12 h-36 w-36 rounded-full bg-blue-200/25 blur-3xl" />
+    <main className="island-page relative min-h-screen overflow-hidden pb-24">
+      <div className="island-shell space-y-4">
+      <div className="pointer-events-none absolute -top-16 -right-10 h-40 w-40 rounded-full bg-[#f7cd67]/30 blur-3xl" />
+      <div className="pointer-events-none absolute top-40 -left-12 h-36 w-36 rounded-full bg-[#8ac68a]/25 blur-3xl" />
 
       <header className="relative space-y-1">
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+        <p className="text-xs font-bold text-[#6fba2c]">Baby Island</p>
+        <h1 className="text-2xl font-black text-[#725d42] tracking-tight">
           {babyName} 的成长记录
         </h1>
-        <p className="text-xs text-gray-500" suppressHydrationWarning>
+        <p className="text-xs text-[#9f927d]" suppressHydrationWarning>
           {format(new Date(), "yyyy年MM月dd日 EEEE", { locale: zhCN })}
         </p>
         <div className="mt-3 flex gap-2">
-          <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] text-gray-600 border shadow-sm">
+          <span className="rounded-full bg-[#fffdf5]/90 px-3 py-1 text-[11px] text-[#725d42] border border-[#e8dcc8] shadow-sm">
             共 {events.length} 条事件
           </span>
-          <span className="rounded-full bg-blue-50 px-3 py-1 text-[11px] text-blue-700 border border-blue-100 shadow-sm">
+          <span className="rounded-full bg-[#eef6e7] px-3 py-1 text-[11px] text-[#5a7f38] border border-[#d9e8c9] shadow-sm">
             待进行 {upcomingCount} 条
           </span>
         </div>
       </header>
 
-      <Card className="relative overflow-hidden border-0 bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg">
-        <div className="absolute right-0 top-0 h-20 w-20 rounded-full bg-white/10 blur-2xl" />
+      <Card className="island-card relative overflow-hidden bg-[#f7cd67] text-[#725d42]">
+        <div className="absolute right-0 top-0 h-20 w-20 rounded-full bg-white/20 blur-2xl" />
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium opacity-90">
+          <CardTitle className="text-sm font-black opacity-90">
             下一个事件
           </CardTitle>
         </CardHeader>
@@ -331,13 +327,15 @@ export default function Home() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Divider type="wave-yellow" />
+
+      <Card className="island-card bg-[#fffdf5]">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">成长时间线</CardTitle>
+          <CardTitle className="text-sm text-[#725d42]">成长时间线</CardTitle>
         </CardHeader>
         <CardContent>
           {sortedDesc.length === 0 ? (
-            <div className="rounded-xl border border-dashed p-6 text-center text-sm text-gray-500">
+            <div className="rounded-3xl border-2 border-dashed border-[#d4c9b4] bg-[#faf8f2] p-6 text-center text-sm text-[#9f927d]">
               暂无事件，先添加第一条体检/疫苗/大事件吧。
             </div>
           ) : (
@@ -351,26 +349,26 @@ export default function Home() {
                   return (
                     <div
                       key={event.id}
-                      className="relative rounded-xl border bg-white p-3 shadow-sm"
+                      className="relative rounded-3xl border-2 border-[#e8dcc8] bg-[#fffdf5] p-3 shadow-sm"
                     >
-                      <span className="absolute -left-[13px] top-4 h-3 w-3 rounded-full bg-blue-500" />
+                      <span className="absolute -left-[13px] top-4 h-3 w-3 rounded-full bg-[#8ac68a]" />
 
                       <div className="flex items-start justify-between gap-2">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <Icon size={14} className="text-gray-500" />
-                            <p className="font-semibold text-sm text-gray-900">
+                            <Icon size={14} className="text-[#9f927d]" />
+                            <p className="font-semibold text-sm text-[#725d42]">
                               {event.title}
                             </p>
                           </div>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-[#9f927d]">
                             {format(parseISO(event.date), "yyyy年MM月dd日")}
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => handleDeleteEvent(event.id)}
-                          className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-red-500"
+                          className="rounded-full p-1 text-[#a0936e] hover:bg-[#f0e8d8] hover:text-red-500"
                           aria-label="删除事件"
                         >
                           <Trash2 size={14} />
@@ -384,11 +382,11 @@ export default function Home() {
                           {typeMeta.label}
                         </span>
                         {event.notes ? (
-                          <p className="text-xs text-gray-500 line-clamp-1">
+                          <p className="text-xs text-[#9f927d] line-clamp-1">
                             备注：{event.notes}
                           </p>
                         ) : (
-                          <p className="text-xs text-gray-400">无备注</p>
+                          <p className="text-xs text-[#c4b89e]">无备注</p>
                         )}
                       </div>
                     </div>
@@ -401,15 +399,15 @@ export default function Home() {
       </Card>
 
       <section className="pt-1 space-y-2">
-        <p className="text-xs text-gray-500">原功能入口</p>
+        <p className="text-xs text-[#9f927d]">快捷入口</p>
 
-        <div className="rounded-2xl border bg-white/90 p-3 shadow-sm">
+        <div className="island-soft-panel p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-gray-900">
+              <p className="text-sm font-semibold text-[#725d42]">
                 继续记录喂养数据
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-[#9f927d] mt-0.5">
                 进入原有喂养记录流程
               </p>
             </div>
@@ -419,11 +417,32 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="rounded-2xl border bg-white/90 p-3 shadow-sm">
+        <div className="island-soft-panel p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-[#dff0d5] p-2 text-[#5a7f38]">
+                <BarChart3 size={18} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#725d42]">
+                  喂养情况总览
+                </p>
+                <p className="text-xs text-[#9f927d] mt-0.5">
+                  查看奶量和睡眠趋势
+                </p>
+              </div>
+            </div>
+            <Button asChild variant="outline" className="h-10 px-4">
+              <Link href="/stats">看总览</Link>
+            </Button>
+          </div>
+        </div>
+
+        <div className="island-soft-panel p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-gray-900">留言板</p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-sm font-semibold text-[#725d42]">留言板</p>
+              <p className="text-xs text-[#9f927d] mt-0.5">
                 给家人留句话，记录当下心情
               </p>
             </div>
@@ -434,14 +453,26 @@ export default function Home() {
         </div>
       </section>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-sm rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>新增成长事件</DialogTitle>
-            <DialogDescription>
+      <Modal
+        open={dialogOpen}
+        title="新增成长事件"
+        width="min(92vw, 380px)"
+        typewriter={false}
+        onClose={() => setDialogOpen(false)}
+        footer={
+          <div className="flex w-full gap-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>
+              取消
+            </Button>
+            <Button type="button" className="flex-1" onClick={handleCreateEvent}>
+              保存事件
+            </Button>
+          </div>
+        }
+      >
+          <div className="mb-3 text-sm text-[#9f927d]">
               记录体检、疫苗和宝宝成长大事件。
-            </DialogDescription>
-          </DialogHeader>
+          </div>
 
           <div className="space-y-3">
             <div className="space-y-1.5">
@@ -472,7 +503,7 @@ export default function Home() {
                 onChange={(e) =>
                   setEventType(e.target.value as GrowthEventType)
                 }
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                className="flex h-10 w-full rounded-full border-2 border-[#c4b89e] bg-[#f7f3df] px-4 py-1 text-sm text-[#725d42] shadow-[0_3px_#d4c9b4] outline-none"
               >
                 <option value="checkup">体检</option>
                 <option value="vaccine">疫苗</option>
@@ -487,20 +518,14 @@ export default function Home() {
                 id="event-notes"
                 value={eventNotes}
                 onChange={(e) => setEventNotes(e.target.value)}
-                className="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                className="min-h-20 w-full rounded-3xl border-2 border-[#c4b89e] bg-[#f7f3df] px-4 py-3 text-sm text-[#725d42] shadow-[0_3px_#d4c9b4] outline-none"
                 placeholder="例如：身高68cm，体重8.3kg"
               />
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              取消
-            </Button>
-            <Button onClick={handleCreateEvent}>保存事件</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </Modal>
+      </div>
     </main>
   );
 }

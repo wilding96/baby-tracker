@@ -1,15 +1,22 @@
 import * as React from "react"
+import { Card as AnimalCard } from "animal-island-ui"
+import type { CardProps as AnimalCardProps } from "animal-island-ui"
 
 import { cn } from "@/lib/utils"
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+function Card({
+  className,
+  color,
+  type,
+  ...props
+}: Omit<React.ComponentProps<"div">, "color"> &
+  Pick<AnimalCardProps, "color" | "type">) {
   return (
-    <div
+    <AnimalCard
       data-slot="card"
-      className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
-        className
-      )}
+      color={color}
+      type={type}
+      className={cn("flex flex-col gap-6 py-6 shadow-sm", className)}
       {...props}
     />
   )

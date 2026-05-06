@@ -43,7 +43,7 @@ type ArchiverFactory = (
 type ExifToolInstance = {
   write(
     file: string,
-    tags: { ContentIdentifier: string },
+    tags: { ContentIdentifier: string; StillImageTime?: number },
     args?: string[],
   ): Promise<void>;
   end(): Promise<void>;
@@ -152,6 +152,14 @@ export async function POST(request: Request) {
 
     const exiftool = new ExifTool();
     try {
+      await exiftool.write(
+        outputVideoPath,
+        {
+          ContentIdentifier: contentIdentifier,
+          StillImageTime: 0,
+        },
+        ["-overwrite_original"],
+      );
       await exiftool.write(
         inputImagePath,
         { ContentIdentifier: contentIdentifier },

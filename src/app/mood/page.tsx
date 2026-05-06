@@ -57,10 +57,7 @@ export default function MoodDemoPage() {
     // 过滤函数：录制视频时，不录制底部的悬浮控制台和返回按钮
     const filterNodes = (node: HTMLElement) => {
       const exclusionClasses = ["floating-dock", "diary-back"];
-      if (node.classList) {
-        return !exclusionClasses.some((cls) => node.classList.contains(cls));
-      }
-      return true;
+      return !exclusionClasses.some((cls) => node.classList?.contains(cls));
     };
 
     try {
@@ -68,7 +65,7 @@ export default function MoodDemoPage() {
       let latestFrame = await htmlToImage.toCanvas(targetNode, {
         pixelRatio: 1,
         backgroundColor: emotion === "faded" ? "#e4e3df" : "#050a1f", // 给个底色防黑边
-        filter: filterNodes as any,
+        filter: filterNodes,
       });
 
       const streamCanvas = document.createElement("canvas");
@@ -80,19 +77,22 @@ export default function MoodDemoPage() {
 
       // 2. 配置 30FPS 视频流
       const stream = streamCanvas.captureStream(30);
-      // 优先尝试 iOS Safari 专属的 mp4 格式，其次是 H264 编码的 webm，最后兜底 VP8/VP9
-      let mimeType = "video/webm";
-      let extension = "webm";
+      const supportedMimeTypes = [
+        "video/webm;codecs=h264",
+        "video/webm;codecs=vp9",
+        "video/webm;codecs=vp8",
+        "video/webm",
+        "video/mp4",
+      ];
+      const mimeType = supportedMimeTypes.find((type) =>
+        MediaRecorder.isTypeSupported(type),
+      );
 
-      if (MediaRecorder.isTypeSupported("video/mp4")) {
-        mimeType = "video/mp4";
-        extension = "mp4";
-      } else if (MediaRecorder.isTypeSupported("video/webm; codecs=h264")) {
-        mimeType = "video/webm; codecs=h264";
-      } else if (MediaRecorder.isTypeSupported("video/webm; codecs=vp9")) {
-        mimeType = "video/webm; codecs=vp9";
+      if (!mimeType) {
+        throw new Error("当前浏览器不支持 MediaRecorder 视频录制");
       }
 
+      const extension = mimeType.includes("mp4") ? "mp4" : "webm";
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       const chunks: BlobPart[] = [];
 
@@ -100,52 +100,72 @@ export default function MoodDemoPage() {
         if (e.data.size > 0) chunks.push(e.data);
       };
 
-      // 将 base64 转为 Blob 的辅助函数（请将这个函数放在组件外面或组件内部都可以）
-      const base64ToBlob = (base64: string, mimeType: string) => {
-        const byteString = atob(base64.split(",")[1]);
-        const ab = new ArrayBuffer(byteString.length);
-        const ia = new Uint8Array(ab);
-        for (let i = 0; i < byteString.length; i++) {
-          ia[i] = byteString.charCodeAt(i);
-        }
-        return new Blob([ab], { type: mimeType });
-      };
+      const canvasToBlob = (canvas: HTMLCanvasElement) =>
+        new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                resolve(blob);
+              } else {
+                reject(new Error("生成封面图片失败"));
+              }
+            },
+            "image/jpeg",
+            0.9,
+          );
+        });
 
       mediaRecorder.onstop = async () => {
         try {
-          // 1. 拿到录制好的 WebM 视频
-          const videoBlob = new Blob(chunks, { type: "video/webm" });
+          if (chunks.length === 0) {
+            throw new Error("视频录制失败，没有生成有效片段");
+          }
 
-          // 2. 将第一帧的 Base64 截图（latestFrame 此时是个 Canvas）转为 JPEG Blob
-          // 注意：这里需要你将 latestFrame（HTMLCanvasElement）转为 Blob
-          const imageBase64 = latestFrame.toDataURL("image/jpeg", 0.9);
-          const imageBlob = base64ToBlob(imageBase64, "image/jpeg");
+          const videoBlob = new Blob(chunks, { type: mimeType });
+          const imageBlob = await canvasToBlob(latestFrame);
 
-          // 3. 构建 FormData 发给我们的黑科技接口
           const formData = new FormData();
           formData.append("image", imageBlob, "cover.jpg");
-          formData.append("video", videoBlob, "live.webm");
+          formData.append("video", videoBlob, `live.${extension}`);
 
-          // 4. 发起请求（因为直接返回二进制流，需要设置 responseType 相关的接收方式）
           const response = await fetch("/api/generate-live-photo", {
             method: "POST",
             body: formData,
           });
 
-          if (!response.ok) throw new Error("刻录接口报错了");
+          if (!response.ok) {
+            const errorText = await response.text();
+            let message = errorText || "刻录接口报错了";
 
-          // 5. 拿到返回的 ZIP 文件并触发下载
+            try {
+              const errorBody = JSON.parse(errorText) as { error?: string };
+              message = errorBody.error || message;
+            } catch {
+              // 保留原始错误文本
+            }
+
+            throw new Error(message);
+          }
+
+          const contentType = response.headers.get("Content-Type") || "";
+          if (!contentType.includes("application/zip")) {
+            throw new Error("接口没有返回 ZIP 文件，请检查是否被登录页或中间件重定向");
+          }
+
           const zipBlob = await response.blob();
           const url = URL.createObjectURL(zipBlob);
           const a = document.createElement("a");
           a.href = url;
           a.download = `Emotion-Live-Photo-${Date.now()}.zip`;
+          document.body.appendChild(a);
           a.click();
+          a.remove();
           URL.revokeObjectURL(url);
         } catch (error) {
           console.error("实况图刻录失败", error);
-          alert("实况图刻录失败，请检查控制台");
+          alert(error instanceof Error ? error.message : "实况图刻录失败，请检查控制台");
         } finally {
+          stream.getTracks().forEach((track) => track.stop());
           setIsRecording(false);
         }
       };
@@ -209,8 +229,8 @@ export default function MoodDemoPage() {
         try {
           latestFrame = await htmlToImage.toCanvas(targetNode, {
             pixelRatio: 1,
-            backgroundColor: null,
-            filter: filterNodes as any,
+            backgroundColor: undefined,
+            filter: filterNodes,
           });
         } catch (e) {
           console.error("Capture loop error", e);

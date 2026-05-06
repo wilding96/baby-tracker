@@ -1,118 +1,197 @@
+import { randomUUID } from "node:crypto";
+import { unlink, mkdir, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { PassThrough, Readable } from "node:stream";
+import { join } from "node:path";
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
-import crypto from "crypto";
-import ffmpeg from "fluent-ffmpeg";
-import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-import { exiftool } from "exiftool-vendored";
-import archiver from "archiver";
-import { PassThrough } from "stream";
 
-// 配置 ffmpeg 使用我们安装的静态二进制文件
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const require = createRequire(import.meta.url);
+
+type FfmpegCommand = {
+  videoCodec(codec: string): FfmpegCommand;
+  audioCodec(codec: string): FfmpegCommand;
+  outputOptions(options: string[]): FfmpegCommand;
+  output(path: string): FfmpegCommand;
+  format(format: string): FfmpegCommand;
+  on(event: "end", listener: () => void): FfmpegCommand;
+  on(
+    event: "error",
+    listener: (error: Error, stdout?: string, stderr?: string) => void,
+  ): FfmpegCommand;
+  run(): void;
+};
+
+type FfmpegFactory = ((input: string) => FfmpegCommand) & {
+  setFfmpegPath(path: string): void;
+};
+
+type Archive = {
+  pipe(stream: PassThrough): void;
+  file(path: string, data: { name: string }): Archive;
+  finalize(): Promise<void>;
+  on(event: "error", listener: (error: Error) => void): Archive;
+};
+
+type ArchiverFactory = (
+  format: "zip",
+  options?: { zlib?: { level?: number } },
+) => Archive;
+
+type ExifToolInstance = {
+  write(
+    file: string,
+    tags: { ContentIdentifier: string },
+    args?: string[],
+  ): Promise<void>;
+  end(): Promise<void>;
+};
+
+type ExifToolConstructor = new () => ExifToolInstance;
+
+const ffmpeg = require("fluent-ffmpeg") as FfmpegFactory;
+const archiver = require("archiver") as ArchiverFactory;
+const { ExifTool } = require("exiftool-vendored") as {
+  ExifTool: ExifToolConstructor;
+};
+
+ffmpeg.setFfmpegPath(require("@ffmpeg-installer/ffmpeg").path);
+
+function isUploadFile(value: FormDataEntryValue | null): value is File {
+  return value instanceof File && value.size > 0;
+}
+
+async function cleanupTempFiles(paths: string[]) {
+  await Promise.allSettled(paths.map((path) => unlink(path)));
+}
+
+function createCleanupOnce(paths: string[]) {
+  let cleaned = false;
+
+  return () => {
+    if (cleaned) return;
+    cleaned = true;
+    void cleanupTempFiles(paths);
+  };
+}
+
+function transcodeVideoToLivePhotoMov(
+  inputPath: string,
+  outputPath: string,
+  contentIdentifier: string,
+) {
+  return new Promise<void>((resolve, reject) => {
+    ffmpeg(inputPath)
+      .videoCodec("libx264")
+      .audioCodec("aac")
+      .format("mov")
+      .outputOptions([
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "-metadata",
+        `com.apple.quicktime.content.identifier=${contentIdentifier}`,
+      ])
+      .output(outputPath)
+      .on("end", () => resolve())
+      .on("error", (error, _stdout, stderr) => {
+        reject(new Error(stderr || error.message));
+      })
+      .run();
+  });
+}
+
+function toErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "生成 Live Photo 失败";
+}
 
 export async function POST(request: Request) {
-  const tmpFiles: string[] = [];
+  const id = `${Date.now()}_${randomUUID().replaceAll("-", "").slice(0, 8)}`;
+  const contentIdentifier = randomUUID().toUpperCase();
+  const tempDir = "/tmp";
+
+  const inputImagePath = join(tempDir, `${id}_in.jpg`);
+  const inputVideoPath = join(tempDir, `${id}_in.webm`);
+  const outputImageName = `IMG_${id}.JPG`;
+  const outputVideoName = `IMG_${id}.MOV`;
+  const outputImagePath = join(tempDir, outputImageName);
+  const outputVideoPath = join(tempDir, outputVideoName);
+  const tempFiles = [
+    inputImagePath,
+    inputVideoPath,
+    outputImagePath,
+    outputVideoPath,
+  ];
 
   try {
-    // 1. 获取前端传来的视频和图片
     const formData = await request.formData();
-    const imageFile = formData.get("image") as File;
-    const videoFile = formData.get("video") as File;
+    const image = formData.get("image");
+    const video = formData.get("video");
 
-    if (!imageFile || !videoFile) {
+    if (!isUploadFile(image) || !isUploadFile(video)) {
       return NextResponse.json(
-        { error: "缺少图片或视频文件" },
+        { error: "请上传 image 和 video 文件" },
         { status: 400 },
       );
     }
 
-    const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
-    const videoBuffer = Buffer.from(await videoFile.arrayBuffer());
-
-    // 2. 准备基础数据：UUID 与临时路径
-    const assetIdentifier = crypto.randomUUID().toUpperCase();
-    const tmpDir = "/tmp";
-    const baseName = `IMG_${Date.now()}`;
-
-    const inJpg = path.join(tmpDir, `${baseName}_in.jpg`);
-    const inWebm = path.join(tmpDir, `${baseName}_in.webm`);
-    const outJpg = path.join(tmpDir, `${baseName}.JPG`); // 苹果实况图规范大写
-    const outMov = path.join(tmpDir, `${baseName}.MOV`); // 苹果实况图规范大写
-
-    tmpFiles.push(inJpg, inWebm, outJpg, outMov);
-
-    // 写入原始文件到 Vercel 允许的 /tmp 目录
-    await fs.writeFile(inJpg, imageBuffer);
-    await fs.writeFile(inWebm, videoBuffer);
-
-    // ==========================================
-    // 核心手术 1：处理图片 (写入 EXIF UUID)
-    // ==========================================
-    // 先复制一份出来作为输出底板
-    await fs.copyFile(inJpg, outJpg);
-    // 强行注入苹果特有的 ContentIdentifier
-    await exiftool.write(outJpg, { ContentIdentifier: assetIdentifier }, [
-      "-overwrite_original",
+    await mkdir(tempDir, { recursive: true });
+    await Promise.all([
+      writeFile(inputImagePath, Buffer.from(await image.arrayBuffer())),
+      writeFile(inputVideoPath, Buffer.from(await video.arrayBuffer())),
     ]);
 
-    // ==========================================
-    // 核心手术 2：处理视频 (WebM转MOV + 注入 UUID)
-    // ==========================================
-    await new Promise<void>((resolve, reject) => {
-      ffmpeg(inWebm)
-        .videoCodec("libx264")
-        .outputOptions([
-          "-pix_fmt yuv420p",
-          // 灵魂注入：写入 QuickTime 轨道 UUID
-          `-metadata com.apple.quicktime.content.identifier=${assetIdentifier}`,
-        ])
-        .save(outMov)
-        .on("end", () => resolve())
-        .on("error", (err) => reject(err));
+    await transcodeVideoToLivePhotoMov(
+      inputVideoPath,
+      outputVideoPath,
+      contentIdentifier,
+    );
+
+    const exiftool = new ExifTool();
+    try {
+      await exiftool.write(
+        inputImagePath,
+        { ContentIdentifier: contentIdentifier },
+        ["-o", outputImagePath],
+      );
+    } finally {
+      await exiftool.end();
+    }
+
+    const cleanupOnce = createCleanupOnce(tempFiles);
+    const archive = archiver("zip", { zlib: { level: 9 } });
+    const zipStream = new PassThrough();
+
+    archive.on("error", (error) => {
+      zipStream.destroy(error);
     });
 
-    // ==========================================
-    // 核心手术 3：打包 ZIP 到内存中
-    // ==========================================
-    // 为了防止在流传输过程中清理了临时文件导致报错，我们把 ZIP 直接缓冲到内存里
-    const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      const stream = new PassThrough();
-      const archive = archiver("zip", { zlib: { level: 9 } });
+    zipStream.on("close", cleanupOnce);
+    zipStream.on("end", cleanupOnce);
+    zipStream.on("error", cleanupOnce);
 
-      stream.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-      stream.on("end", () => resolve(Buffer.concat(chunks)));
-      stream.on("error", (err) => reject(err));
+    archive.pipe(zipStream);
+    archive.file(outputImagePath, { name: outputImageName });
+    archive.file(outputVideoPath, { name: outputVideoName });
 
-      archive.pipe(stream);
-      // 注意：实况图的图片和视频必须同名
-      archive.file(outJpg, { name: `${baseName}.JPG` });
-      archive.file(outMov, { name: `${baseName}.MOV` });
-      archive.finalize();
+    void archive.finalize().catch((error: Error) => {
+      zipStream.destroy(error);
     });
 
-    // ==========================================
-    // 核心手术 4：彻底清理痕迹并返回
-    // ==========================================
-    // 必须调用 end 释放 exiftool 进程，防止 Vercel 内存泄露
-    await exiftool.end();
+    const body = Readable.toWeb(zipStream) as ReadableStream<Uint8Array>;
 
-    // 清理 /tmp 文件
-    await Promise.all(tmpFiles.map((f) => fs.unlink(f).catch(() => {})));
-
-    // 将存在内存里的 ZIP 返回给前端下载
-    return new NextResponse(zipBuffer, {
+    return new NextResponse(body, {
       headers: {
         "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="Emotion-Live-Photo-${baseName}.zip"`,
+        "Content-Disposition": 'attachment; filename="Live-Photo.zip"',
       },
     });
   } catch (error) {
-    console.error("Live Photo 生成失败:", error);
-    // 发生错误时也要尝试清理
-    await exiftool.end().catch(() => {});
-    await Promise.all(tmpFiles.map((f) => fs.unlink(f).catch(() => {})));
-    return NextResponse.json({ error: "生成失败" }, { status: 500 });
+    await cleanupTempFiles(tempFiles);
+
+    return NextResponse.json({ error: toErrorMessage(error) }, { status: 500 });
   }
 }

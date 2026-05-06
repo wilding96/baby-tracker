@@ -47,7 +47,9 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/settings") ||
     pathname.startsWith("/record") ||
     pathname.startsWith("/stats") ||
-    pathname.startsWith("/legacy");
+    pathname.startsWith("/legacy") ||
+    pathname.startsWith("/mood");
+
 
   const {
     data: { user },

@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import {
   CalendarClock,
   BarChart3,
+  HeartPulse,
   Syringe,
   Stethoscope,
   Sparkles,
@@ -124,15 +125,13 @@ export default function Home() {
           return;
         }
 
-        const relation = relationData as
-          | {
-              baby_id: string | null;
-              babies:
-                | { id: string; name: string }
-                | { id: string; name: string }[]
-                | null;
-            }
-          | null;
+        const relation = relationData as {
+          baby_id: string | null;
+          babies:
+            | { id: string; name: string }
+            | { id: string; name: string }[]
+            | null;
+        } | null;
         const babyRaw = relation?.babies;
         const baby = Array.isArray(babyRaw) ? babyRaw[0] : babyRaw;
         const currentBabyId = relation?.baby_id || baby?.id;
@@ -539,6 +538,31 @@ export default function Home() {
                 className="h-10 border-white/70 bg-white/90 px-4 text-[#2f8f78] shadow-[0_5px_rgba(57,145,123,0.45)] hover:border-white hover:bg-white hover:text-[#247b67]"
               >
                 <Link href="/stats">看总览</Link>
+              </Button>
+            </div>
+          </Card>
+
+          <Card color="warm-peach-pink" className="island-card p-3 text-white">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-white/25 p-2 text-white shadow-sm ring-1 ring-white/35">
+                  <HeartPulse size={18} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white drop-shadow-sm">
+                    心情记录
+                  </p>
+                  <p className="text-xs text-white/85 mt-0.5">
+                    进入独立页面，记录当下动态情绪
+                  </p>
+                </div>
+              </div>
+              <Button
+                asChild
+                variant="outline"
+                className="h-10 border-white/70 bg-white/90 px-4 text-[#8b2d5e] shadow-[0_5px_rgba(139,45,94,0.45)] hover:border-white hover:bg-white hover:text-[#76264f]"
+              >
+                <Link href="/mood">写心情</Link>
               </Button>
             </div>
           </Card>

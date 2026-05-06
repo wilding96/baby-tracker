@@ -12,6 +12,12 @@ const withSerwist = withSerwistInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // 其他配置保持不变
+  // 核心修复：告诉 Next.js 不要打包这些底层的二进制和跨平台依赖包
+  serverExternalPackages: [
+    "@ffmpeg-installer/ffmpeg",
+    "fluent-ffmpeg",
+    "exiftool-vendored",
+  ],
 };
 
 export default withSerwist(nextConfig);

@@ -100,15 +100,54 @@ export default function MoodDemoPage() {
         if (e.data.size > 0) chunks.push(e.data);
       };
 
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `emotion-${emotion}-${Date.now()}.${extension}`;
-        a.click();
-        URL.revokeObjectURL(url);
-        setIsRecording(false);
+      // 将 base64 转为 Blob 的辅助函数（请将这个函数放在组件外面或组件内部都可以）
+      const base64ToBlob = (base64: string, mimeType: string) => {
+        const byteString = atob(base64.split(",")[1]);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+          ia[i] = byteString.charCodeAt(i);
+        }
+        return new Blob([ab], { type: mimeType });
+      };
+
+      mediaRecorder.onstop = async () => {
+        try {
+          // 1. 拿到录制好的 WebM 视频
+          const videoBlob = new Blob(chunks, { type: "video/webm" });
+
+          // 2. 将第一帧的 Base64 截图（latestFrame 此时是个 Canvas）转为 JPEG Blob
+          // 注意：这里需要你将 latestFrame（HTMLCanvasElement）转为 Blob
+          const imageBase64 = latestFrame.toDataURL("image/jpeg", 0.9);
+          const imageBlob = base64ToBlob(imageBase64, "image/jpeg");
+
+          // 3. 构建 FormData 发给我们的黑科技接口
+          const formData = new FormData();
+          formData.append("image", imageBlob, "cover.jpg");
+          formData.append("video", videoBlob, "live.webm");
+
+          // 4. 发起请求（因为直接返回二进制流，需要设置 responseType 相关的接收方式）
+          const response = await fetch("/api/generate-live-photo", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) throw new Error("刻录接口报错了");
+
+          // 5. 拿到返回的 ZIP 文件并触发下载
+          const zipBlob = await response.blob();
+          const url = URL.createObjectURL(zipBlob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `Emotion-Live-Photo-${Date.now()}.zip`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          console.error("实况图刻录失败", error);
+          alert("实况图刻录失败，请检查控制台");
+        } finally {
+          setIsRecording(false);
+        }
       };
 
       mediaRecorder.start();

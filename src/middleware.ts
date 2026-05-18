@@ -41,6 +41,7 @@ export async function middleware(request: NextRequest) {
   const isLoginRoute = pathname.startsWith("/login");
   const isAuthRoute = pathname.startsWith("/auth");
   const isBoardRoute = pathname.startsWith("/board");
+  const isGameRoute = pathname.startsWith("/game");
   const isWelcomeRoute = pathname.startsWith("/welcome");
   const needsFamily =
     pathname === "/" ||
@@ -55,7 +56,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && !isLoginRoute && !isAuthRoute && !isBoardRoute) {
+  if (!user && !isLoginRoute && !isAuthRoute && !isBoardRoute && !isGameRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

@@ -132,6 +132,10 @@ export default function LoginPage() {
               <Link href="/board">不登录，先去留言板</Link>
             </Button>
 
+            <Button asChild variant="outline" className="w-full h-11">
+              <Link href="/game/raiden">不登录，去玩雷电游戏</Link>
+            </Button>
+
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t border-[#d4c9b4]" />

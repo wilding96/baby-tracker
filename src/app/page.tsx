@@ -606,6 +606,26 @@ export default function Home() {
               </Button>
             </div>
           </Card>
+
+          <Card color="warm-peach-pink" className="island-card p-3 text-white">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-white drop-shadow-sm">
+                  雷电战机
+                </p>
+                <p className="text-xs text-white/85 mt-0.5">
+                  经典射击小游戏，不登录也能玩
+                </p>
+              </div>
+              <Button
+                asChild
+                variant="outline"
+                className="h-10 border-white/70 bg-white/90 px-4 text-[#b75f45] shadow-[0_5px_rgba(171,88,62,0.45)] hover:border-white hover:bg-white hover:text-[#9f4d35]"
+              >
+                <Link href="/game/raiden">去玩</Link>
+              </Button>
+            </div>
+          </Card>
         </section>
 
         <Modal

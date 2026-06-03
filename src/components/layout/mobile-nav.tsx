@@ -17,6 +17,7 @@ export default function MobileNav() {
     "/auth/callback",
     "/board",
     "/game",
+    "/game/raiden",
     "/mood",
   ];
   const shouldHide = hideOnPaths.includes(pathname);

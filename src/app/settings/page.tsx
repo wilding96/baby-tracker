@@ -105,7 +105,11 @@ export default function SettingsPage() {
   // ✨ 新增功能：退出登录
   const handleLogout = async () => {
     setLoading(true);
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("退出登录报错", e);
+    }
     router.replace("/login");
   };
 
@@ -272,17 +276,16 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* 退出登录按钮 (✨ 已绑定真实事件) */}
+        {/* 退出登录按钮 */}
         <div className="pt-4">
-          <Button
-            variant="outline"
+          <button
             onClick={handleLogout}
             disabled={loading}
-            className="w-full text-red-500 hover:text-red-600 h-12 text-base font-bold"
+            className="w-full flex items-center justify-center gap-2 h-12 text-base font-bold rounded-full border-2 border-red-200 bg-white text-red-500 hover:bg-red-50 hover:border-red-300 active:scale-[0.97] transition-all disabled:opacity-50"
           >
-            <LogOut size={18} className="mr-2" />
+            <LogOut size={18} />
             {loading ? "正在退出..." : "退出登录"}
-          </Button>
+          </button>
           <p className="text-center text-xs text-[#9f927d] mt-4">
             Baby Tracker v1.0.0
           </p>

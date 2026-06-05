@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Divider } from "animal-island-ui";
+import { Divider, Modal } from "animal-island-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [registeredEmail, setRegisteredEmail] = useState("");
+
+  const handleCloseError = () => {
+    if (registeredEmail) {
+      setIsSignUp(false);
+      setEmail(registeredEmail);
+      setRegisteredEmail("");
+    }
+    setErrorMsg("");
+  };
 
   // 监听登录状态
   useEffect(() => {
@@ -41,7 +52,15 @@ export default function LoginPage() {
       });
 
       if (signUpError) {
-        alert("注册失败: " + signUpError.message);
+        const msg = signUpError.message;
+        if (msg.includes("already registered")) {
+          setRegisteredEmail(cleanEmail);
+          setErrorMsg("该邮箱已注册，点击「直接登录」切换到登录页");
+        } else if (msg.includes("weak password")) {
+          setErrorMsg("密码强度不够，至少6位字符");
+        } else {
+          setErrorMsg("注册失败: " + msg);
+        }
         setLoading(false);
         return;
       }
@@ -49,14 +68,30 @@ export default function LoginPage() {
         email: cleanEmail,
         password: cleanPassword,
       });
-      if (signInError) alert("自动登录失败: " + signInError.message);
+      if (signInError) {
+        const msg = signInError.message;
+        if (msg.includes("Email not confirmed")) {
+          setErrorMsg("邮箱未验证，请先查收验证邮件");
+        } else if (msg.includes("Invalid login credentials")) {
+          setErrorMsg("邮箱或密码不正确");
+        } else {
+          setErrorMsg("登录失败: " + msg);
+        }
+      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: cleanPassword,
       });
       if (error) {
-        alert("登录失败: " + error.message);
+        const msg = error.message;
+        if (msg.includes("Email not confirmed")) {
+          setErrorMsg("邮箱未验证，请先查收验证邮件");
+        } else if (msg.includes("Invalid login credentials")) {
+          setErrorMsg("邮箱或密码不正确");
+        } else {
+          setErrorMsg("登录失败: " + msg);
+        }
         setLoading(false);
       }
     }
@@ -173,6 +208,30 @@ export default function LoginPage() {
             </p>
           </div>
         </div>
+
+        {/* 错误提示弹窗 */}
+        <Modal
+          open={!!errorMsg}
+          title=""
+          width="min(80vw, 320px)"
+          typewriter={false}
+          onClose={handleCloseError}
+          footer={
+            <div className="flex w-full">
+              <Button
+                type="button"
+                className="flex-1"
+                onClick={handleCloseError}
+              >
+                {registeredEmail ? "直接登录" : "知道了"}
+              </Button>
+            </div>
+          }
+        >
+          <div className="text-center py-2 text-sm text-[#725d42]">
+            {errorMsg}
+          </div>
+        </Modal>
 
         {/* 底部版权 */}
         <p className="text-center text-[#9f927d] text-xs mt-8">

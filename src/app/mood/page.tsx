@@ -2,50 +2,56 @@
 
 import Link from "next/link";
 import { useState, useRef } from "react";
-import { ArrowLeft, Loader2, Video } from "lucide-react";
+import { ArrowLeft, Loader2, Video, Pencil, X } from "lucide-react";
 import * as htmlToImage from "html-to-image";
 
 type EmotionMode = "faded" | "neon" | "fever";
 
+const defaultContent: Record<EmotionMode, string> = {
+  faded: `今天长辈又把客厅的窗户关上了，说是有穿堂风。\n\n我没说什么，只是默默把手里的茶杯放下。晚饭后，妻子在卧室里看剧，偶尔传来几声背景音。\n\n什么都没发生，只是觉得很疲惫。明天还要继续。`,
+  neon: `客厅的窗户被长辈关严了，空气停止了流动。\n\n屏幕的幽光打在我的脸上，变成房间里唯一的焦距。卧室里妻子看剧的笑声像隔着一层水膜传过来，很遥远。\n\n我就坐在这里，像一个随时可以被拔掉电源的旁观者。`,
+  fever: `窗户又被长辈锁死了，理由永远是该死的穿堂风。房间闷得像个封死的塑料盒。\n\n手里茶杯的温度烫得心烦。卧室里罐头笑声和主机风扇的嗡嗡声绞在一起，在大脑里来回撞击。\n\n明天又是这样。明天还是这样。`,
+};
+
 export default function MoodDemoPage() {
   const [emotion, setEmotion] = useState<EmotionMode>("faded");
+  const [customText, setCustomText] = useState(defaultContent.faded);
+  const [editingText, setEditingText] = useState("");
+  const [showEditor, setShowEditor] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const containerRef = useRef<HTMLElement>(null);
 
-  const emotionContent = {
-    faded: (
-      <>
-        今天长辈又把客厅的窗户关上了，说是有穿堂风。
-        <br />
-        <br />
-        我没说什么，只是默默把手里的茶杯放下。晚饭后，妻子在卧室里看剧，偶尔传来几声背景音。
-        <br />
-        <br />
-        什么都没发生，只是觉得很疲惫。明天还要继续。
-      </>
-    ),
-    neon: (
-      <>
-        客厅的窗户被长辈关严了，空气停止了流动。
-        <br />
-        <br />
-        屏幕的幽光打在我的脸上，变成房间里唯一的焦距。卧室里妻子看剧的笑声像隔着一层水膜传过来，很遥远。
-        <br />
-        <br />
-        我就坐在这里，像一个随时可以被拔掉电源的旁观者。
-      </>
-    ),
-    fever: (
-      <>
-        窗户又被长辈锁死了，理由永远是该死的穿堂风。房间闷得像个封死的塑料盒。
-        <br />
-        <br />
-        手里茶杯的温度烫得心烦。卧室里罐头笑声和主机风扇的嗡嗡声绞在一起，在大脑里来回撞击。
-        <br />
-        <br />
-        明天又是这样。明天还是这样。
-      </>
-    ),
+  const emotionContent = (text: string) => {
+    return text.split("\n").flatMap((line, i, arr) => {
+      if (line.trim() === "") return [<br key={`br-${i}`} />];
+      return [
+        <span key={`line-${i}`}>
+          {line}
+          {i < arr.length - 1 && <br />}
+        </span>,
+      ];
+    });
+  };
+
+  const handleEmotionChange = (mode: EmotionMode) => {
+    setEmotion(mode);
+    setCustomText(defaultContent[mode]);
+  };
+
+  const openEditor = () => {
+    setEditingText(customText);
+    setShowEditor(true);
+  };
+
+  const saveCustomText = () => {
+    if (editingText.trim()) {
+      setCustomText(editingText);
+    }
+    setShowEditor(false);
+  };
+
+  const cancelEditor = () => {
+    setShowEditor(false);
   };
 
   const handleExportLive = async () => {
@@ -258,30 +264,41 @@ export default function MoodDemoPage() {
         </Link>
 
         <div className="content-wrapper">
-          <p className="diary-text">{emotionContent[emotion]}</p>
+          <p className="diary-text">{emotionContent(customText)}</p>
         </div>
 
         <div className="floating-dock">
           <div className="emotion-toggles">
             <button
               className={emotion === "faded" ? "active" : ""}
-              onClick={() => setEmotion("faded")}
+              onClick={() => handleEmotionChange("faded")}
             >
               褪色
             </button>
             <button
               className={emotion === "neon" ? "active" : ""}
-              onClick={() => setEmotion("neon")}
+              onClick={() => handleEmotionChange("neon")}
             >
               霓虹
             </button>
             <button
               className={emotion === "fever" ? "active" : ""}
-              onClick={() => setEmotion("fever")}
+              onClick={() => handleEmotionChange("fever")}
             >
               焦躁
             </button>
           </div>
+
+          <div className="divider" />
+
+          <button
+            className="edit-text-btn"
+            onClick={openEditor}
+            disabled={isRecording}
+            title="编辑文案"
+          >
+            <Pencil size={13} />
+          </button>
 
           <div className="divider" />
 
@@ -301,6 +318,34 @@ export default function MoodDemoPage() {
             )}
           </button>
         </div>
+
+        {/* 文案编辑浮层 */}
+        {showEditor && (
+          <div className="editor-overlay" onClick={cancelEditor}>
+            <div className="editor-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="editor-header">
+                <span className="editor-title">编辑文案</span>
+                <button className="editor-close" onClick={cancelEditor}>
+                  <X size={16} />
+                </button>
+              </div>
+              <textarea
+                className="editor-textarea"
+                value={editingText}
+                onChange={(e) => setEditingText(e.target.value)}
+                autoFocus
+              />
+              <div className="editor-footer">
+                <button className="editor-cancel" onClick={cancelEditor}>
+                  取消
+                </button>
+                <button className="editor-save" onClick={saveCustomText}>
+                  保存
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* 这里的样式代码保持不变，请保留你之前文件里的 <style> 内容 */}
@@ -329,6 +374,24 @@ export default function MoodDemoPage() {
         .floating-dock button:hover:not(:disabled) { opacity: 1; background: rgba(255, 255, 255, 0.06); }
         .floating-dock button:disabled { cursor: not-allowed; opacity: 0.8; }
         .export-btn { color: inherit; opacity: 0.8 !important; }
+        .edit-text-btn { background: transparent; border: none; color: inherit; padding: 8px 10px; border-radius: 100px; cursor: pointer; transition: all 0.3s ease; font-size: 13px; opacity: 0.5; display: flex; align-items: center; }
+        .edit-text-btn:hover:not(:disabled) { opacity: 1; background: rgba(255, 255, 255, 0.06); }
+        .edit-text-btn:disabled { cursor: not-allowed; opacity: 0.3; }
+        .editor-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; padding: 20px; animation: fade-in 0.2s ease; }
+        .editor-panel { background: #fff; border-radius: 20px; width: 100%; max-width: 480px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; animation: slide-up 0.25s ease; }
+        .editor-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #eee; }
+        .editor-title { font-size: 15px; font-weight: 700; color: #333; }
+        .editor-close { background: transparent; border: none; cursor: pointer; color: #999; padding: 4px; border-radius: 6px; }
+        .editor-close:hover { color: #333; background: #f5f5f5; }
+        .editor-textarea { width: 100%; min-height: 200px; padding: 20px; border: none; outline: none; font-size: 15px; line-height: 1.8; resize: vertical; font-family: inherit; color: #333; }
+        .editor-textarea:focus { outline: none; }
+        .editor-footer { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid #eee; }
+        .editor-cancel { padding: 8px 20px; border-radius: 100px; border: 1px solid #ddd; background: #fff; color: #666; font-size: 13px; cursor: pointer; }
+        .editor-cancel:hover { background: #f5f5f5; }
+        .editor-save { padding: 8px 20px; border-radius: 100px; border: none; background: #5a7f38; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .editor-save:hover { background: #4a6f2e; }
+        @keyframes fade-in { 0% { opacity: 0; } 100% { opacity: 1; } }
+        @keyframes slide-up { 0% { opacity: 0; transform: translateY(20px) scale(0.97); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
         .diary-app.faded { background: linear-gradient(135deg, #e4e3df 0%, #f0efe9 100%); color: #6a6a6a; }

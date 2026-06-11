@@ -139,12 +139,33 @@ interface CardDef {
   rarity: "SR" | "SSR";
   desc: string;
 }
+// ═══════════════════════════════════════════════════════════════════
+// SHOP ITEMS
+// ═══════════════════════════════════════════════════════════════════
+
+interface ShopItemDef {
+  id: keyof SaveData["upgrades"];
+  icon: string;
+  name: string;
+  desc: string;
+  price: number;
+  owned: (upgrades: SaveData["upgrades"]) => boolean;
+}
+const SHOP_ITEMS: ShopItemDef[] = [
+  { id: "extraBomb", icon: "💣", name: "初始炸弹+1", desc: "开局多一枚炸弹", price: 5, owned: (u) => u.extraBomb > 0 },
+  { id: "weaponBoost", icon: "⚡", name: "初始火力+1", desc: "开局Lv2武器", price: 8, owned: (u) => u.weaponBoost },
+  { id: "startShield", icon: "🛡️", name: "开局护盾", desc: "开局3秒无敌", price: 6, owned: (u) => u.startShield },
+  { id: "startWingman", icon: "✈️", name: "僚机开局", desc: "开局携带僚机", price: 12, owned: (u) => u.startWingman },
+  { id: "permaDouble", icon: "🪙", name: "双倍金币卡", desc: "本局金币翻倍", price: 10, owned: (u) => u.permaDouble },
+];
+
 const SR_CARDS: CardDef[] = [
   { id: "power_up", name: "火力升级", icon: "⚡", rarity: "SR", desc: "武器等级 +1" },
   { id: "bomb_give", name: "炸弹补给", icon: "💣", rarity: "SR", desc: "炸弹 +1" },
   { id: "life_give", name: "生命之心", icon: "❤️", rarity: "SR", desc: "生命 +1" },
   { id: "shield_s", name: "护盾", icon: "🛡️", rarity: "SR", desc: "3 秒无敌" },
   { id: "double_coin", name: "双倍金币", icon: "🪙", rarity: "SR", desc: "30s 金币翻倍" },
+  { id: "wingman", name: "僚机", icon: "✈️", rarity: "SR", desc: "召唤僚机协助射击" },
 ];
 const SSR_CARDS: CardDef[] = [
   { id: "shield_l", name: "能量护盾", icon: "🔮", rarity: "SSR", desc: "5 秒无敌" },
@@ -152,7 +173,6 @@ const SSR_CARDS: CardDef[] = [
   { id: "life_pack", name: "生命补给", icon: "💖", rarity: "SSR", desc: "额外 +2 命" },
   { id: "nuke", name: "核弹", icon: "☢️", rarity: "SSR", desc: "全屏清怪 +2 炸弹" },
   { id: "coin_burst", name: "金币爆裂", icon: "💰", rarity: "SSR", desc: "获得 15 金币" },
-  { id: "wingman", name: "僚机", icon: "✈️", rarity: "SSR", desc: "召唤僚机协助射击" },
 ];
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -260,12 +280,12 @@ interface WaveEntry {
   subtitle: string;
 }
 const WAVE_TABLE: WaveEntry[] = [
-  { score: 2000, boss: "fortress", bossHp: 40, name: "钢铁堡垒", subtitle: "重型火力堡垒出现了" },
-  { score: 5000, boss: "carrier", bossHp: 55, name: "星际航母", subtitle: "航母正在释放舰载机" },
-  { score: 9000, boss: "eye", bossHp: 70, name: "魔眼", subtitle: "巨型魔眼正在注视你" },
-  { score: 14000, boss: "fortress", bossHp: 90, name: "堡垒·改", subtitle: "强化堡垒，火力翻倍" },
-  { score: 20000, boss: "carrier", bossHp: 110, name: "航母·改", subtitle: "精英航母编队" },
-  { score: 27000, boss: "eye", bossHp: 130, name: "魔眼·改", subtitle: "终极魔眼" },
+  { score: 5000, boss: "fortress", bossHp: 40, name: "钢铁堡垒", subtitle: "重型火力堡垒出现了" },
+  { score: 12000, boss: "carrier", bossHp: 55, name: "星际航母", subtitle: "航母正在释放舰载机" },
+  { score: 20000, boss: "eye", bossHp: 70, name: "魔眼", subtitle: "巨型魔眼正在注视你" },
+  { score: 30000, boss: "fortress", bossHp: 90, name: "堡垒·改", subtitle: "强化堡垒，火力翻倍" },
+  { score: 42000, boss: "carrier", bossHp: 110, name: "航母·改", subtitle: "精英航母编队" },
+  { score: 55000, boss: "eye", bossHp: 130, name: "魔眼·改", subtitle: "终极魔眼" },
 ];
 
 // ═══════════════════════════════════════════════════════════════════
@@ -276,14 +296,28 @@ interface SaveData {
   totalCoins: number;
   highScore: number;
   totalGames: number;
+  upgrades: {
+    extraBomb: number;
+    weaponBoost: boolean;
+    startShield: boolean;
+    startWingman: boolean;
+    permaDouble: boolean;
+  };
 }
 const SAVE_KEY = "raiden_save";
 function loadSave(): SaveData {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // ensure upgrades field exists (old save data might not have it)
+      if (!parsed.upgrades) {
+        parsed.upgrades = { extraBomb: 0, weaponBoost: false, startShield: false, startWingman: false, permaDouble: false };
+      }
+      return parsed;
+    }
   } catch {}
-  return { totalCoins: 0, highScore: 0, totalGames: 0 };
+  return { totalCoins: 0, highScore: 0, totalGames: 0, upgrades: { extraBomb: 0, weaponBoost: false, startShield: false, startWingman: false, permaDouble: false } };
 }
 function writeSave(data: SaveData) {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch {}
@@ -360,8 +394,14 @@ export default function RaidenGame() {
   const [gachaCost, setGachaCost] = useState(10);
   const [overdriveTimer, setOverdriveTimer] = useState(0);
   const [waveAnnounce, setWaveAnnounce] = useState("");
+  const [bossWarning, setBossWarning] = useState(false);
   const [highScore, setHighScore] = useState(0);
   const [wingmanCount, setWingmanCount] = useState(0);
+  const [showShop, setShowShop] = useState(false);
+  const [shopRefreshKey, setShopRefreshKey] = useState(0);
+
+  const gachaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchAnchorRef = useRef<{ x: number; y: number; shipX: number; shipY: number } | null>(null);
 
   // ── 3-layer parallax star field ──
   const starsRef = useRef<Star[]>([]);
@@ -381,8 +421,14 @@ export default function RaidenGame() {
     }
   }
 
-  // ── exhaust particles ──
-  const exhaustRef = useRef<ExhaustParticle[]>([]);
+  // ── exhaust particles (pooled) ──
+  const exhaustPool = useRef<Pool<ExhaustParticle>>(
+    new Pool<ExhaustParticle>(() => ({
+      x: 0, y: 0, vx: 0, vy: 0,
+      alpha: 0, size: 0, life: 0, maxLife: 0,
+      alive: false,
+    }))
+  );
 
   const bgOffsetRef = useRef(0);
   const saveRef = useRef(loadSave());
@@ -431,6 +477,7 @@ export default function RaidenGame() {
     formationTimer: 0, gachaLocked: false, gachaCost: 10,
     formationGroupCounter: 0, overdriveTimer: 0,
     lastWaveSpawned: -1,
+    bossWarningTimer: 0,
     _carrierSpawnTimer: 0,
     bossCooldown: 0,
     minibossCooldown: 0,
@@ -450,7 +497,7 @@ export default function RaidenGame() {
   ) {
     const b = stateRef.current.bullets.get();
     b.x = x; b.y = y; b.vx = vx; b.vy = vy;
-    b.type = "player"; b.wtype = wtype;
+    b.type = "player"; b.wtype = wtype; b.wingman = false;
   }
   function spawnEnemyBullet(x: number, y: number, vx: number, vy: number) {
     const b = stateRef.current.enemyBullets.get();
@@ -509,7 +556,7 @@ export default function RaidenGame() {
     if (!alive) {
       const pu = state.powerUps.get();
       pu.x = x; pu.y = y;
-      emitExplosion(x, y, 12, ["#38bdf8", "#7dd3fc"], 4);
+      emitExplosion(x, y, 15, ["#38bdf8", "#7dd3fc", "#fff"], 5, 35);
     }
   }
 
@@ -562,6 +609,48 @@ export default function RaidenGame() {
     audio.gachaCard();
     state.gachaLocked = false; state.gachaCost += 5;
     setGachaCost(state.gachaCost); setShowGacha(false);
+    // Give player brief breather after gacha — clear leftover carrier spawns
+    state.monsters.releaseAll();
+    if (state.bossCooldown <= 0) state.bossCooldown = 90;
+    if (state.minibossCooldown <= 0) state.minibossCooldown = 90;
+  };
+
+  const emitBombEffect = (cx: number, cy: number) => {
+    const state = stateRef.current;
+    // huge expanding ring
+    for (let ring = 0; ring < 3; ring++) {
+      const rDelay = ring * 4;
+      const r = 20 + ring * 25;
+      for (let a = 0; a < 360; a += 15) {
+        const rad = (a * Math.PI) / 180;
+        const dist = r + (Math.random() - 0.5) * 20;
+        spawnParticle(
+          cx + Math.cos(rad) * dist, cy + Math.sin(rad) * dist,
+          Math.cos(rad) * (3 + Math.random() * 2),
+          Math.sin(rad) * (3 + Math.random() * 2),
+          ["#fef08a", "#f97316", "#ef4444", "#fff"][Math.floor(Math.random() * 4)],
+          2 + Math.random() * 4,
+          30 + ring * 10,
+          0.02,
+        );
+      }
+    }
+    // white flash core
+    for (let i = 0; i < 20; i++) {
+      spawnParticle(
+        cx + (Math.random() - 0.5) * 10, cy + (Math.random() - 0.5) * 10,
+        (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8,
+        "#fff", 5 + Math.random() * 6, 15, 0.03,
+      );
+    }
+    // shockwave trail (horizontal strip)
+    for (let i = 0; i < 15; i++) {
+      const side = Math.random() > 0.5 ? 1 : -1;
+      spawnParticle(
+        cx + side * Math.random() * 40, cy + (Math.random() - 0.5) * 20,
+        0, 0, "#fef08a", 1.5, 20 + Math.random() * 10, 0,
+      );
+    }
   };
 
   const triggerBomb = () => {
@@ -569,20 +658,16 @@ export default function RaidenGame() {
     audio.bomb();
     setBombCount((prev) => prev - 1);
     const state = stateRef.current;
-    state.shakeX = 10; state.shakeY = 10;
+    state.shakeX = 15; state.shakeY = 15;
     state.enemyBullets.releaseAll();
-    const monsters = state.monsters.getActive();
-    for (const m of monsters) {
-      if (Math.random() > 0.5) state.monsters.release(m);
-      else m.hp -= 20;
-    }
+    state.monsters.releaseAll(); // 全屏清小怪
     if (state.boss) state.boss.hp -= 30;
     if (state.miniboss) state.miniboss.hp -= 20;
-    emitExplosion(CW / 2, CH / 2, 80, ["#f97316", "#fef08a", "#ef4444"], 8);
+    emitBombEffect(CW / 2, CH / 2);
   };
 
   const togglePause = () => {
-    if (!isGameOver && !showGacha) {
+    if (!isGameOver && !showGacha && !showShop) {
       audio.buttonClick();
       setIsPaused((p) => !p);
     }
@@ -592,6 +677,7 @@ export default function RaidenGame() {
     const state = stateRef.current;
     if (state.boss) return;
     if (state.bossCooldown > 0) return;
+    if (state.bossWarningTimer > 0) return;
 
     let idx = -1;
     for (let i = WAVE_TABLE.length - 1; i >= 0; i--) {
@@ -602,35 +688,62 @@ export default function RaidenGame() {
     if (idx <= state.lastWaveSpawned) return;
 
     state.lastWaveSpawned = idx;
-    state.boss = {
-      x: 130, y: -80, hp: wave.bossHp, maxHp: wave.bossHp,
-      speed: 1, alive: true, type: wave.boss,
-      attackTimer: 0, phase: 0,
-    };
-    setBossHp(wave.bossHp);
-    setWaveAnnounce(wave.name);
-    setTimeout(() => setWaveAnnounce(""), 2500);
+    state.bossWarningTimer = 180; // 3 seconds warning phase
+    setBossWarning(true);
+    setWaveAnnounce("⚠ WARNING ⚠");
+    setTimeout(() => setWaveAnnounce(""), 1500);
     audio.bossWarning();
   };
 
-  const cycleWeaponType = () => {
+  // ─── SHOP BUY ───
+
+  const handleShopBuy = useCallback((itemId: keyof SaveData["upgrades"]) => {
+    const save = saveRef.current;
+    const upgrades = save.upgrades;
+    const shopItem = SHOP_ITEMS.find((si) => si.id === itemId);
+    if (!shopItem) return;
+    if (shopItem.owned(upgrades)) return;
+    if (save.totalCoins < shopItem.price) return;
+
+    save.totalCoins -= shopItem.price;
+    if (itemId === "extraBomb") {
+      upgrades.extraBomb += 1;
+    } else {
+      (upgrades as unknown as Record<string, boolean>)[itemId] = true;
+    }
+    writeSave(save);
+    setShopRefreshKey((k) => k + 1);
     audio.buttonClick();
-    const types: WeaponType[] = ["spread", "laser", "wave"];
-    const idx = types.indexOf(stateRef.current.weaponType);
-    const next = types[(idx + 1) % types.length];
-    stateRef.current.weaponType = next;
-    setWeaponType(next);
-  };
+  }, [audio]);
 
   // ─── START GAME ───
 
   const handleStart = useCallback(() => {
     if (!gameStarted) {
+      setShowShop(false);
       audio.initAudio();
       // apply ship weapon
       const ship = SHIP_CONFIG[shipType];
       stateRef.current.weaponType = ship.weapon;
       setWeaponType(ship.weapon);
+      // apply shop upgrades
+      const upgrades = saveRef.current.upgrades;
+      if (upgrades.extraBomb > 0) {
+        setBombCount((prev) => prev + upgrades.extraBomb);
+      }
+      if (upgrades.weaponBoost) {
+        stateRef.current.weaponLevel = 2;
+        setWeaponLevel(2);
+      }
+      if (upgrades.startShield) {
+        stateRef.current.invincible = true;
+        stateRef.current.invincibleTimer = 180;
+        setInvincible(true);
+      }
+      if (upgrades.startWingman) {
+        stateRef.current.wingmanCount = 1;
+        setWingmanCount(1);
+      }
       setStartFadeOut(true);
       stateRef.current.gameStarted = true;
       setTimeout(() => {
@@ -689,7 +802,40 @@ export default function RaidenGame() {
 
   function drawMonsterShip(ctx: CanvasRenderingContext2D, m: Monster, x: number, y: number) {
     const flash = stateRef.current.frameCount % 8 < 4;
+    const f = stateRef.current.frameCount;
     ctx.save();
+
+    // ── formation marker (pulsing purple aura ring + "POW" indicator) ──
+    if (m.formation) {
+      const auraPulse = Math.sin(f * 0.08) * 0.3 + 0.7;
+      // floating indicator text
+      ctx.save();
+      ctx.globalAlpha = 0.6 + Math.sin(f * 0.1) * 0.3;
+      ctx.fillStyle = "#c084fc";
+      ctx.font = "bold 6px monospace";
+      ctx.textAlign = "center";
+      ctx.shadowColor = "#a855f7";
+      ctx.shadowBlur = 8;
+      ctx.fillText("POW", x + 12, y - 4);
+      ctx.restore();
+      // outer glow ring
+      ctx.save();
+      ctx.shadowColor = "#a855f7";
+      ctx.shadowBlur = 15;
+      ctx.globalAlpha = 0.3 * auraPulse;
+      ctx.strokeStyle = "#a855f7";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x + 12, y + 10, 16 + Math.sin(f * 0.06) * 3, 0, Math.PI * 2); ctx.stroke();
+      // rotating dash arc
+      ctx.globalAlpha = 0.5 * auraPulse;
+      ctx.strokeStyle = "#c084fc";
+      ctx.lineWidth = 2;
+      const aStart = f * 0.04;
+      const aEnd = aStart + 1.5;
+      ctx.beginPath(); ctx.arc(x + 12, y + 10, 19 + Math.sin(f * 0.05) * 2, aStart, aEnd); ctx.stroke();
+      ctx.restore();
+    }
+
     switch (m.type) {
       case "fighter":
         ctx.shadowColor = "#dc2626";
@@ -853,23 +999,11 @@ export default function RaidenGame() {
   function drawCoinItem(ctx: CanvasRenderingContext2D, x: number, y: number) {
     const f = stateRef.current.frameCount;
     const pulse = Math.sin(f * 0.08) * 0.2 + 1;
-    const sparkle = Math.sin(f * 0.12 + x) > 0.8;
-    ctx.save();
     ctx.translate(x + 2 * P, y + 2 * P);
     ctx.scale(pulse, 1);
-    ctx.shadowColor = "#eab308";
-    ctx.shadowBlur = 6;
     drawSprite(ctx, COIN_SPRITE, { x: "#eab308", a: "#fef08a" }, -2 * P, -2 * P, P);
-    ctx.shadowBlur = 0;
     ctx.fillStyle = "#fef08a";
     ctx.fillRect(-1, -4, 2, 2);
-    ctx.restore();
-    if (sparkle) {
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = "#fff";
-      ctx.beginPath(); ctx.arc(x + 2, y - 2, 1.5, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1;
-    }
   }
 
   function drawShield(ctx: CanvasRenderingContext2D, x: number, y: number) {
@@ -926,12 +1060,18 @@ export default function RaidenGame() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!gameStarted && !startFadeOut) {
-        // Will be handled by the global listener
+        // Arrow keys for ship selection on start screen
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          const idx = SHIP_TYPES.indexOf(shipType);
+          const next = e.key === "ArrowLeft"
+            ? SHIP_TYPES[(idx - 1 + SHIP_TYPES.length) % SHIP_TYPES.length]
+            : SHIP_TYPES[(idx + 1) % SHIP_TYPES.length];
+          setShipType(next);
+        }
         return;
       }
       audio.initAudio();
       if (e.key === "Escape") { togglePause(); return; }
-      if (e.key === "q" || e.key === "Q") { cycleWeaponType(); return; }
       if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","a","d","w","s"].includes(e.key)) {
         stateRef.current.keys[e.key as keyof typeof stateRef.current.keys] = true;
       }
@@ -948,18 +1088,45 @@ export default function RaidenGame() {
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
 
+    // ── touch controls (relative drag) ──
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!gameStarted) return;
+      audio.initAudio();
+      if (isGameOver || isPaused || showGacha || showShop) return;
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      const touchGameX = ((touch.clientX - rect.left) / rect.width) * CW;
+      const touchGameY = ((touch.clientY - rect.top) / rect.height) * CH;
+      touchAnchorRef.current = {
+        x: touchGameX,
+        y: touchGameY,
+        shipX: stateRef.current.player.x,
+        shipY: stateRef.current.player.y,
+      };
+    };
     const handleTouchMove = (e: TouchEvent) => {
       if (!gameStarted) return;
       audio.initAudio();
-      if (isGameOver || isPaused) return;
+      if (isGameOver || isPaused || showGacha || showShop) return;
+      const anchor = touchAnchorRef.current;
+      if (!anchor) return;
       const rect = canvas.getBoundingClientRect();
       const touch = e.touches[0];
-      const x = ((touch.clientX - rect.left) / rect.width) * CW - 15;
-      const y = ((touch.clientY - rect.top) / rect.height) * CH - 15;
-      stateRef.current.player.x = Math.max(0, Math.min(CW - 24, x));
-      stateRef.current.player.y = Math.max(0, Math.min(CH - 32, y));
+      const touchGameX = ((touch.clientX - rect.left) / rect.width) * CW;
+      const touchGameY = ((touch.clientY - rect.top) / rect.height) * CH;
+      const dx = touchGameX - anchor.x;
+      const dy = touchGameY - anchor.y;
+      const newX = anchor.shipX + dx;
+      const newY = anchor.shipY + dy;
+      stateRef.current.player.x = Math.max(0, Math.min(CW - 24, newX));
+      stateRef.current.player.y = Math.max(0, Math.min(CH - 32, newY));
     };
+    const handleTouchEnd = (_e: TouchEvent) => {
+      touchAnchorRef.current = null;
+    };
+    canvas.addEventListener("touchstart", handleTouchStart, { passive: true });
     canvas.addEventListener("touchmove", handleTouchMove, { passive: true });
+    canvas.addEventListener("touchend", handleTouchEnd, { passive: true });
 
     let animId: number;
 
@@ -990,9 +1157,26 @@ export default function RaidenGame() {
         }
       }
 
+      // ── boss warning phase (runs always, even during gacha) ──
+      if (state.bossWarningTimer > 0) {
+        state.bossWarningTimer--;
+        if (state.bossWarningTimer <= 0) {
+          setBossWarning(false);
+          const wave = WAVE_TABLE[state.lastWaveSpawned];
+          state.boss = {
+            x: state.player.x < CW / 2 ? 180 : 60, y: -80,
+            hp: wave.bossHp, maxHp: wave.bossHp,
+            speed: 1, alive: true, type: wave.boss,
+            attackTimer: 0, phase: 0,
+          };
+          setBossHp(wave.bossHp);
+          setWaveAnnounce(wave.name);
+          setTimeout(() => setWaveAnnounce(""), 2000);
+        }
+      }
+      // ── boss/miniboss cooldown (also runs during gacha to prevent stale state) ──
       if (state.bossCooldown > 0) {
         state.bossCooldown--;
-        if (state.bossCooldown === 60) state.monsters.releaseAll();
       }
       if (state.minibossCooldown > 0) {
         state.minibossCooldown--;
@@ -1006,26 +1190,24 @@ export default function RaidenGame() {
         if (s.y > CH) { s.y = -2; s.x = Math.random() * CW; }
       });
 
-      // ── engine exhaust particles ──
-      if (gameStarted && !isPaused && !isGameOver && !showGacha) {
+      // ── engine exhaust particles (pooled) ──
+      if (gameStarted && !isPaused && !isGameOver && !showGacha && !showShop) {
         const pp = state.player;
         for (let i = 0; i < 2; i++) {
-          exhaustRef.current.push({
-            x: pp.x + 12 + (Math.random() - 0.5) * 6,
-            y: pp.y + 26,
-            vx: (Math.random() - 0.5) * 0.5,
-            vy: 1 + Math.random() * 1.5,
-            alpha: 0.6 + Math.random() * 0.4,
-            size: 2 + Math.random() * 3,
-            life: 20 + Math.random() * 15,
-            maxLife: 35,
-            alive: true,
-          });
+          const e = exhaustPool.current.get();
+          e.x = pp.x + 12 + (Math.random() - 0.5) * 6;
+          e.y = pp.y + 26;
+          e.vx = (Math.random() - 0.5) * 0.5;
+          e.vy = 1 + Math.random() * 1.5;
+          e.alpha = 0.6 + Math.random() * 0.4;
+          e.size = 2 + Math.random() * 3;
+          e.life = 20 + Math.random() * 15;
+          e.maxLife = 35;
         }
       }
       // update exhaust
-      for (let i = exhaustRef.current.length - 1; i >= 0; i--) {
-        const e = exhaustRef.current[i];
+      for (const e of exhaustPool.current.items) {
+        if (!e.alive) continue;
         e.x += e.vx;
         e.y += e.vy;
         e.vy *= 0.97;
@@ -1033,11 +1215,11 @@ export default function RaidenGame() {
         e.alpha = Math.max(0, e.life / e.maxLife);
         e.size *= 0.96;
         if (e.life <= 0) {
-          exhaustRef.current.splice(i, 1);
+          exhaustPool.current.release(e);
         }
       }
 
-      if (gameStarted && !isPaused && !isGameOver && !showGacha) {
+      if (gameStarted && !isPaused && !isGameOver && !showGacha && !showShop) {
         const p = state.player;
         if (state.keys.ArrowLeft || state.keys.a) p.x -= p.speed;
         if (state.keys.ArrowRight || state.keys.d) p.x += p.speed;
@@ -1136,68 +1318,88 @@ export default function RaidenGame() {
           }
         }
 
-        // ── formations (primary spawn method: groups) ──
+        // ── formations (only fighters, more random) ──
         state.formationTimer++;
-        const formInterval = Math.max(300, 480 - Math.floor(state.score / 100));
-        if (state.formationTimer >= formInterval && !state.boss && !state.miniboss && state.bossCooldown <= 0 && state.minibossCooldown <= 0) {
+        const formInterval = Math.max(250, 480 - Math.floor(state.score / 100));
+        if (state.formationTimer >= formInterval && !state.boss && !state.miniboss && state.bossCooldown <= 0 && state.minibossCooldown <= 0 && state.bossWarningTimer <= 0) {
           state.formationTimer = 0;
           const pattern = Math.floor(Math.random() * 5);
           state.formationGroupCounter++;
           const gid = state.formationGroupCounter;
           const midScore = state.score;
+          const rspd = () => 0.8 + Math.random() * 1.2; // random speed helper
 
           if (pattern === 0) {
-            // Flanking pincer
+            // Flanking pincer — random entry angle
             for (let i = 0; i < 3; i++) {
-              const m = spawnMonster(-40 - i * 20, -20 + i * 30, "fighter", 2, 0);
-              m.formation = true; m.vx = 1.2 + i * 0.2; m.vy = 1.0; m.formationGroup = gid;
+              const m = spawnMonster(-40 - i * 25, -10 + Math.random() * 40, "fighter", 1 + Math.floor(Math.random() * 2), 0);
+              m.formation = true; m.vx = rspd() + i * 0.15; m.vy = 0.6 + Math.random() * 0.8; m.formationGroup = gid;
             }
             for (let i = 0; i < 3; i++) {
-              const m = spawnMonster(CW + 40 + i * 20, -20 + i * 30, "fighter", 2, 0);
-              m.formation = true; m.vx = -(1.2 + i * 0.2); m.vy = 1.0; m.formationGroup = gid;
+              const m = spawnMonster(CW + 40 + i * 25, -10 + Math.random() * 40, "fighter", 1 + Math.floor(Math.random() * 2), 0);
+              m.formation = true; m.vx = -(rspd() + i * 0.15); m.vy = 0.6 + Math.random() * 0.8; m.formationGroup = gid;
             }
           } else if (pattern === 1) {
-            // Vertical column
-            for (let i = 0; i < 5; i++) {
-              const m = spawnMonster(-30, 50 + i * 24, i % 2 === 0 ? "fighter" : "bomber", i % 2 === 0 ? 2 : 4, 0);
-              m.formation = true; m.vx = 1.5; m.vy = -0.5 + i * 0.2; m.formationGroup = gid;
+            // Side sweep — all from one side (random left or right)
+            const fromLeft = Math.random() > 0.5;
+            const sideX = fromLeft ? -30 : CW + 10;
+            const dir = fromLeft ? 1 : -1;
+            for (let i = 0; i < 4; i++) {
+              const m = spawnMonster(sideX, 30 + i * 35 + Math.random() * 15, "fighter", 1 + Math.floor(Math.random() * 2), 0);
+              m.formation = true; m.vx = dir * (rspd() + i * 0.2); m.vy = 0.3 + Math.random() * 0.5; m.formationGroup = gid;
             }
           } else if (pattern === 2) {
-            // Arrow formation
+            // Arrow formation — random spawn X, random timing offset
+            const anchorX = 40 + Math.random() * (CW - 120);
+            const spread = 40 + Math.random() * 50;
             for (let i = 0; i < 5; i++) {
-              const m = spawnMonster(40 + i * 60, -20 - i * 18, "fighter", 2, 0);
-              m.formation = true; m.vx = (i - 2) * 0.3; m.vy = 1.8; m.formationGroup = gid;
+              const m = spawnMonster(anchorX + (i - 2) * spread, -20 - i * 15, "fighter", 1 + Math.floor(Math.random() * 2), 0);
+              m.formation = true; m.vx = (i - 2) * (0.1 + Math.random() * 0.3); m.vy = 1.2 + Math.random() * 0.8; m.formationGroup = gid;
             }
-          } else if (pattern === 3 && midScore > 300) {
-            // Elite guard — interceptor + elite combo
-            const elite = spawnMonster(CW / 2 - 20, -16, "elite", 15, 0);
-            elite.formation = true; elite.vx = 0; elite.vy = 1.2; elite.formationGroup = gid;
+          } else if (pattern === 3) {
+            // Diagonal intercept — fly across screen at random angle
+            const fromRight = Math.random() > 0.5;
+            const startX = fromRight ? CW + 20 : -30;
+            const startY = 10 + Math.random() * 60;
+            const dirX = fromRight ? -1 : 1;
+            for (let i = 0; i < 3; i++) {
+              const m = spawnMonster(startX, startY + i * 20, "fighter", 1 + Math.floor(Math.random() * 2), 0);
+              m.formation = true; m.vx = dirX * (2 + Math.random()); m.vy = 0.5 + Math.random(); m.formationGroup = gid;
+            }
+          } else if (pattern === 4) {
+            // Zigzag wave — random top spawn with sine movement
+            const baseVy = 0.8 + Math.random() * 0.6;
             for (let i = 0; i < 4; i++) {
-              const side = i < 2 ? -1 : 1;
-              const m = spawnMonster(CW / 2 + side * (30 + (i % 2) * 30), -16 - i * 10, "interceptor", 5, 0);
-              m.formation = true; m.vx = side * 0.3; m.vy = 1.0 + i * 0.1; m.formationGroup = gid;
-            }
-          } else if (pattern === 4 && midScore > 500) {
-            // Double bomber line
-            for (let i = 0; i < 2; i++) {
-              const m = spawnMonster(20 + i * 160, -20, "bomber", 4, 0);
-              m.formation = true; m.vx = 0; m.vy = 0.8; m.formationGroup = gid;
-            }
-            for (let i = 0; i < 4; i++) {
-              const m = spawnMonster(40 + i * 70, -40, "fighter", 2, 0);
-              m.formation = true; m.vx = (i - 1.5) * 0.2; m.vy = 1.2 + i * 0.1; m.formationGroup = gid;
+              const m = spawnMonster(Math.random() * (CW - 40), -20 - i * 18, "fighter", 1 + Math.floor(Math.random() * 2), 0);
+              m.formation = true; m.vx = (Math.random() - 0.5) * 3; m.vy = baseVy; m.formationGroup = gid;
             }
           }
         }
 
+        // ── solo elite/interceptor/bomber spawns (individual, not in groups) ──
+        if (f % 180 === 0 && !state.boss && !state.miniboss && state.bossCooldown <= 0 && state.minibossCooldown <= 0 && state.bossWarningTimer <= 0 && state.score > 400) {
+          const r2 = Math.random();
+          let soloType: Monster["type"] = "bomber";
+          if (state.score > 800 && r2 < 0.25) soloType = "elite";
+          else if (state.score > 500 && r2 < 0.5) soloType = "interceptor";
+          const soloHp = soloType === "elite" ? 15 : soloType === "interceptor" ? 5 : 4;
+          const fromSide = Math.random() > 0.5;
+          const soloX = fromSide ? (Math.random() > 0.5 ? -20 : CW + 10) : Math.random() * (CW - 40);
+          const soloY = fromSide ? 30 + Math.random() * 80 : -16;
+          const soloVx = fromSide ? (soloX < 0 ? 1.5 : -1.5) : (Math.random() - 0.5) * 0.5;
+          const m = spawnMonster(soloX, soloY, soloType, soloHp, 0);
+          m.formation = false;
+          m.vx = soloVx; m.vy = 1 + Math.random() * 0.5;
+        }
+
         // ── miniboss spawn ──
-        if (!state.boss && !state.miniboss && state.bossCooldown <= 0 && state.minibossCooldown <= 0 && state.score > 800) {
+        if (!state.boss && !state.miniboss && state.bossCooldown <= 0 && state.minibossCooldown <= 0 && state.score > 800 && state.bossWarningTimer <= 0) {
           const mbInterval = Math.max(800, 2000 - Math.floor(state.score / 20));
           if (state.score % mbInterval < 3 && state.score > state.lastWaveSpawned * 1000 + 500) {
             const mbTypes: BossType[] = ["fortress", "carrier"];
             const mbType = mbTypes[Math.floor(Math.random() * mbTypes.length)];
             const mbHp = 15 + Math.floor(state.score / 200);
-            const dropCoins = 8 + Math.floor(state.score / 150);
+            const dropCoins = Math.min(20, 8 + Math.floor(state.score / 150));
             state.miniboss = {
               x: Math.random() * (CW - 80) + 20, y: -40,
               hp: mbHp, maxHp: mbHp, speed: 1,
@@ -1253,25 +1455,36 @@ export default function RaidenGame() {
           }
         }
 
-        // ── wave spawn (small waves, capped) ──
-        const waveGap = Math.max(150, 300 - Math.floor(state.score / 100));
-        if (f % waveGap === 0 && !state.boss && !state.miniboss && state.bossCooldown <= 0 && state.minibossCooldown <= 0) {
-          const waveSize = Math.min(6, 2 + Math.floor(state.score / 800));
-          let wt: Monster["type"] = "fighter";
-          const r = Math.random();
-          if (state.score > 500 && r < 0.25) wt = "elite";
-          else if (state.score > 400 && r < 0.35) wt = "interceptor";
-          else if (state.score > 200 && r < 0.5) wt = "bomber";
-          const hp = wt === "elite" ? 15 : wt === "interceptor" ? 5 : wt === "bomber" ? 4 : 2;
-          const sp = wt === "elite" ? 28 : wt === "interceptor" ? 24 : wt === "bomber" ? 20 : 16;
-          const spread = sp + waveSize * 4;
-          for (let i = 0; i < waveSize; i++) {
-            const offset = waveSize > 1 ? (i / (waveSize - 1) - 0.5) * spread : 0;
-            const m = spawnMonster(
-              Math.max(4, Math.min(CW - 36, CW / 2 - 12 + offset)),
-              -16 - i * 12, wt, hp, 0.6 + Math.random() * 0.6,
-            );
-            m.vy = 0.8 + Math.random() * 0.8; m.vx = (Math.random() - 0.5) * 0.3;
+        // ── wave spawn (small waves of fighters only, more random positions) ──
+        const waveGap = Math.max(200, 350 - Math.floor(state.score / 100));
+        if (f % waveGap === 0 && !state.boss && !state.miniboss && state.bossCooldown <= 0 && state.minibossCooldown <= 0 && state.bossWarningTimer <= 0) {
+          const waveSize = Math.min(4, 2 + Math.floor(state.score / 1500));
+          const spread = 120 + Math.random() * 80;
+          // Random entry: sometimes from top, sometimes from sides
+          const entryStyle = Math.random();
+          const hp = 1 + Math.floor(Math.random() * 2);
+          if (entryStyle < 0.4) {
+            // from top
+            for (let i = 0; i < waveSize; i++) {
+              const offset = waveSize > 1 ? (i / (waveSize - 1) - 0.5) * spread : 0;
+              const m = spawnMonster(
+                Math.max(4, Math.min(CW - 36, CW / 2 - 12 + offset + (Math.random() - 0.5) * 30)),
+                -16 - i * 10, "fighter", hp, 0,
+              );
+              m.vy = 1 + Math.random(); m.vx = (Math.random() - 0.5) * 1.5;
+            }
+          } else if (entryStyle < 0.7) {
+            // from left
+            for (let i = 0; i < waveSize; i++) {
+              const m = spawnMonster(-20 - i * 15, 20 + Math.random() * 80, "fighter", hp, 0);
+              m.vy = 0.5 + Math.random(); m.vx = 1.5 + Math.random();
+            }
+          } else {
+            // from right
+            for (let i = 0; i < waveSize; i++) {
+              const m = spawnMonster(CW + 20 + i * 15, 20 + Math.random() * 80, "fighter", hp, 0);
+              m.vy = 0.5 + Math.random(); m.vx = -(1.5 + Math.random());
+            }
           }
         }
 
@@ -1392,7 +1605,7 @@ export default function RaidenGame() {
               state.bullets.release(b);
               emitExplosion(b.x, b.y, 3, ["#fbbf24"], 3);
               if (m.hp <= 0) {
-                const isDouble = state.doubleCoinTimer > 0;
+                const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
                 const base = m.type === "elite" ? 10 : m.type === "interceptor" ? 3 : m.type === "bomber" ? 2 : 1;
                 spawnCoin(m.x + 8, m.y + 4, isDouble ? base * 2 : base);
                 emitExplosion(m.x + 8, m.y + 8, 10, ["#ef4444", "#f97316"], 6);
@@ -1416,7 +1629,7 @@ export default function RaidenGame() {
               state.missiles.release(ms);
               emitExplosion(ms.x, ms.y, 8, ["#f97316", "#fef08a", "#ef4444"], 5);
               if (m.hp <= 0) {
-                const isDouble = state.doubleCoinTimer > 0;
+                const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
                 const base = m.type === "elite" ? 10 : m.type === "interceptor" ? 3 : m.type === "bomber" ? 2 : 1;
                 spawnCoin(m.x + 8, m.y + 4, isDouble ? base * 2 : base);
                 emitExplosion(m.x + 8, m.y + 8, 10, ["#ef4444", "#f97316"], 6);
@@ -1467,7 +1680,7 @@ export default function RaidenGame() {
               emitExplosion(bullet.x, bullet.y, 3, ["#fbbf24"], 3);
               if (b.hp <= 0) {
                 emitExplosion(b.x + 22, b.y + 16, 50, ["#f97316", "#ef4444", "#fef08a", "#fff"], 8);
-                const isDouble = state.doubleCoinTimer > 0;
+                const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
                 spawnCoin(b.x + 18, b.y + 10, isDouble ? 20 : 10);
                 setScore((prev) => { const n = prev + 1000; state.score = n; return n; });
                 setBossHp(0);
@@ -1477,7 +1690,9 @@ export default function RaidenGame() {
                 state.shakeX = 14; state.shakeY = 14;
                 audio.bossExplosion();
                 // trigger gacha on boss kill
-                setTimeout(() => {
+                if (gachaTimerRef.current) clearTimeout(gachaTimerRef.current);
+                gachaTimerRef.current = setTimeout(() => {
+                  gachaTimerRef.current = null;
                   const cards = generateGachaOptions();
                   setGachaCards(cards);
                   setShowGacha(true);
@@ -1498,14 +1713,16 @@ export default function RaidenGame() {
                 emitExplosion(ms.x, ms.y, 8, ["#f97316", "#fef08a", "#ef4444"], 5);
                 if (b2.hp <= 0) {
                   emitExplosion(b2.x + 22, b2.y + 16, 50, ["#f97316", "#ef4444", "#fef08a", "#fff"], 8);
-                  const isDouble = state.doubleCoinTimer > 0;
+                  const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
                   spawnCoin(b2.x + 18, b2.y + 10, isDouble ? 20 : 10);
                   setScore((prev) => { const n = prev + 1000; state.score = n; return n; });
                   setBossHp(0); b2.alive = false; state.boss = null;
                   state.bossCooldown = 180;
                   state.shakeX = 14; state.shakeY = 14;
                   audio.bossExplosion();
-                  setTimeout(() => {
+                  if (gachaTimerRef.current) clearTimeout(gachaTimerRef.current);
+                  gachaTimerRef.current = setTimeout(() => {
+                    gachaTimerRef.current = null;
                     const cards = generateGachaOptions();
                     setGachaCards(cards);
                     setShowGacha(true);
@@ -1529,10 +1746,12 @@ export default function RaidenGame() {
                 emitExplosion(bullet.x, bullet.y, 3, ["#fbbf24"], 3);
                 if (mb.hp <= 0) {
                   emitExplosion(mb.x + 26, mb.y + 20, 40, ["#f97316", "#ef4444", "#fef08a"], 7);
-                  const isDouble = state.doubleCoinTimer > 0;
+                  const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
                   const dropCount = mb.dropCoins;
                   for (let dc = 0; dc < dropCount; dc++) {
-                    spawnCoin(mb.x + 10 + Math.random() * 30, mb.y + 10 + Math.random() * 20, isDouble ? 2 : 1);
+                    const angle = (Math.PI * 2 * dc) / dropCount + Math.random() * 0.3;
+                    const dist = 20 + Math.random() * 30;
+                    spawnCoin(mb.x + 26 + Math.cos(angle) * dist, mb.y + 20 + Math.sin(angle) * dist, isDouble ? 2 : 1);
                   }
                   setScore((prev) => { const n = prev + 500; state.score = n; return n; });
                   mb.alive = false; state.miniboss = null;
@@ -1553,10 +1772,12 @@ export default function RaidenGame() {
                   emitExplosion(ms.x, ms.y, 6, ["#f97316", "#fef08a", "#ef4444"], 5);
                   if (mb2.hp <= 0) {
                     emitExplosion(mb2.x + 26, mb2.y + 20, 40, ["#f97316", "#ef4444", "#fef08a"], 7);
-                    const isDouble = state.doubleCoinTimer > 0;
+                    const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
                     const dropCount = mb2.dropCoins;
                     for (let dc = 0; dc < dropCount; dc++) {
-                      spawnCoin(mb2.x + 10 + Math.random() * 30, mb2.y + 10 + Math.random() * 20, isDouble ? 2 : 1);
+                      const angle = (Math.PI * 2 * dc) / dropCount + Math.random() * 0.3;
+                      const dist = 20 + Math.random() * 30;
+                      spawnCoin(mb2.x + 26 + Math.cos(angle) * dist, mb2.y + 20 + Math.sin(angle) * dist, isDouble ? 2 : 1);
                     }
                     setScore((prev) => { const n = prev + 500; state.score = n; return n; });
                     mb2.alive = false; state.miniboss = null;
@@ -1576,7 +1797,8 @@ export default function RaidenGame() {
           const px = state.player.x;
           const py = state.player.y;
           if (c.x > px - 4 && c.x < px + 32 && c.y > py - 4 && c.y < py + 32) {
-            state.wallet += c.value;
+            const coinMult = saveRef.current.upgrades.permaDouble ? 2 : 1;
+            state.wallet += c.value * coinMult;
             state.coins.release(c);
             emitExplosion(c.x, c.y, 4, ["#eab308"], 3);
             audio.coinCollect();
@@ -1671,25 +1893,14 @@ export default function RaidenGame() {
       ctx.globalAlpha = 1;
 
       // ── engine exhaust ──
-      for (const e of exhaustRef.current) {
+      for (const e of exhaustPool.current.items) {
+        if (!e.alive) continue;
         ctx.globalAlpha = e.alpha * 0.6;
         ctx.fillStyle = "#f97316";
         ctx.fillRect(e.x, e.y, 2, 2);
         ctx.globalAlpha = e.alpha * 0.3;
         ctx.fillStyle = "#fef08a";
         ctx.fillRect(e.x - 0.5, e.y - 0.5, 3, 3);
-      }
-      ctx.globalAlpha = 1;
-
-      // particles
-      for (const pt of state.particles.getActive()) {
-        ctx.globalAlpha = Math.max(0, pt.alpha);
-        ctx.save();
-        ctx.shadowColor = pt.color;
-        ctx.shadowBlur = pt.size > 4 ? 8 : 4;
-        ctx.fillStyle = pt.color;
-        ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size / 2, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
       }
       ctx.globalAlpha = 1;
 
@@ -1752,51 +1963,54 @@ export default function RaidenGame() {
           ctx.beginPath(); ctx.arc(b.x, b.y - 1, 1.2, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         } else if (b.wtype === "laser") {
-          const len = 14;
+          const od = stateRef.current.overdriveTimer > 0;
+          const len = od ? 22 : 14;
           ctx.save();
-          ctx.shadowColor = "#22d3ee";
-          ctx.shadowBlur = 8;
-          const lg = ctx.createRadialGradient(b.x, b.y - len / 2, 0, b.x, b.y - len / 2, 6);
-          lg.addColorStop(0, "rgba(34,211,238,0.4)");
-          lg.addColorStop(1, "rgba(34,211,238,0)");
+          ctx.shadowColor = od ? "#f97316" : "#22d3ee";
+          ctx.shadowBlur = od ? 16 : 8;
+          const lg = ctx.createRadialGradient(b.x, b.y - len / 2, 0, b.x, b.y - len / 2, od ? 10 : 6);
+          lg.addColorStop(0, od ? "rgba(251,146,60,0.5)" : "rgba(34,211,238,0.4)");
+          lg.addColorStop(1, od ? "rgba(251,146,60,0)" : "rgba(34,211,238,0)");
           ctx.fillStyle = lg;
-          ctx.fillRect(b.x - 4, b.y - len, 8, len + 4);
-          ctx.fillStyle = "#22d3ee";
-          ctx.fillRect(b.x - 1, b.y - len, 2, len);
-          ctx.fillStyle = "#e0f2fe";
-          ctx.fillRect(b.x - 0.5, b.y - len, 1, len);
-          ctx.fillStyle = "#fff";
-          ctx.beginPath(); ctx.arc(b.x, b.y - len, 2, 0, Math.PI * 2); ctx.fill();
+          ctx.fillRect(b.x - (od ? 6 : 4), b.y - len, (od ? 12 : 8), len + 4);
+          ctx.fillStyle = od ? "#f97316" : "#22d3ee";
+          ctx.fillRect(b.x - (od ? 2 : 1), b.y - len, od ? 4 : 2, len);
+          ctx.fillStyle = od ? "#fef08a" : "#e0f2fe";
+          ctx.fillRect(b.x - 1, b.y - len, od ? 2 : 1, len);
+          ctx.fillStyle = od ? "#fff" : "#fff";
+          ctx.beginPath(); ctx.arc(b.x, b.y - len, od ? 3 : 2, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         } else if (b.wtype === "wave") {
-          const pulseR = 5 + Math.sin(stateRef.current.frameCount * 0.15) * 1;
+          const od = stateRef.current.overdriveTimer > 0;
+          const pulseR = od ? 8 + Math.sin(stateRef.current.frameCount * 0.2) * 3 : 5 + Math.sin(stateRef.current.frameCount * 0.15) * 1;
           ctx.save();
-          ctx.shadowColor = "#4ade80";
-          ctx.shadowBlur = 8;
-          const wg = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, pulseR + 3);
-          wg.addColorStop(0, "rgba(74,222,128,0.5)");
-          wg.addColorStop(1, "rgba(74,222,128,0)");
+          ctx.shadowColor = od ? "#f97316" : "#4ade80";
+          ctx.shadowBlur = od ? 16 : 8;
+          const wg = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, pulseR + (od ? 6 : 3));
+          wg.addColorStop(0, od ? "rgba(251,146,60,0.5)" : "rgba(74,222,128,0.5)");
+          wg.addColorStop(1, od ? "rgba(251,146,60,0)" : "rgba(74,222,128,0)");
           ctx.fillStyle = wg;
-          ctx.beginPath(); ctx.arc(b.x, b.y, pulseR + 3, 0, Math.PI * 2); ctx.fill();
-          ctx.strokeStyle = "#4ade80";
-          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(b.x, b.y, pulseR + (od ? 6 : 3), 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = od ? "#f97316" : "#4ade80";
+          ctx.lineWidth = od ? 3 : 2;
           ctx.beginPath(); ctx.arc(b.x, b.y, pulseR, 0, Math.PI * 2); ctx.stroke();
           ctx.fillStyle = "#bbf7d0";
           ctx.beginPath(); ctx.arc(b.x, b.y, 1.5, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         } else {
+          const od = stateRef.current.overdriveTimer > 0;
           ctx.save();
-          ctx.shadowColor = "#fbbf24";
-          ctx.shadowBlur = 6;
-          const sg = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 5);
-          sg.addColorStop(0, "rgba(251,191,36,0.4)");
-          sg.addColorStop(1, "rgba(251,191,36,0)");
+          ctx.shadowColor = od ? "#f97316" : "#fbbf24";
+          ctx.shadowBlur = od ? 14 : 6;
+          const sg = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, od ? 9 : 5);
+          sg.addColorStop(0, od ? "rgba(251,146,60,0.5)" : "rgba(251,191,36,0.4)");
+          sg.addColorStop(1, od ? "rgba(251,146,60,0)" : "rgba(251,191,36,0)");
           ctx.fillStyle = sg;
-          ctx.fillRect(b.x - 5, b.y - 5, 10, 10);
-          ctx.fillStyle = "#fbbf24";
-          ctx.beginPath(); ctx.arc(b.x, b.y, 2.5, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = "#fef08a";
-          ctx.beginPath(); ctx.arc(b.x, b.y, 1, 0, Math.PI * 2); ctx.fill();
+          ctx.fillRect(b.x - (od ? 9 : 5), b.y - (od ? 9 : 5), (od ? 18 : 10), (od ? 18 : 10));
+          ctx.fillStyle = od ? "#f97316" : "#fbbf24";
+          ctx.beginPath(); ctx.arc(b.x, b.y, od ? 4 : 2.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = od ? "#fef08a" : "#fef08a";
+          ctx.beginPath(); ctx.arc(b.x, b.y, od ? 2 : 1, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         }
       }
@@ -1861,13 +2075,24 @@ export default function RaidenGame() {
           }
 
           if (state.overdriveTimer > 0) {
+            // engine overcharge glow
             ctx.globalAlpha = 0.4 + Math.sin(f * 0.15) * 0.2;
-            const eg = ctx.createRadialGradient(sp.x + 12, sp.y + 24, 0, sp.x + 12, sp.y + 24, 14);
+            const eg = ctx.createRadialGradient(sp.x + 12, sp.y + 24, 0, sp.x + 12, sp.y + 24, 18);
             eg.addColorStop(0, "#f97316");
             eg.addColorStop(1, "rgba(249,115,22,0)");
             ctx.fillStyle = eg;
-            ctx.beginPath(); ctx.arc(sp.x + 12, sp.y + 24, 14, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(sp.x + 12, sp.y + 24, 18, 0, Math.PI * 2); ctx.fill();
             ctx.globalAlpha = 1;
+            // level indicator text floating above ship
+            ctx.save();
+            ctx.globalAlpha = 0.5 + Math.sin(f * 0.1) * 0.3;
+            ctx.fillStyle = "#f97316";
+            ctx.font = "bold 10px monospace";
+            ctx.textAlign = "center";
+            ctx.shadowColor = "#fbbf24";
+            ctx.shadowBlur = 12;
+            ctx.fillText("★ MAX ★", sp.x + 12, sp.y - 6);
+            ctx.restore();
           }
           ctx.globalAlpha = 0.08;
           const pg = ctx.createRadialGradient(sp.x + 12, sp.y + 12, 0, sp.x + 12, sp.y + 12, 30);
@@ -1892,43 +2117,107 @@ export default function RaidenGame() {
         drawMinibossShip(ctx, state.miniboss, state.miniboss.x, state.miniboss.y);
       }
 
-      // coins
-      for (const c of state.coins.getActive()) {
+      // coins — batch glow pass then individual
+      const activeCoins = state.coins.getActive();
+      ctx.save();
+      ctx.shadowColor = "#eab308";
+      ctx.shadowBlur = 6;
+      for (const c of activeCoins) {
         const floatY = Math.sin(f * 0.06 + c.x) * 2;
+        ctx.save();
         drawCoinItem(ctx, c.x, c.y + floatY);
+        ctx.restore();
+      }
+      ctx.restore();
+      // sparkles on top (no shadow)
+      for (const c of activeCoins) {
+        if (Math.sin(f * 0.12 + c.x) > 0.8) {
+          const floatY = Math.sin(f * 0.06 + c.x) * 2;
+          ctx.globalAlpha = 0.5;
+          ctx.fillStyle = "#fff";
+          ctx.beginPath(); ctx.arc(c.x + 2, c.y + floatY - 2, 1.5, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+        }
       }
 
-      // power-ups
+      // power-ups (enhanced effect)
       for (const pu of state.powerUps.getActive()) {
         const pcx = pu.x + 6, pcy = pu.y + 6;
         const pulse = Math.sin(f * 0.1) * 0.3 + 0.7;
         ctx.save();
+        // outer glow ring (rotating)
         ctx.shadowColor = "#38bdf8";
-        ctx.shadowBlur = 10;
-        ctx.globalAlpha = 0.25 * pulse;
+        ctx.shadowBlur = 20;
+        ctx.globalAlpha = 0.35 * pulse;
         ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(pcx, pcy, 14 + Math.sin(f * 0.08) * 3, 0, Math.PI * 2); ctx.stroke();
-        const pg = ctx.createRadialGradient(pcx, pcy, 0, pcx, pcy, 10);
-        pg.addColorStop(0, "rgba(125,211,252,0.9)");
-        pg.addColorStop(0.5, "rgba(56,189,248,0.6)");
+        const ringR = 16 + Math.sin(f * 0.08) * 4;
+        ctx.beginPath(); ctx.arc(pcx, pcy, ringR, 0, Math.PI * 2); ctx.stroke();
+        // rotating arc
+        ctx.globalAlpha = 0.5 * pulse;
+        ctx.strokeStyle = "#7dd3fc"; ctx.lineWidth = 2.5;
+        const arcStart = f * 0.05;
+        const arcEnd = arcStart + 1.2;
+        ctx.beginPath(); ctx.arc(pcx, pcy, ringR + 2, arcStart, arcEnd); ctx.stroke();
+        // main gradient sphere
+        const pg = ctx.createRadialGradient(pcx, pcy, 0, pcx, pcy, 14);
+        pg.addColorStop(0, "rgba(255,255,255,0.95)");
+        pg.addColorStop(0.3, "rgba(125,211,252,0.9)");
+        pg.addColorStop(0.6, "rgba(56,189,248,0.6)");
         pg.addColorStop(1, "rgba(56,189,248,0)");
-        ctx.globalAlpha = pulse;
+        ctx.globalAlpha = 0.9 * pulse;
+        ctx.shadowColor = "#38bdf8";
+        ctx.shadowBlur = 25;
         ctx.fillStyle = pg;
-        ctx.beginPath(); ctx.arc(pcx, pcy, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(pcx, pcy, 14, 0, Math.PI * 2); ctx.fill();
         ctx.shadowBlur = 0;
-        ctx.globalAlpha = 0.9;
-        ctx.fillStyle = "#e0f2fe";
-        ctx.beginPath(); ctx.arc(pcx, pcy, 3, 0, Math.PI * 2); ctx.fill();
+        // bright core
+        ctx.globalAlpha = 1;
         ctx.fillStyle = "#fff";
-        ctx.beginPath(); ctx.arc(pcx, pcy, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowColor = "#fff";
+        ctx.shadowBlur = 10;
+        ctx.beginPath(); ctx.arc(pcx, pcy, 3.5 + Math.sin(f * 0.12) * 1, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        // orbiting particles
         for (let i = 0; i < 3; i++) {
           const da = f * 0.06 + (Math.PI * 2 * i) / 3;
-          ctx.globalAlpha = 0.6 * pulse;
-          ctx.fillStyle = "#fff";
-          ctx.beginPath(); ctx.arc(pcx + Math.cos(da) * 7, pcy + Math.sin(da) * 7, 1, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = (0.5 + Math.sin(f * 0.08 + i) * 0.3) * pulse;
+          ctx.fillStyle = i === 0 ? "#fff" : i === 1 ? "#7dd3fc" : "#38bdf8";
+          ctx.beginPath(); ctx.arc(
+            pcx + Math.cos(da) * (10 + Math.sin(f * 0.05 + i) * 2),
+            pcy + Math.sin(da) * (10 + Math.sin(f * 0.05 + i) * 2),
+            1.5 + Math.sin(f * 0.1 + i) * 0.5, 0, Math.PI * 2,
+          ); ctx.fill();
         }
+        // "P" letter hint
+        ctx.globalAlpha = 0.7 * pulse;
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 8px monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("P", pcx, pcy + 0.5);
         ctx.restore();
       }
+
+      // particles (batch-rendered 3-pass: glow first, then core, to minimize ctx state changes)
+      const pts = state.particles.getActive();
+      // pass 1: glow (larger particles with shadow)
+      ctx.save();
+      for (const pt of pts) {
+        if (pt.size <= 4) continue;
+        ctx.globalAlpha = Math.max(0, pt.alpha * 0.4);
+        ctx.shadowColor = pt.color;
+        ctx.shadowBlur = pt.size > 6 ? 10 : 5;
+        ctx.fillStyle = pt.color;
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size * 0.8, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+      // pass 2: all particles, no shadow (fast)
+      for (const pt of pts) {
+        ctx.globalAlpha = Math.max(0, pt.alpha);
+        ctx.fillStyle = pt.color;
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size * 0.6, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
 
       ctx.restore();
 
@@ -1942,10 +2231,13 @@ export default function RaidenGame() {
       cancelAnimationFrame(animId);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      canvas.removeEventListener("touchstart", handleTouchStart);
+      canvas.removeEventListener("touchmove", handleTouchMove);
+      canvas.removeEventListener("touchend", handleTouchEnd);
     };
   }, [
     gameStarted, startFadeOut, isGameOver, weaponLevel, weaponType,
-    bombCount, lives, isPaused, showGacha, hasHoming, wingmanCount, audio
+    bombCount, lives, isPaused, showGacha, showShop, hasHoming, wingmanCount, audio, shipType
   ]);
 
   // Check boss spawn
@@ -1955,13 +2247,13 @@ export default function RaidenGame() {
 
   // BGM control
   useEffect(() => {
-    if (gameStarted && !isPaused && !isGameOver && !showGacha) {
+    if (gameStarted && !isPaused && !isGameOver && !showGacha && !showShop) {
       audio.startBGM();
     } else {
       audio.stopBGM();
     }
     return () => audio.stopBGM();
-  }, [gameStarted, isPaused, isGameOver, showGacha, audio]);
+  }, [gameStarted, isPaused, isGameOver, showGacha, showShop, audio]);
 
   // save on game over
   useEffect(() => {
@@ -1984,6 +2276,7 @@ export default function RaidenGame() {
 
   const restartGame = () => {
     audio.buttonClick();
+    if (gachaTimerRef.current) { clearTimeout(gachaTimerRef.current); gachaTimerRef.current = null; }
     const state = stateRef.current;
     state.monsters.releaseAll();
     state.bullets.releaseAll();
@@ -2002,16 +2295,16 @@ export default function RaidenGame() {
     state.formationTimer = 0; state.gachaLocked = false;
     state.gachaCost = 10; state.formationGroupCounter = 0;
     state.overdriveTimer = 0; state.lastWaveSpawned = -1;
-    state.bossCooldown = 0; state.minibossCooldown = 0; state.wingmanCount = 0;
+    state.bossCooldown = 0; state.minibossCooldown = 0; state.wingmanCount = 0; state.bossWarningTimer = 0;
     bgOffsetRef.current = 0;
-    exhaustRef.current = [];
-    setIsPaused(false); setShowGacha(false);
+    exhaustPool.current.releaseAll();
+    setIsPaused(false); setShowGacha(false); setShowShop(false);
     setScore(0); setWeaponLevel(1);
     setBombCount(3); setLives(3); setIsGameOver(false);
     setInvincible(false); setBossHp(0); setCoins(0);
     setDoubleCoinTimer(0); setHasHoming(false);
     setGachaCost(10); setOverdriveTimer(0); setWaveAnnounce("");
-    setWingmanCount(0); setGameStarted(false); setStartFadeOut(false);
+    setWingmanCount(0); setBossWarning(false); setGameStarted(false); setStartFadeOut(false);
   };
 
   const formatScore = (n: number) => n.toString().padStart(6, "0");
@@ -2099,32 +2392,55 @@ export default function RaidenGame() {
                     <p className="pixel-font text-[16px] text-[#fbbf24] tracking-[6px] -mt-1" style={{ fontFamily: PIXEL_FONT }}>战机</p>
                   </div>
 
-                  {/* Ship selection */}
+                  {/* Ship selection — arrow key carousel */}
                   <div className="mb-4">
                     <p className="pixel-font text-[7px] text-[#64748b] mb-2">选择战机</p>
-                    <div className="flex gap-2 justify-center">
-                      {SHIP_TYPES.map((st) => (
-                        <button
-                          key={st}
-                          onClick={(e) => { e.stopPropagation(); setShipType(st); }}
-                          className={`pixel-hud px-3 py-2 flex flex-col items-center gap-1 transition-all active:scale-90 ${
-                            shipType === st
-                              ? "bg-[rgba(56,189,248,0.2)] border-[#38bdf8]"
-                              : "hover:bg-[rgba(56,189,248,0.1)]"
-                          }`}
-                        >
-                          <span className="text-lg">{SHIP_CONFIG[st].icon}</span>
-                          <span className="pixel-font text-[6px] text-white">{SHIP_CONFIG[st].label}</span>
-                          <span className="pixel-font text-[5px] text-[#475569]">{SHIP_CONFIG[st].desc}</span>
-                        </button>
-                      ))}
+                    <div className="flex items-center justify-center gap-3">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const idx = SHIP_TYPES.indexOf(shipType);
+                          const prev = SHIP_TYPES[(idx - 1 + SHIP_TYPES.length) % SHIP_TYPES.length];
+                          setShipType(prev);
+                        }}
+                        className="pixel-hud w-7 h-7 flex items-center justify-center hover:bg-[rgba(56,189,248,0.15)] active:scale-90 transition-all text-white text-xs"
+                      >
+                        ◀
+                      </button>
+                      <div className="pixel-hud px-4 py-2 flex flex-col items-center gap-1 min-w-[100px]">
+                        <span className="text-2xl">{SHIP_CONFIG[shipType].icon}</span>
+                        <span className="pixel-font text-[8px] text-white">{SHIP_CONFIG[shipType].label}</span>
+                        <span className="pixel-font text-[6px] text-[#475569]">{SHIP_CONFIG[shipType].desc}</span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const idx = SHIP_TYPES.indexOf(shipType);
+                          const next = SHIP_TYPES[(idx + 1) % SHIP_TYPES.length];
+                          setShipType(next);
+                        }}
+                        className="pixel-hud w-7 h-7 flex items-center justify-center hover:bg-[rgba(56,189,248,0.15)] active:scale-90 transition-all text-white text-xs"
+                      >
+                        ▶
+                      </button>
                     </div>
                   </div>
 
                   {/* Stats */}
-                  <div className="pixel-hud px-4 py-3 mb-4 inline-block">
+                  <div className="pixel-hud px-4 py-3 mb-3 inline-block">
                     <p className="pixel-font text-[7px] text-[#64748b] mb-1">HIGH SCORE</p>
                     <p className="pixel-font text-[10px] text-[#fbbf24]">{formatScore(highScore)}</p>
+                  </div>
+
+                  {/* Shop button */}
+                  <div className="mb-3">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowShop(true); }}
+                      className="pixel-hud px-4 py-1.5 hover:bg-[rgba(56,189,248,0.15)] active:scale-90 transition-all flex items-center gap-1.5 mx-auto"
+                    >
+                      <Coins className="w-2.5 h-2.5 text-yellow-400" />
+                      <span className="pixel-font text-[7px] text-[#facc15] tracking-[2px]">商店</span>
+                    </button>
                   </div>
 
                   {/* Hint */}
@@ -2139,7 +2455,7 @@ export default function RaidenGame() {
                       WASD/ARROWS MOVE
                     </p>
                     <p className="pixel-font text-[6px] text-[#64748b] leading-[10px]">
-                      Q WEAPON | SPACE BOMB
+                      SPACE BOMB
                     </p>
                     <p className="pixel-font text-[6px] text-[#64748b] leading-[10px]">
                       ESC PAUSE
@@ -2171,16 +2487,13 @@ export default function RaidenGame() {
                   )}
                 </div>
 
-                {/* Top-right: weapon + pause */}
+                {/* Top-right: ship + weapon info + pause */}
                 <div className="absolute top-2 right-2 flex items-center gap-1">
-                  <button
-                    onClick={cycleWeaponType}
-                    className="pixel-hud px-1.5 py-1 hover:bg-[rgba(56,189,248,0.15)] active:scale-90 transition-all"
-                  >
+                  <div className="pixel-hud px-1.5 py-1">
                     <span className="pixel-font text-[6px] text-[#38bdf8] leading-[8px]">
                       {WEAPON_ICONS[weaponType]} {WEAPON_NAMES[weaponType]}
                     </span>
-                  </button>
+                  </div>
                   <button
                     onClick={togglePause}
                     className="pixel-hud w-6 h-6 flex items-center justify-center hover:bg-[rgba(56,189,248,0.15)] active:scale-90 transition-all"
@@ -2226,8 +2539,47 @@ export default function RaidenGame() {
               </>
             )}
 
+            {/* Boss Warning overlay */}
+            {bossWarning && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-15">
+                {/* Red flashing background */}
+                <div
+                  className="absolute inset-0 transition-opacity"
+                  style={{
+                    background: `radial-gradient(ellipse at center, rgba(239,68,68,0.3) 0%, rgba(239,68,68,0.1) 40%, transparent 70%)`,
+                    opacity: stateRef.current.bossWarningTimer % 20 < 10 ? 1 : 0.3,
+                    transition: "opacity 0.15s",
+                  }}
+                />
+                {/* WARNING text */}
+                <div
+                  className="relative z-10"
+                  style={{
+                    opacity: stateRef.current.bossWarningTimer % 30 < 15 ? 1 : 0.2,
+                    transition: "opacity 0.15s",
+                  }}
+                >
+                  <p
+                    className="text-[28px] font-black text-red-500 tracking-[6px]"
+                    style={{
+                      fontFamily: PIXEL_FONT,
+                      textShadow: "0 0 20px rgba(239,68,68,0.8), 0 0 40px rgba(239,68,68,0.4)",
+                    }}
+                  >
+                    WARNING
+                  </p>
+                  <p
+                    className="text-[10px] font-black text-yellow-400 tracking-[2px] mt-1 text-center"
+                    style={{ fontFamily: PIXEL_FONT }}
+                  >
+                    BOSS APPROACHING
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Wave announcement */}
-            {waveAnnounce && (
+            {waveAnnounce && !bossWarning && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                 <div className="bg-black/80 pixel-border px-6 py-3 animate-blink">
                   <p
@@ -2339,6 +2691,97 @@ export default function RaidenGame() {
                     {coins >= 5 ? "刷新 (5金币)" : "金币不足"}
                   </span>
                 </button>
+                {/* Shop button in gacha */}
+                <button
+                  onClick={() => {
+                    if (gachaTimerRef.current) { clearTimeout(gachaTimerRef.current); gachaTimerRef.current = null; }
+                    setShowGacha(false);
+                    setShowShop(true);
+                  }}
+                  className="pixel-hud px-3 py-1.5 mt-2 hover:bg-[rgba(56,189,248,0.15)] active:scale-90 transition-all"
+                >
+                  <span className="pixel-font text-[6px] text-[#facc15] tracking-[1px]">商店 (金币)</span>
+                </button>
+              </div>
+            )}
+
+            {/* ═══ SHOP OVERLAY ═══ */}
+            {showShop && (
+              <div
+                className="absolute inset-0 bg-black/85 flex flex-col items-center p-4 z-30 overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="pixel-hud px-4 py-2 mb-3">
+                  <p className="pixel-font text-[10px] text-[#facc15] tracking-[4px]">商 店</p>
+                </div>
+                {/* Coins display */}
+                <div className="flex items-center gap-1 mb-4">
+                  <Coins className="w-3 h-3 text-yellow-400" />
+                  <span className="pixel-font text-[8px] text-yellow-300" key={shopRefreshKey}>
+                    {saveRef.current.totalCoins}
+                  </span>
+                </div>
+                {/* Shop items grid */}
+                <div className="grid grid-cols-2 gap-3 w-full max-w-[280px] mb-4">
+                  {SHOP_ITEMS.map((item) => {
+                    const owned = item.owned(saveRef.current.upgrades);
+                    const canBuy = saveRef.current.totalCoins >= item.price;
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex flex-col items-center p-2"
+                        style={{
+                          background: "rgba(0,0,0,0.75)",
+                          border: "1px solid rgba(56,189,248,0.2)",
+                          borderRadius: 0,
+                          backgroundImage: [
+                            "linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px)",
+                            "linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)",
+                          ].join(","),
+                          backgroundSize: "8px 8px",
+                        }}
+                      >
+                        <span className="text-2xl mb-1">{item.icon}</span>
+                        <span className="pixel-font text-[7px] text-white text-center leading-tight mb-0.5">{item.name}</span>
+                        <span className="pixel-font text-[5px] text-[#475569] text-center leading-[7px] mb-2">{item.desc}</span>
+                        {owned ? (
+                          <span
+                            className="pixel-font text-[6px] text-green-400 px-2 py-0.5"
+                            style={{ border: "1px solid rgba(74,222,128,0.3)", borderRadius: 0 }}
+                          >
+                            已拥有
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleShopBuy(item.id); }}
+                            disabled={!canBuy}
+                            className={`pixel-font text-[6px] px-2 py-0.5 transition-all active:scale-90 tracking-[1px] ${
+                              canBuy
+                                ? "text-[#38bdf8] hover:bg-[rgba(56,189,248,0.15)]"
+                                : "text-[#475569] opacity-40 cursor-not-allowed"
+                            }`}
+                            style={{
+                              border: canBuy
+                                ? "1px solid rgba(56,189,248,0.3)"
+                                : "1px solid rgba(71,85,105,0.3)",
+                              background: canBuy ? "rgba(56,189,248,0.05)" : "transparent",
+                              borderRadius: 0,
+                            }}
+                          >
+                            购买 ({item.price})
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Close button */}
+                <button
+                  onClick={() => setShowShop(false)}
+                  className="pixel-hud px-4 py-2 hover:bg-[rgba(56,189,248,0.15)] active:scale-95 transition-all"
+                >
+                  <span className="pixel-font text-[8px] text-[#38bdf8] tracking-[2px]">关 闭</span>
+                </button>
               </div>
             )}
 
@@ -2347,7 +2790,7 @@ export default function RaidenGame() {
           {/* Controls help */}
           {gameStarted && !isGameOver && (
             <p className="pixel-font text-[6px] text-[#334155] text-center mt-3 tracking-[1px]">
-              WASD/ARROWS MOVE · Q WEAPON · SPACE BOMB · ESC PAUSE
+              WASD/ARROWS MOVE · SPACE BOMB · ESC PAUSE
             </p>
           )}
         </div>

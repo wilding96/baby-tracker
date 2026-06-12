@@ -31,102 +31,149 @@ function drawSprite(
   y: number,
   s: number,
 ) {
-  map.forEach((row, py) => {
-    for (let px = 0; px < row.length; px++) {
-      const ch = row[px];
-      if (ch !== ".") {
-        ctx.fillStyle = colors[ch] ?? "#fff";
+  const h = map.length, w = map[0].length;
+  // Pass 1: black contour outline (only edge-adjacent cells)
+  for (let py = 0; py < h; py++) {
+    for (let px = 0; px < w; px++) {
+      if (map[py][px] === ".") continue;
+      const edge = py === 0 || py === h - 1 || px === 0 || px === w - 1 ||
+        map[py - 1][px] === "." || map[py + 1][px] === "." ||
+        map[py][px - 1] === "." || map[py][px + 1] === ".";
+      if (edge) {
+        ctx.fillStyle = "#000";
         ctx.fillRect(x + px * s, y + py * s, s, s);
       }
     }
-  });
+  }
+  // Pass 2: color fill (inset by 1 on edge cells for border visibility)
+  for (let py = 0; py < h; py++) {
+    for (let px = 0; px < w; px++) {
+      const ch = map[py][px];
+      if (ch === ".") continue;
+      const edge = py === 0 || py === h - 1 || px === 0 || px === w - 1 ||
+        map[py - 1][px] === "." || map[py + 1][px] === "." ||
+        map[py][px - 1] === "." || map[py][px + 1] === ".";
+      ctx.fillStyle = colors[ch] ?? "#fff";
+      if (edge) {
+        ctx.fillRect(x + px * s + 1, y + py * s + 1, s - 2, s - 2);
+      } else {
+        ctx.fillRect(x + px * s, y + py * s, s, s);
+      }
+    }
+  }
 }
 
 const P = 4;
 
+function drawText(
+  ctx: CanvasRenderingContext2D,
+  text: string, x: number, y: number,
+  color: string, size = 10,
+  align: CanvasTextAlign = "center",
+  strokeW = 2,
+) {
+  ctx.font = `bold ${size}px monospace`;
+  ctx.textAlign = align;
+  ctx.textBaseline = "middle";
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = strokeW;
+  ctx.lineJoin = "round";
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+}
+
 const PLAYER = [
-  "..x.x..",
-  ".xxxxx.",
-  "xxxxxxx",
-  "xaaaaax",
-  "xaaaaax",
-  ".xxxxx.",
-  "..xxx..",
+  "..b.b..",
+  ".bhhhb.",
+  "bhhhhhb",
+  "hhhhhhh",
+  "bbbbbbb",
+  ".bbbbs.",
+  "..sss..",
 ];
-const PLAYER_WING = ["x.", "xx"];
-const WINGMAN_DOT = ["x."];
-const FIGHTER = ["..xx..", ".xxxx.", "xxxxxx", "..xx..", "..xx.."];
-const BOMBER = [".xxxxx.", "xxxxxxx", "xaaaaax", "xxxxxxx", ".xxxxx."];
+const PLAYER_WING = ["b.", "bb"];
+const WINGMAN_CRAFT = [
+  ".b..",
+  "bhhb",
+  "bbbb",
+  ".ss.",
+];
+const FIGHTER = ["..bb..", ".bhhb.", "bhhhhb", "..bb..", "..ss.."];
+const BOMBER = [".hhhhh.", "hhhhhhh", "hbbbbbh", "bbbbbbb", ".sssss."];
 const INTERCEPTOR = [
-  "..xxx..",
-  ".xxxxx.",
-  "xxxxxxx",
-  "xxx.xxx",
-  "..x.x..",
-  "..x.x..",
+  "..hhh..",
+  ".hhhhh.",
+  "hhhhhhh",
+  "hhh.hhh",
+  "..h.h..",
+  "..s.s..",
 ];
 const ELITE_SPRITE = [
-  "..xxxxx..",
-  ".xxxxxxx.",
-  "xxxxxxxxx",
-  "xxaa.aaax",
-  "xxxxxxxxx",
-  ".xxxxxxx.",
-  "..xaaax..",
-  "..x.x.x..",
+  "..bbbbb..",
+  ".bhhhhhb.",
+  "bhhhhhhhb",
+  "bbhhhhhbb",
+  "bbbbbbbbb",
+  ".bbbbbbb.",
+  "..bbbbb..",
+  "..b.b.b..",
 ];
 const MINIBOSS_SPRITE = [
-  "...xxxxx...",
-  "..xxxxxxx..",
-  ".xxxxxxxxx.",
-  "xxxxxxxxxxx",
-  "xxx.xxx.xxx",
-  "xxx.xxx.xxx",
-  "xxxxxxxxxxx",
-  ".xxxxxxxxx.",
-  "..xxxxxxx..",
-  "...xxxxx...",
+  "...bbbbb...",
+  "..bbbbbbb..",
+  ".bhhhhhhhb.",
+  "bhhhhhhhhhb",
+  "hhh.hhh.hhh",
+  "hhh.hhh.hhh",
+  "bhhhhhhhhhb",
+  ".bhhhhhhhb.",
+  "..bbbbbbb..",
+  "...bbbbb...",
 ];
 
 const BOSS_TYPES = ["fortress", "carrier", "eye"] as const;
 type BossType = (typeof BOSS_TYPES)[number];
 
 const BOSS_FORTRESS = [
-  "..xxxxxxxxxx..",
-  ".xxxxxxxxxxxx.",
-  "xxxxxxxxxxxxxx",
-  "xxxaaaxxaaaxxx",
-  "xxxaaaxxaaaxxx",
-  "xxxxxxxxxxxxxx",
-  "xxxxxxxxxxxxxx",
-  ".xxxxxxxxxxxx.",
-  "..xxxxxxxxxx..",
+  "..hhhhhhhhhh..",
+  ".hhhhhhhhhhhh.",
+  "hhhhhhhhhhhhhh",
+  "hhhhhhhhhhhhhh",
+  "hhhbbbhhbbbhhh",
+  "hhhbbbhhbbbhhh",
+  "hhhhhhhhhhhhhh",
+  ".hhhhhhhhhhhh.",
+  "..hhhhhhhhhh..",
+  "..ssssssssss..",
 ];
 const BOSS_CARRIER = [
-  "...xxxxxx...",
-  "..xxxxxxxx..",
-  ".xxxxxxxxxx.",
-  "xxxxxxxxxxxx",
-  "xxaaaaaaaaxx",
-  "xxaaaaaaaaxx",
-  "xxxxxxxxxxxx",
-  "x.xxxxxxxx.x",
-  ".x.xxxxxx.x.",
+  "...hhhhhh...",
+  "..hhhhhhhh..",
+  ".hhhhhhhhhh.",
+  "hhhhhhhhhhhh",
+  "hhhhhhhhhhhh",
+  "hhhhhhhhhhhh",
+  "hhhhhhhhhhhh",
+  "h.hhhhhhhh.h",
+  ".h.hhhhhh.h.",
+  "..s.sssss.s.",
 ];
 const BOSS_EYE_SPRITE = [
-  "..xxxxxxxx..",
-  ".xxxxxxxxxx.",
-  "xxxxxxxxxxxx",
-  "xxxxaaaaaxxxx",
-  "xxxxaaaaaxxxx",
-  "xxxxx..xxxxx",
-  "xxxxxxxxxxxx",
-  ".xxxxxxxxxx.",
-  "..xxxxxxxx..",
+  "..hhhhhhhh..",
+  ".hhhhhhhhhh.",
+  "hhhhhhhhhhhh",
+  "hhhhhhhhhhhh",
+  "hhhhhhhhhhhh",
+  "hhhhh..hhhhh",
+  "hhhhhhhhhhhh",
+  ".hhhhhhhhhh.",
+  "..hhhhhhhh..",
+  "..ssssssss..",
 ];
-const BOSS_EYE_CORE = ["xxxx", "xxxx"];
+const BOSS_EYE_CORE = ["hh", "hh"];
 
-const COIN_SPRITE = [".xx.", "xxxx", "x..x", ".xx."];
+const COIN_SPRITE = [".hb.", "hbbh", "b..b", ".ss."];
 
 // ═══════════════════════════════════════════════════════════════════
 // CARD / GACHA
@@ -165,7 +212,7 @@ const SR_CARDS: CardDef[] = [
   { id: "life_give", name: "生命之心", icon: "❤️", rarity: "SR", desc: "生命 +1" },
   { id: "shield_s", name: "护盾", icon: "🛡️", rarity: "SR", desc: "3 秒无敌" },
   { id: "double_coin", name: "双倍金币", icon: "🪙", rarity: "SR", desc: "30s 金币翻倍" },
-  { id: "wingman", name: "僚机", icon: "✈️", rarity: "SR", desc: "召唤僚机协助射击" },
+  { id: "wingmanUp", name: "僚机升级", icon: "✈️", rarity: "SR", desc: "僚机等级 +1" },
 ];
 const SSR_CARDS: CardDef[] = [
   { id: "shield_l", name: "能量护盾", icon: "🔮", rarity: "SSR", desc: "5 秒无敌" },
@@ -214,6 +261,7 @@ interface Bullet {
   type: "player" | "enemy";
   wtype?: WeaponType;
   wingman?: boolean;
+  lightning?: boolean;
   alive: boolean;
 }
 interface Monster {
@@ -227,6 +275,7 @@ interface Monster {
 }
 interface PowerUp {
   x: number; y: number; alive: boolean;
+  type: "weapon" | "wingman";
 }
 interface Boss {
   x: number; y: number; hp: number; maxHp: number;
@@ -388,6 +437,7 @@ export default function RaidenGame() {
   const [isPaused, setIsPaused] = useState(false);
   const [coins, setCoins] = useState(0);
   const [showGacha, setShowGacha] = useState(false);
+  const [gachaClosing, setGachaClosing] = useState(false);
   const [gachaCards, setGachaCards] = useState<CardDef[]>([]);
   const [doubleCoinTimer, setDoubleCoinTimer] = useState(0);
   const [hasHoming, setHasHoming] = useState(false);
@@ -396,26 +446,28 @@ export default function RaidenGame() {
   const [waveAnnounce, setWaveAnnounce] = useState("");
   const [bossWarning, setBossWarning] = useState(false);
   const [highScore, setHighScore] = useState(0);
-  const [wingmanCount, setWingmanCount] = useState(0);
+  const [wingmanLevel, setWingmanLevel] = useState(0);
   const [showShop, setShowShop] = useState(false);
   const [shopRefreshKey, setShopRefreshKey] = useState(0);
 
   const gachaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const returningFromShopRef = useRef(false);
+  const savedGachaCardsRef = useRef<CardDef[]>([]);
   const touchAnchorRef = useRef<{ x: number; y: number; shipX: number; shipY: number } | null>(null);
 
-  // ── 3-layer parallax star field ──
+  // ── 5-layer parallax star field (deep depth) ──
   const starsRef = useRef<Star[]>([]);
   if (starsRef.current.length === 0) {
-    for (let i = 0; i < 100; i++) {
-      const layer = i < 40 ? 0 : i < 70 ? 1 : 2;
-      const speeds = [0.2, 0.8, 2];
-      const sizes = [1, 1.5, 2.5];
-      const brights = [0.2, 0.5, 0.9];
+    for (let i = 0; i < 120; i++) {
+      const layer = i < 30 ? 0 : i < 60 ? 1 : i < 85 ? 2 : i < 105 ? 3 : 4;
+      const speeds = [0.08, 0.25, 0.7, 1.8, 3.5];
+      const sizes = [1, 1.2, 1.8, 2.5, 3.2];
+      const brights = [0.06, 0.15, 0.28, 0.45, 0.55];
       starsRef.current.push({
         x: Math.random() * CW, y: Math.random() * CH,
-        speed: speeds[layer] + (Math.random() - 0.5) * speeds[layer] * 0.5,
+        speed: speeds[layer] + (Math.random() - 0.5) * speeds[layer] * 0.4,
         size: sizes[layer],
-        brightness: brights[layer] + (Math.random() - 0.5) * 0.3,
+        brightness: brights[layer] + (Math.random() - 0.5) * 0.2,
         layer,
       });
     }
@@ -438,7 +490,7 @@ export default function RaidenGame() {
     player: { x: 180, y: 460, speed: 5 },
     bullets: new Pool<Bullet>(() => ({
       x: 0, y: 0, vx: 0, vy: 0,
-      type: "player", wtype: "spread", wingman: false, alive: false,
+      type: "player", wtype: "spread", wingman: false, lightning: false, alive: false,
     })),
     enemyBullets: new Pool<Bullet>(() => ({
       x: 0, y: 0, vx: 0, vy: 0,
@@ -461,7 +513,7 @@ export default function RaidenGame() {
       x: 0, y: 0, vx: 0, vy: 0,
       targetX: 0, targetY: 0, alive: false,
     })),
-    powerUps: new Pool<PowerUp>(() => ({ x: 0, y: 0, alive: false })),
+    powerUps: new Pool<PowerUp>(() => ({ x: 0, y: 0, type: "weapon", alive: false })),
     stars: starsRef.current,
     shakeX: 0, shakeY: 0,
     keys: {
@@ -481,7 +533,8 @@ export default function RaidenGame() {
     _carrierSpawnTimer: 0,
     bossCooldown: 0,
     minibossCooldown: 0,
-    wingmanCount: 0,
+    wingmanLevel: 0,
+    wingmanOrbitAngle: 0,
     gameStarted: false,
   });
 
@@ -497,7 +550,7 @@ export default function RaidenGame() {
   ) {
     const b = stateRef.current.bullets.get();
     b.x = x; b.y = y; b.vx = vx; b.vy = vy;
-    b.type = "player"; b.wtype = wtype; b.wingman = false;
+    b.type = "player"; b.wtype = wtype; b.wingman = false; b.lightning = false;
   }
   function spawnEnemyBullet(x: number, y: number, vx: number, vy: number) {
     const b = stateRef.current.enemyBullets.get();
@@ -556,9 +609,19 @@ export default function RaidenGame() {
     if (!alive) {
       const pu = state.powerUps.get();
       pu.x = x; pu.y = y;
+      const isWeaponPu = Math.random() < 0.5; // 50% weapon, 50% wingman
+      pu.type = isWeaponPu ? "weapon" : "wingman";
       emitExplosion(x, y, 15, ["#38bdf8", "#7dd3fc", "#fff"], 5, 35);
     }
   }
+
+  const closeGacha = useCallback(() => {
+    setGachaClosing(true);
+    setTimeout(() => {
+      setShowGacha(false);
+      setGachaClosing(false);
+    }, 200);
+  }, []);
 
   const applyCardEffect = (card: CardDef) => {
     const state = stateRef.current;
@@ -597,9 +660,11 @@ export default function RaidenGame() {
       }
       case "coin_burst": state.wallet += 15; setCoins((prev) => prev + 15); break;
       case "double_coin": state.doubleCoinTimer = 1800; setDoubleCoinTimer(1800); break;
-      case "wingman":
-        state.wingmanCount = Math.min(2, state.wingmanCount + 1);
-        setWingmanCount(state.wingmanCount);
+      case "wingman": case "wingmanUp":
+        if (state.wingmanLevel < 4) {
+          state.wingmanLevel++;
+          setWingmanLevel(state.wingmanLevel);
+        }
         break;
     }
     emitExplosion(
@@ -608,7 +673,7 @@ export default function RaidenGame() {
     );
     audio.gachaCard();
     state.gachaLocked = false; state.gachaCost += 5;
-    setGachaCost(state.gachaCost); setShowGacha(false);
+    setGachaCost(state.gachaCost); closeGacha();
     // Give player brief breather after gacha — clear leftover carrier spawns
     state.monsters.releaseAll();
     if (state.bossCooldown <= 0) state.bossCooldown = 90;
@@ -617,38 +682,55 @@ export default function RaidenGame() {
 
   const emitBombEffect = (cx: number, cy: number) => {
     const state = stateRef.current;
-    // huge expanding ring
-    for (let ring = 0; ring < 3; ring++) {
-      const rDelay = ring * 4;
-      const r = 20 + ring * 25;
-      for (let a = 0; a < 360; a += 15) {
+    // huge expanding ring (3 layers with color shift)
+    const ringColors = ["#ef4444", "#f97316", "#fef08a", "#fff"];
+    for (let ring = 0; ring < 4; ring++) {
+      const r = 10 + ring * 20;
+      for (let a = 0; a < 360; a += 10) {
         const rad = (a * Math.PI) / 180;
-        const dist = r + (Math.random() - 0.5) * 20;
+        const dist = r + (Math.random() - 0.5) * 15;
         spawnParticle(
           cx + Math.cos(rad) * dist, cy + Math.sin(rad) * dist,
-          Math.cos(rad) * (3 + Math.random() * 2),
-          Math.sin(rad) * (3 + Math.random() * 2),
-          ["#fef08a", "#f97316", "#ef4444", "#fff"][Math.floor(Math.random() * 4)],
-          2 + Math.random() * 4,
-          30 + ring * 10,
-          0.02,
+          Math.cos(rad) * (2 + Math.random() * 1.5),
+          Math.sin(rad) * (2 + Math.random() * 1.5),
+          ringColors[ring % ringColors.length],
+          2 + Math.random() * 3 + ring * 0.5,
+          25 + ring * 15,
+          0.01,
         );
       }
     }
-    // white flash core
-    for (let i = 0; i < 20; i++) {
+    // fire streaks (random direction, long trail)
+    for (let i = 0; i < 40; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const sp = 1 + Math.random() * 4;
       spawnParticle(
-        cx + (Math.random() - 0.5) * 10, cy + (Math.random() - 0.5) * 10,
-        (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8,
-        "#fff", 5 + Math.random() * 6, 15, 0.03,
+        cx + (Math.random() - 0.5) * 20, cy + (Math.random() - 0.5) * 20,
+        Math.cos(angle) * sp, Math.sin(angle) * sp,
+        ["#ef4444", "#f97316", "#fef08a"][Math.floor(Math.random() * 3)],
+        1.5 + Math.random() * 2,
+        20 + Math.random() * 20,
+        0.005,
       );
     }
-    // shockwave trail (horizontal strip)
-    for (let i = 0; i < 15; i++) {
-      const side = Math.random() > 0.5 ? 1 : -1;
+    // white flash core (burst)
+    for (let i = 0; i < 30; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const sp = 2 + Math.random() * 6;
       spawnParticle(
-        cx + side * Math.random() * 40, cy + (Math.random() - 0.5) * 20,
-        0, 0, "#fef08a", 1.5, 20 + Math.random() * 10, 0,
+        cx + (Math.random() - 0.5) * 8, cy + (Math.random() - 0.5) * 8,
+        Math.cos(angle) * sp, Math.sin(angle) * sp,
+        "#fff", 4 + Math.random() * 5, 12 + Math.random() * 10, 0.04,
+      );
+    }
+    // lingering smoke rings
+    for (let i = 0; i < 20; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 5 + Math.random() * 30;
+      spawnParticle(
+        cx + Math.cos(angle) * dist, cy + Math.sin(angle) * dist,
+        Math.cos(angle) * 0.3, Math.sin(angle) * 0.3,
+        "#475569", 3 + Math.random() * 4, 35 + Math.random() * 20, -0.002,
       );
     }
   };
@@ -660,7 +742,20 @@ export default function RaidenGame() {
     const state = stateRef.current;
     state.shakeX = 15; state.shakeY = 15;
     state.enemyBullets.releaseAll();
-    state.monsters.releaseAll(); // 全屏清小怪
+    // Check formation groups before clearing — drop power-ups for each complete formation
+    const groups = new Set(state.monsters.getActive().map((m) => m.formationGroup).filter((g) => g > 0));
+    groups.forEach((gid) => {
+      const allDead = state.monsters.getActive().every((m) => m.formationGroup !== gid);
+      if (allDead) return; // shouldn't happen since they're alive, but just in case
+      // They'll all die now — drop one power-up for this formation
+      const first = state.monsters.getActive().find((m) => m.formationGroup === gid);
+      if (first) {
+        const pu2 = state.powerUps.get();
+        pu2.x = first.x; pu2.y = first.y;
+        pu2.type = Math.random() < 0.5 ? "weapon" : "wingman";
+      }
+    });
+    state.monsters.releaseAll();
     if (state.boss) state.boss.hp -= 30;
     if (state.miniboss) state.miniboss.hp -= 20;
     emitBombEffect(CW / 2, CH / 2);
@@ -726,24 +821,30 @@ export default function RaidenGame() {
       const ship = SHIP_CONFIG[shipType];
       stateRef.current.weaponType = ship.weapon;
       setWeaponType(ship.weapon);
-      // apply shop upgrades
+      // apply shop upgrades (one-time per game — consume after use)
       const upgrades = saveRef.current.upgrades;
+      let saveChanged = false;
       if (upgrades.extraBomb > 0) {
         setBombCount((prev) => prev + upgrades.extraBomb);
+        upgrades.extraBomb = 0; saveChanged = true;
       }
       if (upgrades.weaponBoost) {
         stateRef.current.weaponLevel = 2;
         setWeaponLevel(2);
+        upgrades.weaponBoost = false; saveChanged = true;
       }
       if (upgrades.startShield) {
         stateRef.current.invincible = true;
         stateRef.current.invincibleTimer = 180;
         setInvincible(true);
+        upgrades.startShield = false; saveChanged = true;
       }
       if (upgrades.startWingman) {
-        stateRef.current.wingmanCount = 1;
-        setWingmanCount(1);
+        stateRef.current.wingmanLevel = 1;
+        setWingmanLevel(1);
+        upgrades.startWingman = false; saveChanged = true;
       }
+      if (saveChanged) writeSave(saveRef.current);
       setStartFadeOut(true);
       stateRef.current.gameStarted = true;
       setTimeout(() => {
@@ -764,39 +865,95 @@ export default function RaidenGame() {
     ctx.save();
     ctx.translate(cx, cy); ctx.rotate(tilt); ctx.translate(-cx, -cy);
 
-    // thrust flame (enhanced with dynamic glow)
-    ctx.shadowColor = "#f97316";
-    ctx.shadowBlur = 8;
-    ctx.globalAlpha = 0.7 + Math.sin(f * 0.2) * 0.3;
-    ctx.fillStyle = "#f97316";
-    ctx.fillRect(x + P, y + 6 * P, 2 * P, 3 * P + Math.sin(f * 0.15) * 2);
-    ctx.fillStyle = "#fef08a";
-    ctx.fillRect(x + P + 2, y + 8 * P, P, P + Math.sin(f * 0.15) * 1);
-    ctx.fillStyle = "#f97316";
-    ctx.fillRect(x + 3 * P, y + 6 * P, 2 * P, 3 * P + Math.sin(f * 0.15 + 1) * 2);
-    ctx.fillStyle = "#fef08a";
-    ctx.fillRect(x + 3 * P + 2, y + 8 * P, P, P + Math.sin(f * 0.15 + 1) * 1);
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;
-
-    // main hull
+    // Pass 0: strong aura glow behind entire ship
+    ctx.save();
     ctx.shadowColor = "#0d9488";
-    ctx.shadowBlur = 6;
-    drawSprite(ctx, PLAYER, { x: "#0d9488", a: "#14b8a6" }, x, y, P);
-    ctx.shadowBlur = 0;
-    // inner glow
-    ctx.globalAlpha = 0.15;
-    drawSprite(ctx, PLAYER, { x: "#99f6e4", a: "#5eead4" }, x - 1, y - 1, P);
-    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 24;
+    const aura = ctx.createRadialGradient(cx, cy, 6, cx, cy, 34);
+    aura.addColorStop(0, "rgba(94,234,212,0.25)");
+    aura.addColorStop(0.5, "rgba(13,148,136,0.1)");
+    aura.addColorStop(1, "rgba(13,148,136,0)");
+    ctx.fillStyle = aura;
+    ctx.beginPath(); ctx.arc(cx, cy, 34, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    // thrust flame (3D glow cone + bright core)
+    const flameLen = 4 + Math.sin(f * 0.2) * 1.5;
+    // outer bloom
+    ctx.save();
+    ctx.shadowColor = "#f97316";
+    ctx.shadowBlur = 20;
+    ctx.globalAlpha = 0.4;
+    const fg = ctx.createRadialGradient(cx, y + 9*P, 0, cx, y + 9*P, 16);
+    fg.addColorStop(0, "rgba(255,237,160,0.5)");
+    fg.addColorStop(0.4, "rgba(251,146,60,0.3)");
+    fg.addColorStop(1, "rgba(251,146,60,0)");
+    ctx.fillStyle = fg;
+    ctx.beginPath(); ctx.arc(cx, y + 9*P, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // flame core
+    ctx.save();
+    ctx.shadowColor = "#fef08a";
+    ctx.shadowBlur = 14;
+    ctx.globalAlpha = 0.7 + Math.sin(f * 0.2) * 0.3;
+    ctx.fillStyle = "#fef08a";
+    ctx.fillRect(x + P + 2, y + 8*P, P, (flameLen-2) * P);
+    ctx.fillRect(x + 3*P + 2, y + 8*P, P, (flameLen-2) * P);
+    ctx.fillStyle = "#f97316";
+    ctx.fillRect(x + P, y + 6*P, 2*P, flameLen * P);
+    ctx.fillRect(x + 3*P, y + 6*P, 2*P, flameLen * P);
+    ctx.restore();
+
+    // main hull — sprite + strong edge glow
+    ctx.save();
+    ctx.shadowColor = "#0d9488";
+    ctx.shadowBlur = 14;
+    drawSprite(ctx, PLAYER, { h: "#5eead4", b: "#0d9488", s: "#0f766e" }, x, y, P);
+    ctx.restore();
+
+    // edge highlight — bright rim light on top and sides
+    ctx.save();
+    ctx.shadowColor = "#99f6e4";
+    ctx.shadowBlur = 8;
+    ctx.globalAlpha = 0.25 + Math.sin(f * 0.06) * 0.1;
+    const hg = ctx.createLinearGradient(x, y, x, y + 7 * P);
+    hg.addColorStop(0, "rgba(255,255,255,0.5)");
+    hg.addColorStop(0.3, "rgba(153,246,228,0.1)");
+    hg.addColorStop(1, "rgba(15,118,110,0.4)");
+    ctx.fillStyle = hg;
+    ctx.fillRect(x, y, 7 * P, 7 * P);
+    ctx.restore();
+
+    // cockpit specular — bright glint
+    ctx.save();
+    ctx.globalAlpha = 0.5 + Math.sin(f * 0.07) * 0.2;
+    const cg = ctx.createRadialGradient(cx - 2*P, y + P, 0, cx - 2*P, y + P, 5);
+    cg.addColorStop(0, "#fff");
+    cg.addColorStop(0.4, "rgba(153,246,228,0.6)");
+    cg.addColorStop(1, "rgba(153,246,228,0)");
+    ctx.fillStyle = cg;
+    ctx.beginPath(); ctx.arc(cx - 2*P, y + P, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
     // wings
-    drawSprite(ctx, PLAYER_WING, { x: "#d97706", a: "#f59e0b" }, x - 2 * P, y + P, P);
-    drawSprite(ctx, PLAYER_WING, { x: "#d97706", a: "#f59e0b" }, x + 7 * P, y + P, P);
-    // wing tips glow
-    ctx.globalAlpha = 0.3 + Math.sin(f * 0.1) * 0.15;
-    ctx.fillStyle = "#fbbf24";
-    ctx.fillRect(x - 2 * P, y + P, P, P);
-    ctx.fillRect(x + 7 * P, y + P, P, P);
-    ctx.globalAlpha = 1;
+    drawSprite(ctx, PLAYER_WING, { b: "#d97706" }, x - 2 * P, y + P, P);
+    drawSprite(ctx, PLAYER_WING, { b: "#d97706" }, x + 7 * P, y + P, P);
+    // wing tips — bright energy glow beams
+    ctx.save();
+    ctx.shadowColor = "#fbbf24";
+    ctx.shadowBlur = 14;
+    ctx.globalAlpha = 0.5 + Math.sin(f * 0.12) * 0.3;
+    const wg = ctx.createRadialGradient(x - P, y + 2*P, 0, x - P, y + 2*P, 6);
+    wg.addColorStop(0, "rgba(255,251,235,0.7)");
+    wg.addColorStop(1, "rgba(251,191,36,0)");
+    ctx.fillStyle = wg;
+    ctx.beginPath(); ctx.arc(x - P, y + 2*P, 6, 0, Math.PI * 2); ctx.fill();
+    const wg2 = ctx.createRadialGradient(x + 8*P, y + 2*P, 0, x + 8*P, y + 2*P, 6);
+    wg2.addColorStop(0, "rgba(255,251,235,0.7)");
+    wg2.addColorStop(1, "rgba(251,191,36,0)");
+    ctx.fillStyle = wg2;
+    ctx.beginPath(); ctx.arc(x + 8*P, y + 2*P, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
     ctx.restore();
   }
 
@@ -810,13 +967,10 @@ export default function RaidenGame() {
       const auraPulse = Math.sin(f * 0.08) * 0.3 + 0.7;
       // floating indicator text
       ctx.save();
-      ctx.globalAlpha = 0.6 + Math.sin(f * 0.1) * 0.3;
-      ctx.fillStyle = "#c084fc";
-      ctx.font = "bold 6px monospace";
-      ctx.textAlign = "center";
       ctx.shadowColor = "#a855f7";
       ctx.shadowBlur = 8;
-      ctx.fillText("POW", x + 12, y - 4);
+      ctx.globalAlpha = 0.6 + Math.sin(f * 0.1) * 0.3;
+      drawText(ctx, "POW", x + 12, y - 4, "#c084fc", 6, "center", 1.5);
       ctx.restore();
       // outer glow ring
       ctx.save();
@@ -836,56 +990,85 @@ export default function RaidenGame() {
       ctx.restore();
     }
 
+    const mw = m.type === "bomber" ? 28 : m.type === "elite" ? 44 : 24;
+    const mh = m.type === "interceptor" ? 24 : m.type === "elite" ? 36 : 20;
+
     switch (m.type) {
       case "fighter":
         ctx.shadowColor = "#dc2626";
-        ctx.shadowBlur = 4;
+        ctx.shadowBlur = 10;
         drawSprite(ctx, FIGHTER, {
-          x: flash ? "#f97316" : "#dc2626",
-          a: flash ? "#fdba74" : "#ef4444",
+          h: flash ? "#fca5a5" : "#f87171",
+          b: flash ? "#ef4444" : "#dc2626",
+          s: flash ? "#b91c1c" : "#991b1b",
         }, x, y, P);
+        // 3D highlight
+        ctx.globalAlpha = 0.2;
+        const fg = ctx.createLinearGradient(x, y, x, y + mh);
+        fg.addColorStop(0, "rgba(255,255,255,0.3)");
+        fg.addColorStop(0.5, "rgba(255,255,255,0)");
+        fg.addColorStop(1, "rgba(0,0,0,0.2)");
+        ctx.fillStyle = fg;
+        ctx.fillRect(x, y, mw, mh);
+        ctx.globalAlpha = 1;
         ctx.shadowBlur = 0;
-        ctx.fillStyle = "#450a0a";
-        ctx.fillRect(x + P, y + 2 * P, P, 2 * P);
-        ctx.fillRect(x + 4 * P, y + 2 * P, P, 2 * P);
         break;
       case "bomber":
         ctx.shadowColor = "#7c3aed";
-        ctx.shadowBlur = 5;
+        ctx.shadowBlur = 12;
         drawSprite(ctx, BOMBER, {
-          x: flash ? "#c084fc" : "#7c3aed",
-          a: flash ? "#e9d5ff" : "#a855f7",
+          h: flash ? "#e9d5ff" : "#c084fc",
+          b: flash ? "#a855f7" : "#7c3aed",
+          s: flash ? "#6b21a8" : "#581c87",
         }, x, y, P);
+        ctx.globalAlpha = 0.2;
+        const bg = ctx.createLinearGradient(x, y, x, y + mh);
+        bg.addColorStop(0, "rgba(255,255,255,0.25)");
+        bg.addColorStop(0.4, "rgba(255,255,255,0)");
+        bg.addColorStop(1, "rgba(0,0,0,0.2)");
+        ctx.fillStyle = bg;
+        ctx.fillRect(x, y, mw, mh);
+        ctx.globalAlpha = 1;
         ctx.shadowBlur = 0;
-        ctx.fillStyle = "#2e1065";
-        ctx.fillRect(x + 2 * P, y + 2 * P, P, P);
-        ctx.fillRect(x + 4 * P, y + 2 * P, P, P);
         break;
       case "interceptor":
         ctx.shadowColor = "#ec4899";
-        ctx.shadowBlur = 4;
+        ctx.shadowBlur = 10;
         drawSprite(ctx, INTERCEPTOR, {
-          x: flash ? "#fb923c" : "#ec4899",
-          a: flash ? "#fed7aa" : "#f472b6",
+          h: flash ? "#fbcfe8" : "#f472b6",
+          b: flash ? "#ec4899" : "#db2777",
+          s: flash ? "#a21caf" : "#86198f",
         }, x, y, P);
+        ctx.globalAlpha = 0.2;
+        const ig = ctx.createLinearGradient(x, y, x, y + mh);
+        ig.addColorStop(0, "rgba(255,255,255,0.25)");
+        ig.addColorStop(0.4, "rgba(255,255,255,0)");
+        ig.addColorStop(1, "rgba(0,0,0,0.2)");
+        ctx.fillStyle = ig;
+        ctx.fillRect(x, y, mw, mh);
+        ctx.globalAlpha = 1;
         ctx.shadowBlur = 0;
-        ctx.fillStyle = "#500724";
-        ctx.fillRect(x + 2 * P, y + P, P, P);
-        ctx.fillRect(x + 3 * P, y + P, P, P);
         break;
       case "elite":
         ctx.shadowColor = "#eab308";
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 16;
         ctx.globalAlpha = 0.85 + Math.sin(stateRef.current.frameCount * 0.15) * 0.15;
         drawSprite(ctx, ELITE_SPRITE, {
-          x: flash ? "#facc15" : "#ca8a04",
-          a: flash ? "#fef08a" : "#facc15",
+          h: flash ? "#fef08a" : "#facc15",
+          b: flash ? "#eab308" : "#ca8a04",
+          s: flash ? "#a16207" : "#854d0e",
         }, x, y, P);
-        ctx.shadowBlur = 0;
         ctx.globalAlpha = 1;
-        ctx.fillStyle = "#422006";
-        ctx.fillRect(x + 2 * P, y + 2 * P, P, 2 * P);
-        ctx.fillRect(x + 6 * P, y + 2 * P, P, 2 * P);
+        // 3D overlay
+        ctx.globalAlpha = 0.15;
+        const eg = ctx.createLinearGradient(x, y, x, y + mh);
+        eg.addColorStop(0, "rgba(255,255,255,0.3)");
+        eg.addColorStop(0.3, "rgba(255,255,255,0)");
+        eg.addColorStop(1, "rgba(0,0,0,0.25)");
+        ctx.fillStyle = eg;
+        ctx.fillRect(x, y, mw, mh);
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
         break;
     }
     ctx.restore();
@@ -913,8 +1096,11 @@ export default function RaidenGame() {
     ctx.shadowBlur = 8;
     if (type === "fortress") {
       ctx.shadowColor = "#ef4444";
-      drawSprite(ctx, BOSS_FORTRESS,
-        { x: flash ? "#ef4444" : "#b91c1c", a: flash ? "#fca5a5" : "#7f1d1d" }, x, y, P);
+      drawSprite(ctx, BOSS_FORTRESS, {
+        h: flash ? "#fca5a5" : "#ef4444",
+        b: flash ? "#dc2626" : "#b91c1c",
+        s: flash ? "#991b1b" : "#7f1d1d",
+      }, x, y, P);
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 0.6 + Math.sin(f * 0.1) * 0.4;
       ctx.fillStyle = "#facc15";
@@ -925,8 +1111,11 @@ export default function RaidenGame() {
       ctx.globalAlpha = 1;
     } else if (type === "carrier") {
       ctx.shadowColor = "#a855f7";
-      drawSprite(ctx, BOSS_CARRIER,
-        { x: flash ? "#c084fc" : "#6b21a8", a: flash ? "#e9d5ff" : "#581c87" }, x, y, P);
+      drawSprite(ctx, BOSS_CARRIER, {
+        h: flash ? "#e9d5ff" : "#a855f7",
+        b: flash ? "#8b5cf6" : "#6b21a8",
+        s: flash ? "#6b21a8" : "#581c87",
+      }, x, y, P);
       ctx.shadowBlur = 0;
       ctx.fillStyle = flash ? "#fef08a" : "#eab308";
       ctx.fillRect(x + 5 * P, y + 4 * P, P, P);
@@ -934,13 +1123,15 @@ export default function RaidenGame() {
       ctx.fillRect(x + 9 * P, y + 4 * P, P, P);
     } else {
       ctx.shadowColor = "#22d3ee";
-      drawSprite(ctx, BOSS_EYE_SPRITE,
-        { x: flash ? "#67e8f9" : "#0891b2", a: flash ? "#cffafe" : "#0e7490" }, x, y, P);
+      drawSprite(ctx, BOSS_EYE_SPRITE, {
+        h: flash ? "#cffafe" : "#22d3ee",
+        b: flash ? "#06b6d4" : "#0891b2",
+        s: flash ? "#0e7490" : "#155e75",
+      }, x, y, P);
       ctx.shadowBlur = 0;
       const pulse = Math.sin(f * 0.08) * 0.3 + 0.7;
       ctx.globalAlpha = pulse;
-      drawSprite(ctx, BOSS_EYE_CORE,
-        { x: "#fef08a", a: "#facc15" }, x + 4 * P, y + 4 * P, P);
+      drawSprite(ctx, BOSS_EYE_CORE, { h: "#fef08a" }, x + 4 * P, y + 4 * P, P);
       ctx.globalAlpha = 1;
       ctx.fillStyle = "#ef4444";
       const pupilOff = Math.sin(f * 0.06) * 2;
@@ -969,13 +1160,30 @@ export default function RaidenGame() {
 
     ctx.save();
     ctx.globalAlpha = animProgress;
+    // 3D glow aura
     ctx.shadowColor = "#f97316";
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = 20;
+    const ma = ctx.createRadialGradient(x + 26, y + 20, 0, x + 26, y + 20, 36);
+    ma.addColorStop(0, "rgba(249,115,22,0.15)");
+    ma.addColorStop(1, "rgba(249,115,22,0)");
+    ctx.fillStyle = ma;
+    ctx.beginPath(); ctx.arc(x + 26, y + 20, 36, 0, Math.PI * 2); ctx.fill();
 
     drawSprite(ctx, MINIBOSS_SPRITE, {
-      x: flash ? "#f97316" : "#ea580c",
-      a: flash ? "#fdba74" : "#c2410c",
+      h: flash ? "#fdba74" : "#f97316",
+      b: flash ? "#f97316" : "#ea580c",
+      s: flash ? "#ea580c" : "#c2410c",
     }, x, y + enterBounce, P);
+
+    // 3D top highlight
+    ctx.globalAlpha = 0.2 * animProgress;
+    const mg = ctx.createLinearGradient(x, y + enterBounce, x, y + enterBounce + 40);
+    mg.addColorStop(0, "rgba(255,255,255,0.3)");
+    mg.addColorStop(0.3, "rgba(255,255,255,0)");
+    mg.addColorStop(1, "rgba(0,0,0,0.2)");
+    ctx.fillStyle = mg;
+    ctx.fillRect(x, y + enterBounce, 52, 40);
+    ctx.globalAlpha = animProgress;
 
     ctx.shadowBlur = 0;
     ctx.globalAlpha = animProgress;
@@ -998,12 +1206,43 @@ export default function RaidenGame() {
 
   function drawCoinItem(ctx: CanvasRenderingContext2D, x: number, y: number) {
     const f = stateRef.current.frameCount;
-    const pulse = Math.sin(f * 0.08) * 0.2 + 1;
-    ctx.translate(x + 2 * P, y + 2 * P);
-    ctx.scale(pulse, 1);
-    drawSprite(ctx, COIN_SPRITE, { x: "#eab308", a: "#fef08a" }, -2 * P, -2 * P, P);
-    ctx.fillStyle = "#fef08a";
-    ctx.fillRect(-1, -4, 2, 2);
+    const pulse = Math.sin(f * 0.08) * 0.15 + 0.85;
+    const cx = x + 6, cy = y + 6;
+    // outer glow ring (cyan/purple to distinguish from power-up's blue)
+    ctx.globalAlpha = 0.2 + Math.sin(f * 0.07) * 0.1;
+    ctx.shadowColor = "#06b6d4";
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = "#22d3ee";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx, cy, 14 + Math.sin(f * 0.05) * 2, 0, Math.PI * 2); ctx.stroke();
+    // secondary ring
+    ctx.globalAlpha = 0.15 + Math.sin(f * 0.09) * 0.1;
+    ctx.strokeStyle = "#06b6d4";
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, 10 + Math.cos(f * 0.06) * 1.5, 0, Math.PI * 2); ctx.stroke();
+    // main gem body — gold/amber gradient sphere
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.95 * pulse;
+    const gg = ctx.createRadialGradient(cx - 3, cy - 3, 0, cx, cy, 8);
+    gg.addColorStop(0, "#fffbeb");
+    gg.addColorStop(0.2, "#fef08a");
+    gg.addColorStop(0.5, "#eab308");
+    gg.addColorStop(0.8, "#ca8a04");
+    gg.addColorStop(1, "#854d0e");
+    ctx.fillStyle = gg;
+    ctx.shadowColor = "#eab308";
+    ctx.shadowBlur = 8;
+    ctx.beginPath(); ctx.arc(cx, cy, 6 + Math.sin(f * 0.1) * 0.5, 0, Math.PI * 2); ctx.fill();
+    // specular highlight (offset white dot)
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.6 + Math.sin(f * 0.12) * 0.2;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(cx - 2, cy - 2.5, 2.2, 0, Math.PI * 2); ctx.fill();
+    // tiny sparkle
+    ctx.globalAlpha = 0.7 * pulse;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(cx + 3, cy - 1, 1, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
   }
 
   function drawShield(ctx: CanvasRenderingContext2D, x: number, y: number) {
@@ -1184,7 +1423,7 @@ export default function RaidenGame() {
 
       bgOffsetRef.current = (bgOffsetRef.current + 1) % 40;
 
-      // ── 3-layer parallax stars ──
+      // ── 5-layer parallax stars ──
       state.stars.forEach((s) => {
         s.y += s.speed;
         if (s.y > CH) { s.y = -2; s.x = Math.random() * CW; }
@@ -1282,31 +1521,49 @@ export default function RaidenGame() {
           }
         }
 
-        // ── wingman auto-fire ──
-        if (state.wingmanCount > 0 && f % 10 === 0) {
+        // ── wingman auto-fire (4-level system) ──
+        const wmLvl = state.wingmanLevel;
+        if (wmLvl > 0 && f % 10 === 0) {
           const wt = state.weaponType;
-          const wm1x = p.x - 6, wm1y = p.y + 20;
-          const b1 = state.bullets.get();
-          b1.x = wm1x; b1.y = wm1y; b1.vx = 0; b1.vy = -7; b1.type = "player"; b1.wtype = wt; b1.wingman = true;
-          const b2 = state.bullets.get();
-          b2.x = wm1x + 4; b2.y = wm1y; b2.vx = 0; b2.vy = -7; b2.type = "player"; b2.wtype = wt; b2.wingman = true;
-          const wm2x = p.x + 30, wm2y = p.y + 20;
-          const b3 = state.bullets.get();
-          b3.x = wm2x; b3.y = wm2y; b3.vx = 0; b3.vy = -7; b3.type = "player"; b3.wtype = wt; b3.wingman = true;
-          const b4 = state.bullets.get();
-          b4.x = wm2x + 4; b4.y = wm2y; b4.vx = 0; b4.vy = -7; b4.type = "player"; b4.wtype = wt; b4.wingman = true;
-          if (state.wingmanCount >= 2) {
-            const wm3x = p.x, wm3y = p.y + 24;
-            const b5 = state.bullets.get();
-            b5.x = wm3x; b5.y = wm3y; b5.vx = -0.5; b5.vy = -6; b5.type = "player"; b5.wtype = wt; b5.wingman = true;
-            const b6 = state.bullets.get();
-            b6.x = wm3x + 6; b6.y = wm3y; b6.vx = 0.5; b6.vy = -6; b6.type = "player"; b6.wtype = wt; b6.wingman = true;
-            const wm4x = p.x + 28, wm4y = p.y + 24;
-            const b7 = state.bullets.get();
-            b7.x = wm4x; b7.y = wm4y; b7.vx = -0.5; b7.vy = -6; b7.type = "player"; b7.wtype = wt; b7.wingman = true;
-            const b8 = state.bullets.get();
-            b8.x = wm4x + 6; b8.y = wm4y; b8.vx = 0.5; b8.vy = -6; b8.type = "player"; b8.wtype = wt; b8.wingman = true;
+          const wmBoost = wmLvl >= 4;
+          // L1: flank left of ship, with gap
+          const lx = p.x - 22, ly = p.y + 18;
+          const bL = state.bullets.get();
+          bL.x = lx + 4; bL.y = ly; bL.vx = 0; bL.vy = wmBoost ? -9 : -7;
+          bL.type = "player"; bL.wtype = wt; bL.wingman = true; bL.lightning = false;
+          // L2: flank right of ship, with gap
+          if (wmLvl >= 2) {
+            const rx = p.x + 42, ry = p.y + 18;
+            const bR = state.bullets.get();
+            bR.x = rx + 4; bR.y = ry; bR.vx = 0; bR.vy = wmBoost ? -9 : -7;
+            bR.type = "player"; bR.wtype = wt; bR.wingman = true; bR.lightning = false;
           }
+          // L3: orbiting wingman fires lightning bullet (wide orbit)
+          if (wmLvl >= 3) {
+            const angle = state.wingmanOrbitAngle;
+            const orbR = 40;
+            const orbX = p.x + 12 + Math.cos(angle) * orbR;
+            const orbY = p.y + 12 + Math.sin(angle) * orbR;
+            const bO = state.bullets.get();
+            const dx = -Math.cos(angle) * 4;
+            const dy = -Math.sin(angle) * 4 - (wmBoost ? 5 : 3);
+            bO.x = orbX; bO.y = orbY; bO.vx = dx; bO.vy = dy;
+            bO.type = "player"; bO.wtype = wt; bO.wingman = true; bO.lightning = true;
+            // L4: extra lightning bolt from orbit
+            if (wmBoost) {
+              const angle2 = angle + Math.PI * 0.6;
+              const orbX2 = p.x + 12 + Math.cos(angle2) * orbR;
+              const orbY2 = p.y + 12 + Math.sin(angle2) * orbR;
+              const bO2 = state.bullets.get();
+              bO2.x = orbX2; bO2.y = orbY2; bO2.vx = -Math.cos(angle2) * 4; bO2.vy = -Math.sin(angle2) * 4 - 5;
+              bO2.type = "player"; bO2.wtype = wt; bO2.wingman = true; bO2.lightning = true;
+            }
+          }
+        }
+
+        // ── wingman orbit angle ──
+        if (state.wingmanLevel >= 3) {
+          state.wingmanOrbitAngle += 0.04;
         }
 
         // ── homing missile ──
@@ -1318,60 +1575,59 @@ export default function RaidenGame() {
           }
         }
 
-        // ── formations (only fighters, more random) ──
+        // ── formations (fighters, more frequent but tight and slow) ──
         state.formationTimer++;
-        const formInterval = Math.max(250, 480 - Math.floor(state.score / 100));
+        const formInterval = Math.max(180, 350 - Math.floor(state.score / 120));
         if (state.formationTimer >= formInterval && !state.boss && !state.miniboss && state.bossCooldown <= 0 && state.minibossCooldown <= 0 && state.bossWarningTimer <= 0) {
           state.formationTimer = 0;
           const pattern = Math.floor(Math.random() * 5);
           state.formationGroupCounter++;
           const gid = state.formationGroupCounter;
-          const midScore = state.score;
-          const rspd = () => 0.8 + Math.random() * 1.2; // random speed helper
+          const rspd = () => 0.3 + Math.random() * 0.4;
 
           if (pattern === 0) {
-            // Flanking pincer — random entry angle
+            // Flanking pincer — 3+3
             for (let i = 0; i < 3; i++) {
-              const m = spawnMonster(-40 - i * 25, -10 + Math.random() * 40, "fighter", 1 + Math.floor(Math.random() * 2), 0);
-              m.formation = true; m.vx = rspd() + i * 0.15; m.vy = 0.6 + Math.random() * 0.8; m.formationGroup = gid;
+              const m = spawnMonster(-30 - i * 18, -5 + Math.random() * 15, "fighter", 1, 0);
+              m.formation = true; m.vx = rspd() + i * 0.08; m.vy = 0.3 + Math.random() * 0.3; m.formationGroup = gid;
             }
             for (let i = 0; i < 3; i++) {
-              const m = spawnMonster(CW + 40 + i * 25, -10 + Math.random() * 40, "fighter", 1 + Math.floor(Math.random() * 2), 0);
-              m.formation = true; m.vx = -(rspd() + i * 0.15); m.vy = 0.6 + Math.random() * 0.8; m.formationGroup = gid;
+              const m = spawnMonster(CW + 30 + i * 18, -5 + Math.random() * 15, "fighter", 1, 0);
+              m.formation = true; m.vx = -(rspd() + i * 0.08); m.vy = 0.3 + Math.random() * 0.3; m.formationGroup = gid;
             }
           } else if (pattern === 1) {
-            // Side sweep — all from one side (random left or right)
+            // Side sweep — 4 tight from one side
             const fromLeft = Math.random() > 0.5;
             const sideX = fromLeft ? -30 : CW + 10;
             const dir = fromLeft ? 1 : -1;
             for (let i = 0; i < 4; i++) {
-              const m = spawnMonster(sideX, 30 + i * 35 + Math.random() * 15, "fighter", 1 + Math.floor(Math.random() * 2), 0);
-              m.formation = true; m.vx = dir * (rspd() + i * 0.2); m.vy = 0.3 + Math.random() * 0.5; m.formationGroup = gid;
+              const m = spawnMonster(sideX, 15 + i * 16 + Math.random() * 8, "fighter", 1, 0);
+              m.formation = true; m.vx = dir * (rspd() + 0.2); m.vy = 0.2 + Math.random() * 0.2; m.formationGroup = gid;
             }
           } else if (pattern === 2) {
-            // Arrow formation — random spawn X, random timing offset
-            const anchorX = 40 + Math.random() * (CW - 120);
-            const spread = 40 + Math.random() * 50;
+            // Arrow formation — 5 ships spread
+            const anchorX = 60 + Math.random() * (CW - 160);
+            const spread = 22 + Math.random() * 20;
             for (let i = 0; i < 5; i++) {
-              const m = spawnMonster(anchorX + (i - 2) * spread, -20 - i * 15, "fighter", 1 + Math.floor(Math.random() * 2), 0);
-              m.formation = true; m.vx = (i - 2) * (0.1 + Math.random() * 0.3); m.vy = 1.2 + Math.random() * 0.8; m.formationGroup = gid;
+              const m = spawnMonster(anchorX + (i - 2) * spread, -8 - i * 10, "fighter", 1, 0);
+              m.formation = true; m.vx = (i - 2) * (0.05 + Math.random() * 0.1); m.vy = 0.4 + Math.random() * 0.3; m.formationGroup = gid;
             }
           } else if (pattern === 3) {
-            // Diagonal intercept — fly across screen at random angle
+            // Diagonal intercept — 3 ships
             const fromRight = Math.random() > 0.5;
             const startX = fromRight ? CW + 20 : -30;
-            const startY = 10 + Math.random() * 60;
+            const startY = 15 + Math.random() * 30;
             const dirX = fromRight ? -1 : 1;
             for (let i = 0; i < 3; i++) {
-              const m = spawnMonster(startX, startY + i * 20, "fighter", 1 + Math.floor(Math.random() * 2), 0);
-              m.formation = true; m.vx = dirX * (2 + Math.random()); m.vy = 0.5 + Math.random(); m.formationGroup = gid;
+              const m = spawnMonster(startX, startY + i * 18, "fighter", 1, 0);
+              m.formation = true; m.vx = dirX * (0.8 + Math.random() * 0.4); m.vy = 0.25 + Math.random() * 0.3; m.formationGroup = gid;
             }
           } else if (pattern === 4) {
-            // Zigzag wave — random top spawn with sine movement
-            const baseVy = 0.8 + Math.random() * 0.6;
+            // Zigzag wave — 4 ships from top
+            const baseVy = 0.4 + Math.random() * 0.3;
             for (let i = 0; i < 4; i++) {
-              const m = spawnMonster(Math.random() * (CW - 40), -20 - i * 18, "fighter", 1 + Math.floor(Math.random() * 2), 0);
-              m.formation = true; m.vx = (Math.random() - 0.5) * 3; m.vy = baseVy; m.formationGroup = gid;
+              const m = spawnMonster(Math.random() * (CW - 60), -12 - i * 14, "fighter", 1, 0);
+              m.formation = true; m.vx = (Math.random() - 0.5) * 1.2; m.vy = baseVy; m.formationGroup = gid;
             }
           }
         }
@@ -1399,7 +1655,7 @@ export default function RaidenGame() {
             const mbTypes: BossType[] = ["fortress", "carrier"];
             const mbType = mbTypes[Math.floor(Math.random() * mbTypes.length)];
             const mbHp = 15 + Math.floor(state.score / 200);
-            const dropCoins = Math.min(20, 8 + Math.floor(state.score / 150));
+            const dropCoins = Math.min(12, 4 + Math.floor(state.score / 300));
             state.miniboss = {
               x: Math.random() * (CW - 80) + 20, y: -40,
               hp: mbHp, maxHp: mbHp, speed: 1,
@@ -1462,7 +1718,7 @@ export default function RaidenGame() {
           const spread = 120 + Math.random() * 80;
           // Random entry: sometimes from top, sometimes from sides
           const entryStyle = Math.random();
-          const hp = 1 + Math.floor(Math.random() * 2);
+          const hp = 1; // always 1 hp for regular fighters
           if (entryStyle < 0.4) {
             // from top
             for (let i = 0; i < waveSize; i++) {
@@ -1471,19 +1727,19 @@ export default function RaidenGame() {
                 Math.max(4, Math.min(CW - 36, CW / 2 - 12 + offset + (Math.random() - 0.5) * 30)),
                 -16 - i * 10, "fighter", hp, 0,
               );
-              m.vy = 1 + Math.random(); m.vx = (Math.random() - 0.5) * 1.5;
+              m.vy = 0.6 + Math.random() * 0.4; m.vx = (Math.random() - 0.5) * 0.8;
             }
           } else if (entryStyle < 0.7) {
             // from left
             for (let i = 0; i < waveSize; i++) {
               const m = spawnMonster(-20 - i * 15, 20 + Math.random() * 80, "fighter", hp, 0);
-              m.vy = 0.5 + Math.random(); m.vx = 1.5 + Math.random();
+              m.vy = 0.3 + Math.random() * 0.3; m.vx = 1 + Math.random() * 0.5;
             }
           } else {
             // from right
             for (let i = 0; i < waveSize; i++) {
               const m = spawnMonster(CW + 20 + i * 15, 20 + Math.random() * 80, "fighter", hp, 0);
-              m.vy = 0.5 + Math.random(); m.vx = -(1.5 + Math.random());
+              m.vy = 0.3 + Math.random() * 0.3; m.vx = -(1 + Math.random() * 0.5);
             }
           }
         }
@@ -1650,18 +1906,29 @@ export default function RaidenGame() {
           const py = state.player.y;
           if (pu.x > px - 4 && pu.x < px + 32 && pu.y > py - 4 && pu.y < py + 32) {
             state.powerUps.release(pu);
-            if (state.overdriveTimer > 0) {
-              state.overdriveTimer = Math.min(600, state.overdriveTimer + 180);
-              setOverdriveTimer(state.overdriveTimer);
-            } else if (state.weaponLevel >= 3) {
-              state.weaponLevel = 4; state.overdriveTimer = 300;
-              setWeaponLevel(4); setOverdriveTimer(300);
+            if (pu.type === "wingman") {
+              // Wingman power-up
+              if (state.wingmanLevel < 4) {
+                state.wingmanLevel++;
+                setWingmanLevel(state.wingmanLevel);
+              }
+              emitExplosion(pu.x, pu.y, 15, ["#c084fc", "#a855f7", "#fff"], 6, 30, 0.02, 4);
+              audio.powerUp();
             } else {
-              const n = Math.min(3, state.weaponLevel + 1);
-              state.weaponLevel = n; setWeaponLevel(n);
+              // Weapon power-up
+              if (state.overdriveTimer > 0) {
+                state.overdriveTimer = Math.min(600, state.overdriveTimer + 180);
+                setOverdriveTimer(state.overdriveTimer);
+              } else if (state.weaponLevel >= 3) {
+                state.weaponLevel = 4; state.overdriveTimer = 300;
+                setWeaponLevel(4); setOverdriveTimer(300);
+              } else {
+                const n = Math.min(3, state.weaponLevel + 1);
+                state.weaponLevel = n; setWeaponLevel(n);
+              }
+              emitExplosion(pu.x, pu.y, 15, ["#38bdf8", "#7dd3fc", "#fff"], 6, 30, 0.02, 4);
+              audio.powerUp();
             }
-            emitExplosion(pu.x, pu.y, 15, ["#38bdf8", "#7dd3fc", "#fff"], 6, 30, 0.02, 4);
-            audio.powerUp();
           }
         }
         for (const pu of state.powerUps.getActive()) {
@@ -1792,15 +2059,25 @@ export default function RaidenGame() {
           }
         }
 
-        // ── collect coins ──
+        // ── collect coins (auto-magnet, stronger) ──
+        const MAGNET_RANGE = 120;
         for (const c of state.coins.getActive()) {
           const px = state.player.x;
           const py = state.player.y;
+          const dx = (px + 14) - c.x;
+          const dy = (py + 12) - c.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < MAGNET_RANGE && dist > 1) {
+            // magnetic pull — stronger, more generous
+            const pull = (1 - dist / MAGNET_RANGE) * 3 + 0.5;
+            c.x += (dx / dist) * pull;
+            c.y += (dy / dist) * pull;
+          }
           if (c.x > px - 4 && c.x < px + 32 && c.y > py - 4 && c.y < py + 32) {
             const coinMult = saveRef.current.upgrades.permaDouble ? 2 : 1;
             state.wallet += c.value * coinMult;
             state.coins.release(c);
-            emitExplosion(c.x, c.y, 4, ["#eab308"], 3);
+            emitExplosion(c.x, c.y, 6, ["#06b6d4", "#22d3ee", "#fff"], 4);
             audio.coinCollect();
             setCoins(state.wallet);
           }
@@ -1875,18 +2152,23 @@ export default function RaidenGame() {
         ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(CW, gy); ctx.stroke();
       }
 
-      // ── 3-layer parallax stars ──
+      // ── 5-layer parallax stars (deep parallax depth) ──
       state.stars.forEach((s) => {
-        ctx.globalAlpha = s.brightness;
-        ctx.fillStyle = "#fff";
-        if (s.layer === 2) {
-          // near layer: add subtle glow
-          ctx.save();
-          ctx.shadowColor = "#fff";
-          ctx.shadowBlur = 3;
+        ctx.globalAlpha = Math.min(0.25, s.layer < 3 ? s.brightness : s.brightness * 0.3);
+        if (s.layer === 4) {
+          ctx.fillStyle = "#e2e8f0";
+          ctx.beginPath(); ctx.arc(s.x + s.size / 2, s.y + s.size / 2, s.size * 0.8, 0, Math.PI * 2); ctx.fill();
+        } else if (s.layer === 3) {
+          ctx.fillStyle = "#94a3b8";
+          ctx.beginPath(); ctx.arc(s.x + s.size / 2, s.y + s.size / 2, s.size * 0.6, 0, Math.PI * 2); ctx.fill();
+        } else if (s.layer === 2) {
+          ctx.fillStyle = "#4a5568";
+          ctx.beginPath(); ctx.arc(s.x + s.size / 2, s.y + s.size / 2, s.size * 0.8, 0, Math.PI * 2); ctx.fill();
+        } else if (s.layer === 1) {
+          ctx.fillStyle = "#3b4a6b";
           ctx.fillRect(s.x, s.y, s.size, s.size);
-          ctx.restore();
         } else {
+          ctx.fillStyle = "#1e293b";
           ctx.fillRect(s.x, s.y, s.size, s.size);
         }
       });
@@ -1904,113 +2186,217 @@ export default function RaidenGame() {
       }
       ctx.globalAlpha = 1;
 
-      // enemy bullets with bloom
-      for (const b of state.enemyBullets.getActive()) {
-        const flicker = Math.sin(f * 0.2 + b.x) * 0.3 + 0.7;
-        const glow = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 14);
-        glow.addColorStop(0, `rgba(251,113,133,${0.5 * flicker})`);
-        glow.addColorStop(0.4, `rgba(251,113,133,${0.2 * flicker})`);
-        glow.addColorStop(1, "rgba(251,113,133,0)");
-        ctx.save();
-        ctx.shadowColor = "#f43f5e";
-        ctx.shadowBlur = 10;
-        ctx.fillStyle = glow;
-        ctx.beginPath(); ctx.arc(b.x, b.y, 14, 0, Math.PI * 2); ctx.fill();
-        ctx.shadowBlur = 0;
+      // ── START SCREEN: simple ship preview removed ──
+      // We'll show ship selection in UI instead of canvas
 
+      // enemy bullets — enhanced bright red glow, large aurora + diamond + pulsing ring
+      for (const b of state.enemyBullets.getActive()) {
+        const flicker = Math.sin(f * 0.2 + b.x) * 0.2 + 0.8;
+        ctx.save();
         ctx.translate(b.x, b.y);
-        ctx.rotate(Math.PI / 4);
-        ctx.globalAlpha = 0.9 * flicker;
-        ctx.fillStyle = "#f43f5e";
+        // Pass 1: large outer pulsing aurora ring
+        ctx.globalAlpha = 0.4 * flicker;
+        ctx.shadowColor = "#FF0055";
+        ctx.shadowBlur = 28;
+        ctx.fillStyle = "rgba(255,0,85,0.03)";
+        ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "rgba(255,0,85,0.25)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(0, 0, 14 + Math.sin(f * 0.08 + b.x) * 3, 0, Math.PI * 2); ctx.stroke();
+        ctx.shadowBlur = 0;
+        // Pass 2: elongated diamond shape — larger
+        ctx.globalAlpha = flicker;
+        ctx.shadowColor = "#FF0055";
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = "#FF0055";
         ctx.beginPath();
-        ctx.moveTo(0, -5);
-        ctx.lineTo(3.5, -2);
-        ctx.lineTo(5, 0);
-        ctx.lineTo(3.5, 2);
-        ctx.lineTo(0, 5);
-        ctx.lineTo(-3.5, 2);
-        ctx.lineTo(-5, 0);
-        ctx.lineTo(-3.5, -2);
+        ctx.moveTo(0, -9);
+        ctx.lineTo(5, -3);
+        ctx.lineTo(6, 0);
+        ctx.lineTo(5, 3);
+        ctx.lineTo(0, 9);
+        ctx.lineTo(-5, 3);
+        ctx.lineTo(-6, 0);
+        ctx.lineTo(-5, -3);
         ctx.closePath();
         ctx.fill();
+        ctx.shadowBlur = 0;
+        // Pass 3: bright inner diamond — lighter pink
         ctx.globalAlpha = 0.8 * flicker;
-        ctx.fillStyle = "#fecdd3";
-        ctx.beginPath(); ctx.arc(0, 0, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "#FF6699";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -5);
+        ctx.lineTo(3, -1);
+        ctx.lineTo(0, 5);
+        ctx.lineTo(-3, -1);
+        ctx.closePath();
+        ctx.stroke();
+        // Pass 4: white-hot core with bloom
+        ctx.globalAlpha = flicker;
+        ctx.shadowColor = "#fff";
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = "#fff";
+        ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+        // Pass 5: tiny orange center highlight
+        ctx.globalAlpha = 0.6 * flicker;
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = "#ffe066";
+        ctx.beginPath(); ctx.arc(0, 0, 1.5, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
       }
 
       // player bullets with bloom
       for (const b of state.bullets.getActive()) {
         if (b.wingman) {
-          ctx.save();
-          ctx.shadowColor = "#f97316";
-          ctx.shadowBlur = 6;
-          ctx.globalAlpha = 0.85 + Math.sin(f * 0.15 + b.x) * 0.15;
-          const wg = ctx.createRadialGradient(b.x, b.y - 2, 0, b.x, b.y - 2, 6);
-          wg.addColorStop(0, "rgba(251,146,60,0.4)");
-          wg.addColorStop(1, "rgba(251,146,60,0)");
-          ctx.fillStyle = wg;
-          ctx.beginPath(); ctx.arc(b.x, b.y - 2, 6, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = "#f97316";
-          ctx.beginPath();
-          ctx.moveTo(b.x, b.y - 5);
-          ctx.lineTo(b.x + 2.5, b.y - 1);
-          ctx.lineTo(b.x, b.y + 3);
-          ctx.lineTo(b.x - 2.5, b.y - 1);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = "#fef08a";
-          ctx.beginPath(); ctx.arc(b.x, b.y - 1, 1.2, 0, Math.PI * 2); ctx.fill();
-          ctx.restore();
+          if (b.lightning) {
+            // L3/L4 lightning bullet (cyan electric bolt)
+            ctx.save();
+            ctx.shadowColor = "#22d3ee";
+            ctx.shadowBlur = 18;
+            ctx.strokeStyle = "#22d3ee";
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            const lx = b.x, ly = b.y;
+            const zigzag = Math.sin(f * 0.3 + lx * 0.5) * 3;
+            ctx.moveTo(lx, ly);
+            ctx.lineTo(lx - 2 + zigzag, ly - 4);
+            ctx.lineTo(lx + 1 - zigzag, ly - 8);
+            ctx.lineTo(lx - 3 + zigzag, ly - 12);
+            ctx.stroke();
+            // inner bright bolt
+            ctx.strokeStyle = "#e0f2fe";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(lx, ly);
+            ctx.lineTo(lx - 2 + zigzag, ly - 4);
+            ctx.lineTo(lx + 1 - zigzag, ly - 8);
+            ctx.lineTo(lx - 3 + zigzag, ly - 12);
+            ctx.stroke();
+            // glow core
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = "#67e8f9";
+            ctx.fillStyle = "#fff";
+            ctx.beginPath(); ctx.arc(lx, ly - 6, 2.5, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+          } else {
+            // wingman normal bullet — fireball with strong 3D glow
+            ctx.save();
+            ctx.shadowColor = "#f97316";
+            ctx.shadowBlur = 14;
+            ctx.globalAlpha = 0.4;
+            const wg2 = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 10);
+            wg2.addColorStop(0, "rgba(255,255,255,0.3)");
+            wg2.addColorStop(0.4, "rgba(251,146,60,0.3)");
+            wg2.addColorStop(1, "rgba(251,146,60,0)");
+            ctx.fillStyle = wg2;
+            ctx.beginPath(); ctx.arc(b.x, b.y, 10, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 0.9;
+            const fb2 = ctx.createRadialGradient(b.x - 1, b.y - 1, 0, b.x + 1, b.y + 1, 5);
+            fb2.addColorStop(0, "#fff");
+            fb2.addColorStop(0.3, "#fef08a");
+            fb2.addColorStop(0.6, "#f97316");
+            fb2.addColorStop(1, "rgba(234,88,12,0.3)");
+            ctx.fillStyle = fb2;
+            ctx.beginPath(); ctx.arc(b.x, b.y, 4.5, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+          }
         } else if (b.wtype === "laser") {
+          // ── LASER: strong bloom bar with bright core, lightning-style ──
           const od = stateRef.current.overdriveTimer > 0;
-          const len = od ? 22 : 14;
+          const len = od ? 24 : 16;
           ctx.save();
+          // Pass 1: wide outer bloom
           ctx.shadowColor = od ? "#f97316" : "#22d3ee";
-          ctx.shadowBlur = od ? 16 : 8;
-          const lg = ctx.createRadialGradient(b.x, b.y - len / 2, 0, b.x, b.y - len / 2, od ? 10 : 6);
-          lg.addColorStop(0, od ? "rgba(251,146,60,0.5)" : "rgba(34,211,238,0.4)");
-          lg.addColorStop(1, od ? "rgba(251,146,60,0)" : "rgba(34,211,238,0)");
-          ctx.fillStyle = lg;
-          ctx.fillRect(b.x - (od ? 6 : 4), b.y - len, (od ? 12 : 8), len + 4);
-          ctx.fillStyle = od ? "#f97316" : "#22d3ee";
-          ctx.fillRect(b.x - (od ? 2 : 1), b.y - len, od ? 4 : 2, len);
-          ctx.fillStyle = od ? "#fef08a" : "#e0f2fe";
-          ctx.fillRect(b.x - 1, b.y - len, od ? 2 : 1, len);
-          ctx.fillStyle = od ? "#fff" : "#fff";
-          ctx.beginPath(); ctx.arc(b.x, b.y - len, od ? 3 : 2, 0, Math.PI * 2); ctx.fill();
+          ctx.shadowBlur = 28;
+          ctx.globalAlpha = 0.3;
+          const lg2 = ctx.createRadialGradient(b.x, b.y - len / 2, 0, b.x, b.y - len / 2, od ? 16 : 10);
+          lg2.addColorStop(0, od ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.3)");
+          lg2.addColorStop(0.3, od ? "rgba(251,146,60,0.3)" : "rgba(34,211,238,0.3)");
+          lg2.addColorStop(1, od ? "rgba(251,146,60,0)" : "rgba(34,211,238,0)");
+          ctx.fillStyle = lg2;
+          ctx.fillRect(b.x - (od ? 10 : 7), b.y - len - 2, (od ? 20 : 14), len + 6);
+          // Pass 2: bright beam with gradient width
+          ctx.shadowBlur = 0;
+          ctx.globalAlpha = 0.9;
+          const cg2 = ctx.createLinearGradient(b.x - (od ? 4 : 3), 0, b.x + (od ? 4 : 3), 0);
+          cg2.addColorStop(0, "rgba(255,255,255,0)");
+          cg2.addColorStop(0.3, od ? "#fef08a" : "#e0f2fe");
+          cg2.addColorStop(0.5, od ? "#f97316" : "#22d3ee");
+          cg2.addColorStop(0.7, od ? "#fef08a" : "#e0f2fe");
+          cg2.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = cg2;
+          ctx.fillRect(b.x - (od ? 4 : 3), b.y - len + 1, od ? 8 : 6, len - 2);
+          // Pass 3: white core line
+          ctx.fillStyle = "#fff";
+          ctx.shadowColor = od ? "#f97316" : "#22d3ee";
+          ctx.shadowBlur = 14;
+          ctx.fillRect(b.x - 1, b.y - len + 2, 2, len - 3);
+          // Pass 4: bright tip glow sphere
+          ctx.beginPath(); ctx.arc(b.x, b.y - len, od ? 4 : 3, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         } else if (b.wtype === "wave") {
+          // ── WAVE: pulsing energy ring with 3D depth ──
           const od = stateRef.current.overdriveTimer > 0;
-          const pulseR = od ? 8 + Math.sin(stateRef.current.frameCount * 0.2) * 3 : 5 + Math.sin(stateRef.current.frameCount * 0.15) * 1;
+          const pulseR = od ? 8 + Math.sin(f * 0.25) * 4 : 5 + Math.sin(f * 0.18) * 2;
           ctx.save();
+          // Pass 1: outer bloom
           ctx.shadowColor = od ? "#f97316" : "#4ade80";
-          ctx.shadowBlur = od ? 16 : 8;
-          const wg = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, pulseR + (od ? 6 : 3));
-          wg.addColorStop(0, od ? "rgba(251,146,60,0.5)" : "rgba(74,222,128,0.5)");
-          wg.addColorStop(1, od ? "rgba(251,146,60,0)" : "rgba(74,222,128,0)");
-          ctx.fillStyle = wg;
-          ctx.beginPath(); ctx.arc(b.x, b.y, pulseR + (od ? 6 : 3), 0, Math.PI * 2); ctx.fill();
+          ctx.shadowBlur = 26;
+          ctx.globalAlpha = 0.35;
+          const wg3 = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, pulseR + (od ? 12 : 8));
+          wg3.addColorStop(0, od ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.3)");
+          wg3.addColorStop(0.4, od ? "rgba(251,146,60,0.3)" : "rgba(74,222,128,0.3)");
+          wg3.addColorStop(1, od ? "rgba(251,146,60,0)" : "rgba(74,222,128,0)");
+          ctx.fillStyle = wg3;
+          ctx.beginPath(); ctx.arc(b.x, b.y, pulseR + (od ? 12 : 8), 0, Math.PI * 2); ctx.fill();
+          // Pass 2: bright ring with glow
+          ctx.shadowBlur = 0;
+          ctx.globalAlpha = 0.85;
           ctx.strokeStyle = od ? "#f97316" : "#4ade80";
-          ctx.lineWidth = od ? 3 : 2;
+          ctx.lineWidth = od ? 3.5 : 2.5;
           ctx.beginPath(); ctx.arc(b.x, b.y, pulseR, 0, Math.PI * 2); ctx.stroke();
-          ctx.fillStyle = "#bbf7d0";
-          ctx.beginPath(); ctx.arc(b.x, b.y, 1.5, 0, Math.PI * 2); ctx.fill();
+          // Pass 3: inner ring glint
+          ctx.globalAlpha = 0.5;
+          ctx.strokeStyle = od ? "#fef08a" : "#bbf7d0";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.arc(b.x - 1, b.y - 1, pulseR * 0.6, 0, Math.PI * 2); ctx.stroke();
+          // Pass 4: white core
+          ctx.globalAlpha = 1;
+          ctx.shadowColor = od ? "#f97316" : "#4ade80";
+          ctx.shadowBlur = 10;
+          ctx.fillStyle = "#fff";
+          ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         } else {
+          // ── SPREAD: 3D fireball with layered glow ──
           const od = stateRef.current.overdriveTimer > 0;
           ctx.save();
+          // Pass 1: huge outer glow
           ctx.shadowColor = od ? "#f97316" : "#fbbf24";
-          ctx.shadowBlur = od ? 14 : 6;
-          const sg = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, od ? 9 : 5);
-          sg.addColorStop(0, od ? "rgba(251,146,60,0.5)" : "rgba(251,191,36,0.4)");
-          sg.addColorStop(1, od ? "rgba(251,146,60,0)" : "rgba(251,191,36,0)");
-          ctx.fillStyle = sg;
-          ctx.fillRect(b.x - (od ? 9 : 5), b.y - (od ? 9 : 5), (od ? 18 : 10), (od ? 18 : 10));
-          ctx.fillStyle = od ? "#f97316" : "#fbbf24";
-          ctx.beginPath(); ctx.arc(b.x, b.y, od ? 4 : 2.5, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = od ? "#fef08a" : "#fef08a";
-          ctx.beginPath(); ctx.arc(b.x, b.y, od ? 2 : 1, 0, Math.PI * 2); ctx.fill();
+          ctx.shadowBlur = 26;
+          ctx.globalAlpha = 0.3;
+          const sg2 = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, od ? 14 : 10);
+          sg2.addColorStop(0, od ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.3)");
+          sg2.addColorStop(0.3, od ? "rgba(251,146,60,0.3)" : "rgba(251,191,36,0.3)");
+          sg2.addColorStop(1, od ? "rgba(251,146,60,0)" : "rgba(251,191,36,0)");
+          ctx.fillStyle = sg2;
+          ctx.fillRect(b.x - (od ? 14 : 10), b.y - (od ? 14 : 10), (od ? 28 : 20), (od ? 28 : 20));
+          // Pass 2: 3D sphere (radial gradient core)
+          ctx.shadowBlur = 0;
+          ctx.globalAlpha = 0.95;
+          const sp2 = ctx.createRadialGradient(b.x - 1.5, b.y - 1.5, 0, b.x + 1, b.y + 1, od ? 6 : 4.5);
+          sp2.addColorStop(0, "#fff");
+          sp2.addColorStop(0.3, od ? "#fef08a" : "#fef08a");
+          sp2.addColorStop(0.6, od ? "#f97316" : "#fbbf24");
+          sp2.addColorStop(1, od ? "rgba(234,88,12,0.3)" : "rgba(217,119,6,0.3)");
+          ctx.fillStyle = sp2;
+          ctx.beginPath(); ctx.arc(b.x, b.y, od ? 6 : 4.5, 0, Math.PI * 2); ctx.fill();
+          // Pass 3: specular highlight
+          ctx.globalAlpha = 0.7;
+          ctx.fillStyle = "#fff";
+          ctx.beginPath(); ctx.arc(b.x - 1.5, b.y - 2, od ? 2.5 : 1.8, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         }
       }
@@ -2040,38 +2426,58 @@ export default function RaidenGame() {
           if (state.invincible) drawShield(ctx, sp.x, sp.y);
           drawPlayerShip(ctx, sp.x, sp.y, playerTiltRef.current);
 
-          // wingman
-          if (state.wingmanCount > 0) {
-            const wmCount = state.wingmanCount;
+          // wingman (4-level pixel sprite rendering)
+          const wmLvl = state.wingmanLevel;
+          if (wmLvl > 0) {
+            const wmColors = { b: "#0d9488", h: "#5eead4", s: "#0f766e" };
             const flicker = 0.7 + Math.sin(f * 0.15) * 0.3;
-            const lx = sp.x - 10, ly = sp.y + 6;
+            // L1: one sprite left-flank, with clear gap
             ctx.globalAlpha = flicker;
-            ctx.fillStyle = "#0d9488";
-            ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "#5eead4";
-            ctx.beginPath(); ctx.arc(lx, ly, 1.5, 0, Math.PI * 2); ctx.fill();
-            const rx = sp.x + 32, ry = sp.y + 6;
-            ctx.fillStyle = "#0d9488";
-            ctx.beginPath(); ctx.arc(rx, ry, 3, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "#5eead4";
-            ctx.beginPath(); ctx.arc(rx, ry, 1.5, 0, Math.PI * 2); ctx.fill();
-            if (wmCount >= 2) {
-              ctx.fillStyle = "#d97706";
-              ctx.beginPath(); ctx.arc(sp.x - 16, sp.y + 10, 2.5, 0, Math.PI * 2); ctx.fill();
-              ctx.fillStyle = "#fbbf24";
-              ctx.beginPath(); ctx.arc(sp.x - 16, sp.y + 10, 1.2, 0, Math.PI * 2); ctx.fill();
-              ctx.fillStyle = "#d97706";
-              ctx.beginPath(); ctx.arc(sp.x + 38, sp.y + 10, 2.5, 0, Math.PI * 2); ctx.fill();
-              ctx.fillStyle = "#fbbf24";
-              ctx.beginPath(); ctx.arc(sp.x + 38, sp.y + 10, 1.2, 0, Math.PI * 2); ctx.fill();
-            }
+            drawSprite(ctx, WINGMAN_CRAFT, wmColors, sp.x - 24, sp.y + 14, 3);
             ctx.globalAlpha = 1;
-            ctx.strokeStyle = `rgba(13,148,136,${0.1 + Math.sin(f * 0.1) * 0.05})`;
-            ctx.lineWidth = 1;
-            ctx.setLineDash([2, 4]);
-            ctx.beginPath(); ctx.moveTo(sp.x, sp.y + 8); ctx.lineTo(lx, ly); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(sp.x + 24, sp.y + 8); ctx.lineTo(rx, ry); ctx.stroke();
-            ctx.setLineDash([]);
+            // L2: one sprite right-flank (amber), with clear gap
+            if (wmLvl >= 2) {
+              const flicker2 = 0.7 + Math.sin(f * 0.15 + 1) * 0.3;
+              ctx.globalAlpha = flicker2;
+              drawSprite(ctx, WINGMAN_CRAFT, { b: "#d97706", h: "#fbbf24", s: "#92400e" }, sp.x + 40, sp.y + 14, 3);
+              ctx.globalAlpha = 1;
+            }
+            // L3: orbiting wingman around ship (wide orbit)
+            if (wmLvl >= 3) {
+              const orbR = 40;
+              const angle = state.wingmanOrbitAngle;
+              const orbX = sp.x + 12 + Math.cos(angle) * orbR - 6;
+              const orbY = sp.y + 12 + Math.sin(angle) * orbR - 6;
+              ctx.save();
+              ctx.shadowColor = "#c084fc";
+              ctx.shadowBlur = 12;
+              drawSprite(ctx, WINGMAN_CRAFT, { b: "#7c3aed", h: "#c084fc", s: "#581c87" }, orbX, orbY, 3);
+              ctx.shadowBlur = 0;
+              ctx.restore();
+              // connection tether (purple glow line)
+              ctx.save();
+              ctx.shadowColor = "#a855f7";
+              ctx.shadowBlur = 6;
+              ctx.strokeStyle = "rgba(168,85,247,0.4)";
+              ctx.lineWidth = 1;
+              ctx.setLineDash([2, 4]);
+              ctx.beginPath();
+              ctx.moveTo(sp.x + 12, sp.y + 12);
+              ctx.lineTo(orbX + 6, orbY + 6);
+              ctx.stroke();
+              ctx.setLineDash([]);
+              ctx.restore();
+            }
+            // L4 overdrive glow on all wingmen
+            if (wmLvl >= 4) {
+              ctx.globalAlpha = 0.3 + Math.sin(f * 0.12) * 0.2;
+              const wg = ctx.createRadialGradient(sp.x + 12, sp.y + 14, 0, sp.x + 12, sp.y + 14, 36);
+              wg.addColorStop(0, "rgba(168,85,247,0.25)");
+              wg.addColorStop(1, "rgba(168,85,247,0)");
+              ctx.fillStyle = wg;
+              ctx.beginPath(); ctx.arc(sp.x + 12, sp.y + 14, 36, 0, Math.PI * 2); ctx.fill();
+              ctx.globalAlpha = 1;
+            }
           }
 
           if (state.overdriveTimer > 0) {
@@ -2085,13 +2491,10 @@ export default function RaidenGame() {
             ctx.globalAlpha = 1;
             // level indicator text floating above ship
             ctx.save();
-            ctx.globalAlpha = 0.5 + Math.sin(f * 0.1) * 0.3;
-            ctx.fillStyle = "#f97316";
-            ctx.font = "bold 10px monospace";
-            ctx.textAlign = "center";
             ctx.shadowColor = "#fbbf24";
             ctx.shadowBlur = 12;
-            ctx.fillText("★ MAX ★", sp.x + 12, sp.y - 6);
+            ctx.globalAlpha = 0.5 + Math.sin(f * 0.1) * 0.3;
+            drawText(ctx, "★ MAX ★", sp.x + 12, sp.y - 6, "#ff6a00", 10, "center", 2);
             ctx.restore();
           }
           ctx.globalAlpha = 0.08;
@@ -2117,55 +2520,43 @@ export default function RaidenGame() {
         drawMinibossShip(ctx, state.miniboss, state.miniboss.x, state.miniboss.y);
       }
 
-      // coins — batch glow pass then individual
-      const activeCoins = state.coins.getActive();
-      ctx.save();
-      ctx.shadowColor = "#eab308";
-      ctx.shadowBlur = 6;
-      for (const c of activeCoins) {
+      // coins — each self-contained with glow + 3D gradient
+      for (const c of state.coins.getActive()) {
         const floatY = Math.sin(f * 0.06 + c.x) * 2;
         ctx.save();
         drawCoinItem(ctx, c.x, c.y + floatY);
         ctx.restore();
       }
-      ctx.restore();
-      // sparkles on top (no shadow)
-      for (const c of activeCoins) {
-        if (Math.sin(f * 0.12 + c.x) > 0.8) {
-          const floatY = Math.sin(f * 0.06 + c.x) * 2;
-          ctx.globalAlpha = 0.5;
-          ctx.fillStyle = "#fff";
-          ctx.beginPath(); ctx.arc(c.x + 2, c.y + floatY - 2, 1.5, 0, Math.PI * 2); ctx.fill();
-          ctx.globalAlpha = 1;
-        }
-      }
 
-      // power-ups (enhanced effect)
+      // power-ups (enhanced effect — blue for weapon, purple for wingman)
       for (const pu of state.powerUps.getActive()) {
         const pcx = pu.x + 6, pcy = pu.y + 6;
         const pulse = Math.sin(f * 0.1) * 0.3 + 0.7;
+        const isWingman = pu.type === "wingman";
+        const col1 = isWingman ? "#a855f7" : "#38bdf8";
+        const col2 = isWingman ? "#c084fc" : "#7dd3fc";
         ctx.save();
         // outer glow ring (rotating)
-        ctx.shadowColor = "#38bdf8";
+        ctx.shadowColor = col1;
         ctx.shadowBlur = 20;
         ctx.globalAlpha = 0.35 * pulse;
-        ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 2;
+        ctx.strokeStyle = col1; ctx.lineWidth = 2;
         const ringR = 16 + Math.sin(f * 0.08) * 4;
         ctx.beginPath(); ctx.arc(pcx, pcy, ringR, 0, Math.PI * 2); ctx.stroke();
         // rotating arc
         ctx.globalAlpha = 0.5 * pulse;
-        ctx.strokeStyle = "#7dd3fc"; ctx.lineWidth = 2.5;
+        ctx.strokeStyle = col2; ctx.lineWidth = 2.5;
         const arcStart = f * 0.05;
         const arcEnd = arcStart + 1.2;
         ctx.beginPath(); ctx.arc(pcx, pcy, ringR + 2, arcStart, arcEnd); ctx.stroke();
         // main gradient sphere
         const pg = ctx.createRadialGradient(pcx, pcy, 0, pcx, pcy, 14);
         pg.addColorStop(0, "rgba(255,255,255,0.95)");
-        pg.addColorStop(0.3, "rgba(125,211,252,0.9)");
-        pg.addColorStop(0.6, "rgba(56,189,248,0.6)");
-        pg.addColorStop(1, "rgba(56,189,248,0)");
+        pg.addColorStop(0.3, isWingman ? "rgba(192,132,252,0.9)" : "rgba(125,211,252,0.9)");
+        pg.addColorStop(0.6, isWingman ? "rgba(168,85,247,0.6)" : "rgba(56,189,248,0.6)");
+        pg.addColorStop(1, isWingman ? "rgba(168,85,247,0)" : "rgba(56,189,248,0)");
         ctx.globalAlpha = 0.9 * pulse;
-        ctx.shadowColor = "#38bdf8";
+        ctx.shadowColor = col1;
         ctx.shadowBlur = 25;
         ctx.fillStyle = pg;
         ctx.beginPath(); ctx.arc(pcx, pcy, 14, 0, Math.PI * 2); ctx.fill();
@@ -2181,20 +2572,16 @@ export default function RaidenGame() {
         for (let i = 0; i < 3; i++) {
           const da = f * 0.06 + (Math.PI * 2 * i) / 3;
           ctx.globalAlpha = (0.5 + Math.sin(f * 0.08 + i) * 0.3) * pulse;
-          ctx.fillStyle = i === 0 ? "#fff" : i === 1 ? "#7dd3fc" : "#38bdf8";
+          ctx.fillStyle = i === 0 ? "#fff" : i === 1 ? col2 : col1;
           ctx.beginPath(); ctx.arc(
             pcx + Math.cos(da) * (10 + Math.sin(f * 0.05 + i) * 2),
             pcy + Math.sin(da) * (10 + Math.sin(f * 0.05 + i) * 2),
             1.5 + Math.sin(f * 0.1 + i) * 0.5, 0, Math.PI * 2,
           ); ctx.fill();
         }
-        // "P" letter hint
+        // hint letter
         ctx.globalAlpha = 0.7 * pulse;
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 8px monospace";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("P", pcx, pcy + 0.5);
+        drawText(ctx, isWingman ? "W" : "P", pcx, pcy + 0.5, "#fff", 8, "center", 1.5);
         ctx.restore();
       }
 
@@ -2237,7 +2624,7 @@ export default function RaidenGame() {
     };
   }, [
     gameStarted, startFadeOut, isGameOver, weaponLevel, weaponType,
-    bombCount, lives, isPaused, showGacha, showShop, hasHoming, wingmanCount, audio, shipType
+    bombCount, lives, isPaused, showGacha, showShop, hasHoming, wingmanLevel, audio, shipType
   ]);
 
   // Check boss spawn
@@ -2295,7 +2682,7 @@ export default function RaidenGame() {
     state.formationTimer = 0; state.gachaLocked = false;
     state.gachaCost = 10; state.formationGroupCounter = 0;
     state.overdriveTimer = 0; state.lastWaveSpawned = -1;
-    state.bossCooldown = 0; state.minibossCooldown = 0; state.wingmanCount = 0; state.bossWarningTimer = 0;
+    state.bossCooldown = 0; state.minibossCooldown = 0; state.wingmanLevel = 0; state.wingmanOrbitAngle = 0; state.bossWarningTimer = 0;
     bgOffsetRef.current = 0;
     exhaustPool.current.releaseAll();
     setIsPaused(false); setShowGacha(false); setShowShop(false);
@@ -2304,7 +2691,7 @@ export default function RaidenGame() {
     setInvincible(false); setBossHp(0); setCoins(0);
     setDoubleCoinTimer(0); setHasHoming(false);
     setGachaCost(10); setOverdriveTimer(0); setWaveAnnounce("");
-    setWingmanCount(0); setBossWarning(false); setGameStarted(false); setStartFadeOut(false);
+    setWingmanLevel(0); setBossWarning(false); setGameStarted(false); setStartFadeOut(false);
   };
 
   const formatScore = (n: number) => n.toString().padStart(6, "0");
@@ -2347,6 +2734,56 @@ export default function RaidenGame() {
         .animate-blink {
           animation: blink 1.2s steps(1) infinite;
         }
+        @keyframes float-up {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+        .float-on-hover:hover {
+          animation: float-up 1.5s ease-in-out infinite;
+        }
+        @keyframes gradient-shift {
+          0% { background-position: 0% center; }
+          100% { background-position: 200% center; }
+        }
+        @keyframes bullet-spread-up {
+          0% { transform: translateY(20px); opacity: 0; }
+          20% { opacity: 1; }
+          80% { opacity: 0.6; }
+          100% { transform: translateY(-20px); opacity: 0; }
+        }
+        @keyframes bullet-laser-up {
+          0% { transform: translateY(25px); opacity: 0; }
+          30% { opacity: 1; }
+          70% { opacity: 0.8; }
+          100% { transform: translateY(-25px); opacity: 0; }
+        }
+        @keyframes bullet-wave-up {
+          0% { transform: translateY(20px) scale(0.5); opacity: 0; }
+          25% { opacity: 0.9; }
+          75% { opacity: 0.5; }
+          100% { transform: translateY(-25px) scale(1.3); opacity: 0; }
+        }
+        @keyframes gacha-fade-in {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+        @keyframes gacha-bg-in {
+          0% { background: rgba(0,0,0,0); }
+          100% { background: rgba(0,0,0,0.85); }
+        }
+        @keyframes gacha-slide-down {
+          0% { opacity: 0; transform: translateY(-12px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes gacha-card-pop {
+          0% { opacity: 0; transform: scale(0.6) translateY(16px); }
+          70% { transform: scale(1.06) translateY(-2px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes gacha-fade-out {
+          0% { opacity: 1; }
+          100% { opacity: 0; transform: translateY(6px); }
+        }
       `}</style>
 
       <main className="min-h-screen bg-[#020617]" style={{ fontFamily: PIXEL_FONT }}>
@@ -2361,7 +2798,10 @@ export default function RaidenGame() {
               &lt; RET
             </Link>
             {gameStarted && (
-              <div className="pixel-font text-[8px] text-[#475569] tracking-wider">
+              <div
+                className="pixel-font text-[12px] text-[#475569] tracking-wider"
+                style={{ textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000" }}
+              >
                 {formatScore(score)}
               </div>
             )}
@@ -2380,87 +2820,234 @@ export default function RaidenGame() {
             {/* ═══ START SCREEN ═══ */}
             {!gameStarted && (
               <div
-                className={`absolute inset-0 bg-[#020617] flex flex-col items-center justify-center cursor-pointer z-20 transition-opacity duration-500 ${startFadeOut ? "opacity-0 pointer-events-none" : "opacity-100"}`}
-                onClick={handleStart}
+                className={`absolute inset-0 flex flex-col z-20 transition-opacity duration-500 ${startFadeOut ? "opacity-0 pointer-events-none" : "opacity-100"}`}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleStart(); } }}
                 tabIndex={0}
+                style={{ background: "rgba(2,6,23,0.55)" }}
               >
-                <div className="text-center px-6">
-                  {/* Title */}
-                  <div className="mb-4">
-                    <p className="pixel-font text-[22px] text-[#38bdf8] tracking-[4px]" style={{ fontFamily: PIXEL_FONT }}>雷电</p>
-                    <p className="pixel-font text-[16px] text-[#fbbf24] tracking-[6px] -mt-1" style={{ fontFamily: PIXEL_FONT }}>战机</p>
-                  </div>
+                {/* Neon title: THUNDER FIGHTER */}
+                <div className="text-center px-4 pt-5 flex-shrink-0">
+                  <h1
+                    className="pixel-font leading-tight"
+                    style={{
+                      fontFamily: PIXEL_FONT,
+                      fontSize: "20px",
+                      letterSpacing: "6px",
+                      background: "linear-gradient(90deg, #ff1493, #00bfff, #ff1493)",
+                      backgroundSize: "200% auto",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      backgroundClip: "text",
+                      filter: "drop-shadow(0 0 10px rgba(255,20,147,0.6)) drop-shadow(0 0 20px rgba(0,191,255,0.4))",
+                      animation: "gradient-shift 3s linear infinite",
+                    }}
+                  >
+                    THUNDER
+                  </h1>
+                  <h1
+                    className="pixel-font leading-tight -mt-0.5"
+                    style={{
+                      fontFamily: PIXEL_FONT,
+                      fontSize: "15px",
+                      letterSpacing: "12px",
+                      background: "linear-gradient(90deg, #00bfff, #ff1493, #00bfff)",
+                      backgroundSize: "200% auto",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      backgroundClip: "text",
+                      filter: "drop-shadow(0 0 10px rgba(0,191,255,0.6)) drop-shadow(0 0 20px rgba(255,20,147,0.4))",
+                      animation: "gradient-shift 3s linear infinite",
+                    }}
+                  >
+                    FIGHTER
+                  </h1>
+                </div>
 
-                  {/* Ship selection — arrow key carousel */}
-                  <div className="mb-4">
-                    <p className="pixel-font text-[7px] text-[#64748b] mb-2">选择战机</p>
-                    <div className="flex items-center justify-center gap-3">
+                {/* ─── Ship Selector ─── */}
+                {(() => {
+                  const shipIdx = SHIP_TYPES.indexOf(shipType);
+                  const ship = SHIP_CONFIG[shipType];
+                  return (
+                    <div className="flex items-center justify-center gap-2 mt-4 flex-shrink-0">
+                      {/* Left arrow */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          const idx = SHIP_TYPES.indexOf(shipType);
-                          const prev = SHIP_TYPES[(idx - 1 + SHIP_TYPES.length) % SHIP_TYPES.length];
+                          const prev = SHIP_TYPES[(shipIdx - 1 + SHIP_TYPES.length) % SHIP_TYPES.length];
                           setShipType(prev);
+                          audio.buttonClick?.();
                         }}
-                        className="pixel-hud w-7 h-7 flex items-center justify-center hover:bg-[rgba(56,189,248,0.15)] active:scale-90 transition-all text-white text-xs"
+                        className="pixel-font text-white/60 hover:text-white transition-colors px-1 py-3 active:scale-90"
+                        style={{ textShadow: "0 0 6px rgba(56,189,248,0.5)" }}
                       >
-                        ◀
+                        &#9664;
                       </button>
-                      <div className="pixel-hud px-4 py-2 flex flex-col items-center gap-1 min-w-[100px]">
-                        <span className="text-2xl">{SHIP_CONFIG[shipType].icon}</span>
-                        <span className="pixel-font text-[8px] text-white">{SHIP_CONFIG[shipType].label}</span>
-                        <span className="pixel-font text-[6px] text-[#475569]">{SHIP_CONFIG[shipType].desc}</span>
+
+                      {/* Ship card */}
+                      <div
+                        className="flex flex-col items-center gap-1 px-4 py-3 rounded-none transition-all"
+                        style={{
+                          minWidth: "140px",
+                          border: "1px solid rgba(56,189,248,0.3)",
+                          background: "rgba(0,0,0,0.4)",
+                          boxShadow: "0 0 12px rgba(56,189,248,0.15), inset 0 0 12px rgba(56,189,248,0.05)",
+                        }}
+                      >
+                        <span className="text-3xl" style={{ filter: "drop-shadow(0 0 8px rgba(56,189,248,0.5))" }}>
+                          {ship.icon}
+                        </span>
+                        <span
+                          className="pixel-font text-[12px] tracking-wider"
+                          style={{ color: "#38bdf8", textShadow: "0 0 8px rgba(56,189,248,0.5)" }}
+                        >
+                          {ship.label}
+                        </span>
+                        <span
+                          className="pixel-font text-[7px] tracking-[1px]"
+                          style={{ color: "rgba(148,163,184,0.6)" }}
+                        >
+                          {ship.desc}
+                        </span>
+                        <span
+                          className="pixel-font text-[7px] tracking-[1px] mt-1"
+                          style={{ color: "rgba(56,189,248,0.5)" }}
+                        >
+                          {WEAPON_ICONS[ship.weapon]} {WEAPON_NAMES[ship.weapon]}
+                        </span>
                       </div>
+
+                      {/* Right arrow */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          const idx = SHIP_TYPES.indexOf(shipType);
-                          const next = SHIP_TYPES[(idx + 1) % SHIP_TYPES.length];
+                          const next = SHIP_TYPES[(shipIdx + 1) % SHIP_TYPES.length];
                           setShipType(next);
+                          audio.buttonClick?.();
                         }}
-                        className="pixel-hud w-7 h-7 flex items-center justify-center hover:bg-[rgba(56,189,248,0.15)] active:scale-90 transition-all text-white text-xs"
+                        className="pixel-font text-white/60 hover:text-white transition-colors px-1 py-3 active:scale-90"
+                        style={{ textShadow: "0 0 6px rgba(56,189,248,0.5)" }}
                       >
-                        ▶
+                        &#9654;
                       </button>
                     </div>
-                  </div>
+                  );
+                })()}
 
-                  {/* Stats */}
-                  <div className="pixel-hud px-4 py-3 mb-3 inline-block">
-                    <p className="pixel-font text-[7px] text-[#64748b] mb-1">HIGH SCORE</p>
-                    <p className="pixel-font text-[10px] text-[#fbbf24]">{formatScore(highScore)}</p>
+                {/* ─── Bullet Preview ─── */}
+                <div className="flex justify-center gap-3 mt-3 flex-shrink-0">
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="pixel-font text-[6px] tracking-[2px]" style={{ color: "rgba(148,163,184,0.5)" }}>
+                      {WEAPON_NAMES[SHIP_CONFIG[shipType].weapon]}子弹
+                    </p>
+                    <div
+                      className="relative overflow-hidden"
+                      style={{
+                        width: "200px",
+                        height: "60px",
+                        border: "1px solid rgba(56,189,248,0.15)",
+                        background: "rgba(0,0,0,0.5)",
+                      }}
+                    >
+                      {/* Bullet animation based on weapon type */}
+                      {SHIP_CONFIG[shipType].weapon === "spread" && (
+                        <div className="absolute inset-0 flex items-center justify-center gap-3">
+                          {[0, 1, 2].map((i) => (
+                            <div
+                              key={i}
+                              className="rounded-full"
+                              style={{
+                                width: "10px",
+                                height: "10px",
+                                background: "radial-gradient(circle at 40% 40%, #fff, #fbbf24, #d97706)",
+                                boxShadow: "0 0 8px rgba(251,191,36,0.7), 0 0 16px rgba(251,191,36,0.3)",
+                                animation: `bullet-spread-up ${1.2 + i * 0.15}s ease-in infinite`,
+                                animationDelay: `${i * 0.2}s`,
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {SHIP_CONFIG[shipType].weapon === "laser" && (
+                        <div className="absolute inset-0 flex items-center justify-center gap-2">
+                          {[0, 1].map((i) => (
+                            <div
+                              key={i}
+                              style={{
+                                width: "5px",
+                                height: "26px",
+                                background: "linear-gradient(to top, transparent, #22d3ee, #e0f2fe, #fff, #e0f2fe)",
+                                boxShadow: "0 0 10px rgba(34,211,238,0.6), 0 0 20px rgba(34,211,238,0.2)",
+                                animation: `bullet-laser-up ${1.5}s ease-in infinite`,
+                                animationDelay: `${i * 0.3}s`,
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {SHIP_CONFIG[shipType].weapon === "wave" && (
+                        <div className="absolute inset-0 flex items-center justify-center gap-4">
+                          {[0, 1].map((i) => (
+                            <div
+                              key={i}
+                              className="rounded-full flex items-center justify-center"
+                              style={{
+                                width: "16px",
+                                height: "16px",
+                                border: "2px solid rgba(74,222,128,0.7)",
+                                boxShadow: "0 0 8px rgba(74,222,128,0.4), 0 0 16px rgba(74,222,128,0.2), inset 0 0 4px rgba(255,255,255,0.2)",
+                                animation: `bullet-wave-up ${1.8}s ease-in infinite`,
+                                animationDelay: `${i * 0.4}s`,
+                              }}
+                            >
+                              <div
+                                className="rounded-full"
+                                style={{
+                                  width: "4px",
+                                  height: "4px",
+                                  background: "#fff",
+                                  boxShadow: "0 0 4px rgba(74,222,128,0.6)",
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
+                </div>
 
-                  {/* Shop button */}
-                  <div className="mb-3">
+                <div className="flex-1" />
+
+                {/* Bottom section */}
+                <div className="flex flex-col items-center pb-5 gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="flex flex-col items-center">
+                      <p className="pixel-font text-[7px] tracking-[2px]" style={{ color: "rgba(148,163,184,0.7)", textShadow: "0 0 4px rgba(148,163,184,0.3)" }}>HIGH SCORE</p>
+                      <p className="pixel-font text-[11px]" style={{ color: "#fbbf24", textShadow: "0 0 8px rgba(251,191,36,0.5), 0 0 16px rgba(251,191,36,0.2)" }}>{formatScore(highScore)}</p>
+                    </div>
+                    <div style={{ width: 1, height: 20, background: "rgba(56,189,248,0.2)" }} />
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowShop(true); }}
-                      className="pixel-hud px-4 py-1.5 hover:bg-[rgba(56,189,248,0.15)] active:scale-90 transition-all flex items-center gap-1.5 mx-auto"
+                      className="flex flex-col items-center transition-all active:scale-90"
                     >
-                      <Coins className="w-2.5 h-2.5 text-yellow-400" />
-                      <span className="pixel-font text-[7px] text-[#facc15] tracking-[2px]">商店</span>
+                      <Coins className="w-3 h-3 text-yellow-400" style={{ filter: "drop-shadow(0 0 4px rgba(250,204,21,0.4))" }} />
+                      <span className="pixel-font text-[7px] tracking-[1px]" style={{ color: "rgba(250,204,21,0.8)", textShadow: "0 0 4px rgba(250,204,21,0.3)" }}>商店</span>
                     </button>
                   </div>
 
-                  {/* Hint */}
-                  <div className="animate-blink">
-                    <p className="pixel-font text-[9px] text-[#38bdf8] tracking-[2px]">PRESS ANY KEY</p>
-                    <p className="pixel-font text-[7px] text-[#475569] mt-2 tracking-[1px]">TO START</p>
-                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleStart(); }}
+                    className="float-on-hover px-8 py-2.5 transition-all active:scale-95"
+                    style={{
+                      background: "transparent",
+                      border: "1px solid rgba(56,189,248,0.6)",
+                      boxShadow: "0 0 8px rgba(56,189,248,0.3), 0 0 20px rgba(56,189,248,0.15), inset 0 0 8px rgba(56,189,248,0.1)",
+                    }}
+                  >
+                    <span className="pixel-font text-[12px] tracking-[6px]" style={{ color: "#38bdf8", textShadow: "0 0 8px rgba(56,189,248,0.6), 0 0 16px rgba(56,189,248,0.3)" }}>START GAME</span>
+                  </button>
 
-                  {/* Controls */}
-                  <div className="mt-6 pixel-hud px-3 py-2 inline-block">
-                    <p className="pixel-font text-[6px] text-[#64748b] leading-[10px]">
-                      WASD/ARROWS MOVE
-                    </p>
-                    <p className="pixel-font text-[6px] text-[#64748b] leading-[10px]">
-                      SPACE BOMB
-                    </p>
-                    <p className="pixel-font text-[6px] text-[#64748b] leading-[10px]">
-                      ESC PAUSE
-                    </p>
-                  </div>
+                  <p className="pixel-font text-[6px] tracking-[2px]" style={{ color: "rgba(71,85,105,0.5)", textShadow: "0 0 4px rgba(71,85,105,0.2)" }}>WASD/ARROWS · SPACE BOMB · ESC PAUSE</p>
                 </div>
               </div>
             )}
@@ -2468,8 +3055,17 @@ export default function RaidenGame() {
             {/* ═══ IN-GAME HUD ═══ */}
             {gameStarted && (
               <>
+                {/* Top gradient mask to isolate HUD from starfield */}
+                <div
+                  className="absolute top-0 left-0 right-0 pointer-events-none z-0"
+                  style={{
+                    height: "48px",
+                    background: "linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)",
+                  }}
+                />
+
                 {/* Top-left: lives + coins */}
-                <div className="absolute top-2 left-2 pixel-hud px-2 py-1 flex items-center gap-2">
+                <div className="absolute top-2 left-2 pixel-hud px-2 py-1 flex items-center gap-2" style={{ zIndex: 1 }}>
                   <div className="flex items-center gap-0.5">
                     {Array.from({ length: lives }).map((_, i) => (
                       <Heart key={i} className="w-2.5 h-2.5 text-rose-400" fill="#e11d48" />
@@ -2477,20 +3073,20 @@ export default function RaidenGame() {
                   </div>
                   <div className="flex items-center gap-0.5">
                     <Coins className="w-2.5 h-2.5 text-yellow-400" />
-                    <span className="pixel-font text-[7px] text-yellow-300">{coins}</span>
+                    <span className="pixel-font text-[10px] text-yellow-300">{coins}</span>
                   </div>
                   {invincible && (
-                    <span className="pixel-font text-[6px] text-yellow-300 animate-blink">SHIELD</span>
+                    <span className="pixel-font text-[8px] text-yellow-300 animate-blink">SHIELD</span>
                   )}
                   {overdriveTimer > 0 && (
-                    <span className="pixel-font text-[6px] text-orange-400 animate-blink">MAX</span>
+                    <span className="pixel-font text-[8px] text-orange-400 animate-blink">MAX</span>
                   )}
                 </div>
 
                 {/* Top-right: ship + weapon info + pause */}
-                <div className="absolute top-2 right-2 flex items-center gap-1">
+                <div className="absolute top-2 right-2 flex items-center gap-1" style={{ zIndex: 1 }}>
                   <div className="pixel-hud px-1.5 py-1">
-                    <span className="pixel-font text-[6px] text-[#38bdf8] leading-[8px]">
+                    <span className="pixel-font text-[9px] text-[#38bdf8] leading-[12px]">
                       {WEAPON_ICONS[weaponType]} {WEAPON_NAMES[weaponType]}
                     </span>
                   </div>
@@ -2504,7 +3100,7 @@ export default function RaidenGame() {
 
                 {/* Boss HP bar */}
                 {stateRef.current.boss && bossHp > 0 && (
-                  <div className="absolute top-2 left-1/2 -translate-x-1/2 pixel-hud px-2 py-1 flex items-center gap-1.5">
+                  <div className="absolute top-2 left-1/2 -translate-x-1/2 pixel-hud px-2 py-1 flex items-center gap-1.5" style={{ zIndex: 1 }}>
                     <span className="text-red-400 text-[10px]">☠</span>
                     <div className="w-16 h-1.5 bg-black/60 overflow-hidden" style={{ borderRadius: 0 }}>
                       <div
@@ -2519,20 +3115,20 @@ export default function RaidenGame() {
                 <button
                   onClick={triggerBomb}
                   disabled={bombCount <= 0 || isGameOver || isPaused}
-                  className="absolute bottom-16 right-2 pixel-hud px-2 py-1.5 flex items-center gap-1 hover:bg-[rgba(239,68,68,0.15)] active:scale-90 transition-all disabled:opacity-30 disabled:scale-100"
+                  className="absolute bottom-16 right-2 pixel-hud px-2 py-1.5 flex items-center gap-1 hover:bg-[rgba(239,68,68,0.15)] active:scale-90 transition-all disabled:opacity-30 disabled:scale-100" style={{ zIndex: 1 }}
                 >
                   <Bomb className="w-3 h-3 text-rose-400" />
-                  <span className="pixel-font text-[8px] text-rose-300">×{bombCount}</span>
+                  <span className="pixel-font text-[10px] text-rose-300">×{bombCount}</span>
                 </button>
 
                 {/* Bottom HUD bar: level + fire power indicator */}
-                <div className="absolute bottom-2 left-2 pixel-hud px-2 py-1">
-                  <span className="pixel-font text-[6px] text-[#facc15]">
+                <div className="absolute bottom-2 left-2 pixel-hud px-2 py-1" style={{ zIndex: 1 }}>
+                  <span className="pixel-font text-[8px] text-[#facc15]">
                     LV {Math.min(stateRef.current.weaponLevel, 4)}
                   </span>
                 </div>
-                <div className="absolute bottom-2 right-2 pixel-hud px-2 py-1">
-                  <span className="pixel-font text-[6px] text-[#475569]">
+                <div className="absolute bottom-2 right-2 pixel-hud px-2 py-1" style={{ zIndex: 1 }}>
+                  <span className="pixel-font text-[8px] text-[#475569]">
                     WAVE {Math.max(0, stateRef.current.lastWaveSpawned + 1)}
                   </span>
                 </div>
@@ -2541,7 +3137,7 @@ export default function RaidenGame() {
 
             {/* Boss Warning overlay */}
             {bossWarning && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-15">
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" style={{ zIndex: 2 }}>
                 {/* Red flashing background */}
                 <div
                   className="absolute inset-0 transition-opacity"
@@ -2563,14 +3159,17 @@ export default function RaidenGame() {
                     className="text-[28px] font-black text-red-500 tracking-[6px]"
                     style={{
                       fontFamily: PIXEL_FONT,
-                      textShadow: "0 0 20px rgba(239,68,68,0.8), 0 0 40px rgba(239,68,68,0.4)",
+                      textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 0 20px rgba(239,68,68,0.8), 0 0 40px rgba(239,68,68,0.4)",
                     }}
                   >
                     WARNING
                   </p>
                   <p
-                    className="text-[10px] font-black text-yellow-400 tracking-[2px] mt-1 text-center"
-                    style={{ fontFamily: PIXEL_FONT }}
+                    className="text-[16px] font-black text-yellow-400 tracking-[2px] mt-1 text-center"
+                    style={{
+                      fontFamily: PIXEL_FONT,
+                      textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 0 10px rgba(250,204,21,0.5)",
+                    }}
                   >
                     BOSS APPROACHING
                   </p>
@@ -2598,18 +3197,18 @@ export default function RaidenGame() {
                 className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center cursor-pointer z-10"
                 onClick={togglePause}
               >
-                <p className="pixel-font text-[14px] text-[#38bdf8] tracking-[4px] mb-3">PAUSED</p>
-                <p className="pixel-font text-[7px] text-[#64748b]">PRESS ESC OR TAP</p>
+                <p className="pixel-font text-[20px] text-[#38bdf8] tracking-[4px] mb-3" style={{ textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000" }}>PAUSED</p>
+                <p className="pixel-font text-[9px] text-[#64748b]">PRESS ESC OR TAP</p>
               </div>
             )}
 
             {/* Game over */}
             {isGameOver && (
               <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center text-center p-6 z-10">
-                <p className="pixel-font text-[12px] text-rose-500 tracking-[3px] mb-3">GAME OVER</p>
+                <p className="pixel-font text-[16px] text-rose-500 tracking-[3px] mb-3" style={{ textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000" }}>GAME OVER</p>
                 <div className="pixel-hud px-4 py-2 mb-2">
                   <p className="pixel-font text-[7px] text-[#64748b] mb-1">SCORE</p>
-                  <p className="pixel-font text-[12px] text-[#fbbf24]">{formatScore(score)}</p>
+                  <p className="pixel-font text-[12px] text-[#fbbf24]" style={{ textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000" }}>{formatScore(score)}</p>
                 </div>
                 <div className="pixel-hud px-3 py-1 mb-5">
                   <p className="pixel-font text-[6px] text-[#475569]">BEST {formatScore(highScore)}</p>
@@ -2625,11 +3224,17 @@ export default function RaidenGame() {
 
             {/* ═══ GACHA OVERLAY ═══ */}
             {showGacha && (
-              <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center p-4 z-20">
-                <div className="pixel-hud px-4 py-2 mb-4">
+              <div
+                className="absolute inset-0 flex flex-col items-center justify-center p-4 z-20"
+                style={{
+                  background: "rgba(0,0,0,0.85)",
+                  animation: gachaClosing ? "gacha-fade-out 0.2s ease-in forwards" : "gacha-fade-in 0.25s ease-out, gacha-bg-in 0.3s ease-out",
+                }}
+              >
+                <div className="pixel-hud px-4 py-2 mb-4" style={{ animation: "gacha-slide-down 0.35s ease-out 0.1s both" }}>
                   <p className="pixel-font text-[10px] text-[#facc15] tracking-[4px]">DRAW CARD</p>
                 </div>
-                <p className="pixel-font text-[6px] text-[#64748b] mb-4">CHOOSE YOUR BOOST</p>
+                <p className="pixel-font text-[6px] text-[#64748b] mb-4" style={{ animation: "gacha-slide-down 0.35s ease-out 0.15s both" }}>CHOOSE YOUR BOOST</p>
                 <div className="flex gap-3 max-w-full mb-4">
                   {gachaCards.map((card, i) => (
                     <button
@@ -2650,6 +3255,7 @@ export default function RaidenGame() {
                           ? '1px solid rgba(250,204,21,0.3)'
                           : '1px solid rgba(168,85,247,0.3)',
                         borderRadius: 0,
+                        animation: `gacha-card-pop 0.4s ease-out ${0.2 + i * 0.08}s both`,
                       }}
                     >
                       <span className={`text-2xl ${card.rarity === "SSR" ? "group-hover:scale-110 transition-transform" : ""}`}>
@@ -2686,6 +3292,7 @@ export default function RaidenGame() {
                   className={`pixel-hud px-3 py-1.5 transition-all active:scale-90 flex items-center gap-1 ${
                     coins >= 5 ? "hover:bg-[rgba(56,189,248,0.15)]" : "opacity-40"
                   }`}
+                  style={{ animation: "gacha-slide-down 0.35s ease-out 0.35s both" }}
                 >
                   <span className="pixel-font text-[6px] text-[#38bdf8] tracking-[1px]">
                     {coins >= 5 ? "刷新 (5金币)" : "金币不足"}
@@ -2695,10 +3302,17 @@ export default function RaidenGame() {
                 <button
                   onClick={() => {
                     if (gachaTimerRef.current) { clearTimeout(gachaTimerRef.current); gachaTimerRef.current = null; }
-                    setShowGacha(false);
-                    setShowShop(true);
+                    savedGachaCardsRef.current = gachaCards;
+                    returningFromShopRef.current = true;
+                    setGachaClosing(true);
+                    setTimeout(() => {
+                      setShowGacha(false);
+                      setGachaClosing(false);
+                      setShowShop(true);
+                    }, 180);
                   }}
                   className="pixel-hud px-3 py-1.5 mt-2 hover:bg-[rgba(56,189,248,0.15)] active:scale-90 transition-all"
+                  style={{ animation: "gacha-slide-down 0.35s ease-out 0.4s both" }}
                 >
                   <span className="pixel-font text-[6px] text-[#facc15] tracking-[1px]">商店 (金币)</span>
                 </button>
@@ -2708,7 +3322,11 @@ export default function RaidenGame() {
             {/* ═══ SHOP OVERLAY ═══ */}
             {showShop && (
               <div
-                className="absolute inset-0 bg-black/85 flex flex-col items-center p-4 z-30 overflow-y-auto"
+                className="absolute inset-0 flex flex-col items-center p-4 z-30 overflow-y-auto"
+                style={{
+                  background: "rgba(0,0,0,0.85)",
+                  animation: "gacha-fade-in 0.25s ease-out",
+                }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="pixel-hud px-4 py-2 mb-3">
@@ -2721,63 +3339,72 @@ export default function RaidenGame() {
                     {saveRef.current.totalCoins}
                   </span>
                 </div>
-                {/* Shop items grid */}
+                {/* Shop items grid (dynamic: always life_give + random others) */}
                 <div className="grid grid-cols-2 gap-3 w-full max-w-[280px] mb-4">
-                  {SHOP_ITEMS.map((item) => {
-                    const owned = item.owned(saveRef.current.upgrades);
-                    const canBuy = saveRef.current.totalCoins >= item.price;
+                  {(() => {
+                  const s = saveRef.current;
+                  const items: { id: string; icon: string; name: string; desc: string; price: number; owned: boolean; onBuy: () => void }[] = [];
+                  items.push({
+                    id: "life_give_shop", icon: "❤️", name: "生命+1", desc: "增加一条生命",
+                    price: 3, owned: false,
+                    onBuy: () => {
+                      if (s.totalCoins < 3) return;
+                      s.totalCoins -= 3; writeSave(s);
+                      setLives((p) => p + 1); setShopRefreshKey((k) => k + 1);
+                      audio.buttonClick();
+                    },
+                  });
+                  const shuffled = [...SHOP_ITEMS].sort(() => Math.random() - 0.5);
+                  for (let i = 0; i < Math.min(4, shuffled.length); i++) {
+                    const si = shuffled[i];
+                    items.push({
+                      id: si.id, icon: si.icon, name: si.name, desc: si.desc, price: si.price,
+                      owned: si.owned(s.upgrades),
+                      onBuy: () => handleShopBuy(si.id),
+                    });
+                  }
+                  return items.map((item) => {
+                    const owned = item.owned;
+                    const canBuy = s.totalCoins >= item.price;
                     return (
-                      <div
-                        key={item.id}
-                        className="flex flex-col items-center p-2"
-                        style={{
-                          background: "rgba(0,0,0,0.75)",
-                          border: "1px solid rgba(56,189,248,0.2)",
-                          borderRadius: 0,
-                          backgroundImage: [
-                            "linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px)",
-                            "linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)",
-                          ].join(","),
-                          backgroundSize: "8px 8px",
-                        }}
-                      >
+                      <div key={item.id} className="flex flex-col items-center p-2" style={{
+                        background: "rgba(0,0,0,0.75)",
+                        border: "1px solid rgba(56,189,248,0.2)",
+                        borderRadius: 0,
+                        backgroundImage: [
+                          "linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px)",
+                          "linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)",
+                        ].join(","),
+                        backgroundSize: "8px 8px",
+                      }}>
                         <span className="text-2xl mb-1">{item.icon}</span>
                         <span className="pixel-font text-[7px] text-white text-center leading-tight mb-0.5">{item.name}</span>
                         <span className="pixel-font text-[5px] text-[#475569] text-center leading-[7px] mb-2">{item.desc}</span>
                         {owned ? (
-                          <span
-                            className="pixel-font text-[6px] text-green-400 px-2 py-0.5"
-                            style={{ border: "1px solid rgba(74,222,128,0.3)", borderRadius: 0 }}
-                          >
-                            已拥有
-                          </span>
+                          <span className="pixel-font text-[6px] text-green-400 px-2 py-0.5" style={{ border: "1px solid rgba(74,222,128,0.3)", borderRadius: 0 }}>已拥有</span>
                         ) : (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleShopBuy(item.id); }}
-                            disabled={!canBuy}
-                            className={`pixel-font text-[6px] px-2 py-0.5 transition-all active:scale-90 tracking-[1px] ${
-                              canBuy
-                                ? "text-[#38bdf8] hover:bg-[rgba(56,189,248,0.15)]"
-                                : "text-[#475569] opacity-40 cursor-not-allowed"
-                            }`}
-                            style={{
-                              border: canBuy
-                                ? "1px solid rgba(56,189,248,0.3)"
-                                : "1px solid rgba(71,85,105,0.3)",
-                              background: canBuy ? "rgba(56,189,248,0.05)" : "transparent",
-                              borderRadius: 0,
-                            }}
-                          >
+                          <button onClick={(e) => { e.stopPropagation(); item.onBuy(); }} disabled={!canBuy}
+                            className={`pixel-font text-[6px] px-2 py-0.5 transition-all active:scale-90 tracking-[1px] ${canBuy ? "text-[#38bdf8] hover:bg-[rgba(56,189,248,0.15)]" : "text-[#475569] opacity-40 cursor-not-allowed"}`}
+                            style={{ border: canBuy ? "1px solid rgba(56,189,248,0.3)" : "1px solid rgba(71,85,105,0.3)", background: canBuy ? "rgba(56,189,248,0.05)" : "transparent", borderRadius: 0 }}>
                             购买 ({item.price})
                           </button>
                         )}
                       </div>
-                    );
-                  })}
+                    );});})()}
                 </div>
                 {/* Close button */}
                 <button
-                  onClick={() => setShowShop(false)}
+                  onClick={() => {
+                    setShowShop(false);
+                    if (returningFromShopRef.current) {
+                      returningFromShopRef.current = false;
+                      if (savedGachaCardsRef.current.length > 0) {
+                        setGachaCards(savedGachaCardsRef.current);
+                        savedGachaCardsRef.current = [];
+                        setShowGacha(true);
+                      }
+                    }
+                  }}
                   className="pixel-hud px-4 py-2 hover:bg-[rgba(56,189,248,0.15)] active:scale-95 transition-all"
                 >
                   <span className="pixel-font text-[8px] text-[#38bdf8] tracking-[2px]">关 闭</span>

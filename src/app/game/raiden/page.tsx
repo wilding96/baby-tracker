@@ -2856,6 +2856,14 @@ export default function RaidenGame() {
           0% { opacity: 1; }
           100% { opacity: 0; transform: translateY(6px); }
         }
+        @keyframes bomb-pulse {
+          0%, 100% { box-shadow: 0 0 8px rgba(249,115,22,0.4), 0 0 20px rgba(234,88,12,0.25), inset 0 0 10px rgba(251,146,60,0.15); }
+          50% { box-shadow: 0 0 14px rgba(249,115,22,0.7), 0 0 32px rgba(234,88,12,0.45), inset 0 0 16px rgba(251,146,60,0.3); }
+        }
+        @keyframes bomb-flicker {
+          0%, 100% { filter: drop-shadow(0 0 4px rgba(251,146,60,0.8)); }
+          50% { filter: drop-shadow(0 0 8px rgba(251,146,60,1)) drop-shadow(0 0 2px rgba(255,237,160,0.6)); }
+        }
       `}</style>
 
       <main className="min-h-screen bg-[#020617]" style={{ fontFamily: PIXEL_FONT }}>
@@ -2869,7 +2877,7 @@ export default function RaidenGame() {
             >
               &lt; RET
             </Link>
-            {gameStarted && (
+            {(gameStarted || startFadeOut) && (
               <div
                 className="pixel-font text-[12px] text-[#475569] tracking-wider"
                 style={{ textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000" }}
@@ -3125,7 +3133,7 @@ export default function RaidenGame() {
             )}
 
             {/* ═══ IN-GAME HUD ═══ */}
-            {gameStarted && (
+            {(gameStarted || startFadeOut) && (
               <>
                 {/* Top gradient mask to isolate HUD from starfield */}
                 <div
@@ -3183,14 +3191,67 @@ export default function RaidenGame() {
                   </div>
                 )}
 
-                {/* Bomb button */}
+                {/* Bomb button — flashy */}
                 <button
                   onClick={triggerBomb}
                   disabled={bombCount <= 0 || isGameOver || isPaused}
-                  className="absolute bottom-16 right-2 pixel-hud px-2 py-1.5 flex items-center gap-1 hover:bg-[rgba(239,68,68,0.15)] active:scale-90 transition-all disabled:opacity-30 disabled:scale-100" style={{ zIndex: 1 }}
+                  className="absolute bottom-16 right-2 flex items-center gap-1 transition-all"
+                  style={{
+                    zIndex: 1,
+                    padding: "5px 10px",
+                    border: bombCount > 0
+                      ? "1px solid rgba(249,115,22,0.6)"
+                      : "1px solid rgba(100,100,100,0.3)",
+                    background: bombCount > 0
+                      ? "linear-gradient(135deg, rgba(127,29,29,0.85), rgba(194,65,12,0.7))"
+                      : "rgba(30,30,30,0.75)",
+                    boxShadow: bombCount > 0
+                      ? "0 0 8px rgba(249,115,22,0.4), 0 0 20px rgba(234,88,12,0.25), inset 0 0 10px rgba(251,146,60,0.15)"
+                      : "none",
+                    borderRadius: 0,
+                    opacity: bombCount <= 0 || isGameOver || isPaused ? 0.3 : 1,
+                    animation: bombCount > 0 ? "bomb-pulse 2s ease-in-out infinite" : "none",
+                  }}
                 >
-                  <Bomb className="w-3 h-3 text-rose-400" />
-                  <span className="pixel-font text-[10px] text-rose-300">×{bombCount}</span>
+                  {/* Fire icon glow */}
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      filter: bombCount > 0 ? "drop-shadow(0 0 4px rgba(251,146,60,0.8))" : "none",
+                    }}
+                  >
+                    <Bomb className="w-3.5 h-3.5 text-orange-400" />
+                  </span>
+                  {/* Count with glow */}
+                  <span
+                    className="pixel-font text-[10px]"
+                    style={{
+                      color: bombCount > 0 ? "#fb923c" : "#666",
+                      textShadow: bombCount > 0
+                        ? "0 0 6px rgba(251,146,60,0.6), 0 0 12px rgba(234,88,12,0.3)"
+                        : "none",
+                    }}
+                  >
+                    ×{bombCount}
+                  </span>
+                  {/* Fire accent dot */}
+                  {bombCount > 0 && (
+                    <span
+                      className="animate-blink"
+                      style={{
+                        position: "absolute",
+                        top: "-2px",
+                        right: "-2px",
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        background: "#ef4444",
+                        boxShadow: "0 0 6px #ef4444, 0 0 12px rgba(239,68,68,0.5)",
+                      }}
+                    />
+                  )}
                 </button>
 
                 {/* Bottom HUD bar: level + fire power indicator */}

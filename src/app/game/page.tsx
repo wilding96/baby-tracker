@@ -399,7 +399,7 @@ export default function GamePage() {
         <div className="flex justify-center">
           <div
             onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
-            className={`relative grid gap-1.5 rounded-3xl border-2 border-[#c4b89e] bg-[#f7f3df] p-3 shadow-[inset_0_2px_8px_rgba(0,0,0,0.1),0_8px_20px_rgba(61,52,40,0.15)] select-none touch-none ${processingRef.current ? "opacity-60 cursor-wait" : "cursor-default"}`}
+            className={`relative grid gap-0.5 rounded-2xl border-2 border-[#c4b89e] bg-[#f7f3df] p-2 shadow-[inset_0_2px_8px_rgba(0,0,0,0.1),0_8px_20px_rgba(61,52,40,0.15)] select-none touch-none ${processingRef.current ? "opacity-60 cursor-wait" : "cursor-default"}`}
             style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)`, width: `min(calc(100vw - 2.5rem), 400px)` }}
           >
             {!board

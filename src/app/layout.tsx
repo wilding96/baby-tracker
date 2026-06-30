@@ -35,6 +35,9 @@ export default function RootLayout({
       <head>
         {/* iOS 状态栏样式：default(白底黑字) / black(黑底白字) / black-translucent(沉浸式) */}
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap" rel="stylesheet" />
       </head>
       <body>
         <div className="min-h-screen bg-[#f7f3df] pb-20 text-[#725d42]">

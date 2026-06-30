@@ -626,6 +626,26 @@ export default function Home() {
               </Button>
             </div>
           </Card>
+
+          <Card color="warm-peach-pink" className="island-card p-3 text-white">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-white drop-shadow-sm">
+                  下班发售日
+                </p>
+                <p className="text-xs text-white/85 mt-0.5">
+                  叙事交互小游戏，体验下班后的快乐
+                </p>
+              </div>
+              <Button
+                asChild
+                variant="outline"
+                className="h-10 border-white/70 bg-white/90 px-4 text-[#b75f45] shadow-[0_5px_rgba(171,88,62,0.45)] hover:border-white hover:bg-white hover:text-[#9f4d35]"
+              >
+                <Link href="/game/release-day">去玩</Link>
+              </Button>
+            </div>
+          </Card>
         </section>
 
         <Modal

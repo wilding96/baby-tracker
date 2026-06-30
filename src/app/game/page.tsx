@@ -473,6 +473,7 @@ export default function GamePage() {
 
         <div className="flex items-center gap-2 pt-2">
           <Button asChild variant="outline" className="flex-1"><Link href="/game/leaderboard">🏆 排行榜</Link></Button>
+          <Button asChild variant="outline" className="flex-1"><Link href="/game/release-day">🎮 下班发售日</Link></Button>
           <Button asChild variant="outline" className="flex-1"><Link href="/">🏠 回首页</Link></Button>
         </div>
       </div>

@@ -175,6 +175,18 @@ const BOSS_EYE_CORE = ["hh", "hh"];
 
 const COIN_SPRITE = [".hb.", "hbbh", "b..b", ".ss."];
 
+const PURPLE_WING = [
+  "..p..p..",
+  ".ppp.ppp.",
+  "ppppppppp",
+  "ppppppppp",
+  ".ppppppp.",
+  "..ppppp..",
+  "...ppp...",
+  "...s.s...",
+];
+const GREEN_ORB_R = 7; // radius for green orb option
+
 // ═══════════════════════════════════════════════════════════════════
 // CARD / GACHA
 // ═══════════════════════════════════════════════════════════════════
@@ -236,6 +248,23 @@ function generateGachaOptions(): CardDef[] {
 
 type WeaponType = "spread" | "laser" | "wave";
 
+type OptionForm = "greenLaser" | "purpleWing";
+
+interface OptionState {
+  x: number; y: number;
+  targetX: number; targetY: number;
+  form: OptionForm;
+  transformProgress: number;
+  slashCooldown: number;
+}
+
+interface SlashEffect {
+  x: number; y: number;
+  alpha: number; radius: number;
+  timer: number; maxTimer: number;
+  alive: boolean;
+}
+
 const WEAPON_NAMES: Record<WeaponType, string> = {
   spread: "散弹",
   laser: "激光",
@@ -272,10 +301,11 @@ interface Monster {
   formation: boolean;
   vx: number; vy: number;
   formationGroup: number;
+  flashTimer: number;
 }
 interface PowerUp {
   x: number; y: number; alive: boolean;
-  type: "weapon" | "wingman";
+  type: "weapon" | "wingman" | "optionForm";
 }
 interface Boss {
   x: number; y: number; hp: number; maxHp: number;
@@ -536,6 +566,7 @@ export default function RaidenGame() {
       x: 0, y: 0, hp: 2, maxHp: 2,
       speed: 1, type: "fighter", alive: false,
       formation: false, vx: 0, vy: 0, formationGroup: 0,
+      flashTimer: 0,
     })),
     boss: null as Boss | null,
     miniboss: null as Miniboss | null,
@@ -571,6 +602,15 @@ export default function RaidenGame() {
     minibossCooldown: 0,
     wingmanLevel: 0,
     wingmanOrbitAngle: 0,
+    optionForm: "greenLaser" as OptionForm,
+    options: [
+      { x: 156, y: 478, targetX: 156, targetY: 478, form: "greenLaser" as OptionForm, transformProgress: 0, slashCooldown: 0 },
+      { x: 204, y: 478, targetX: 204, targetY: 478, form: "greenLaser" as OptionForm, transformProgress: 0, slashCooldown: 0 },
+    ] as [OptionState, OptionState],
+    slashEffects: new Pool<SlashEffect>(() => ({
+      x: 0, y: 0, alpha: 1, radius: 0,
+      timer: 0, maxTimer: 15, alive: false,
+    })),
     gameStarted: false,
     isPaused: false,
     isGameOver: false,
@@ -610,6 +650,7 @@ export default function RaidenGame() {
     m.x = x; m.y = y; m.type = type;
     m.hp = hp; m.maxHp = hp; m.speed = speed;
     m.formation = formation; m.vx = 0; m.vy = 0; m.formationGroup = 0;
+    m.flashTimer = 0;
     return m;
   }
   function spawnCoin(x: number, y: number, value: number) {
@@ -654,8 +695,8 @@ export default function RaidenGame() {
     if (!alive) {
       const pu = state.powerUps.get();
       pu.x = x; pu.y = y;
-      const isWeaponPu = Math.random() < 0.5; // 50% weapon, 50% wingman
-      pu.type = isWeaponPu ? "weapon" : "wingman";
+      const r = Math.random();
+      pu.type = r < 0.2 ? "optionForm" : r < 0.6 ? "weapon" : "wingman";
       emitExplosion(x, y, 15, ["#38bdf8", "#7dd3fc", "#fff"], 5, 35);
     }
   }
@@ -802,7 +843,7 @@ export default function RaidenGame() {
       if (first) {
         const pu2 = state.powerUps.get();
         pu2.x = first.x; pu2.y = first.y;
-        pu2.type = Math.random() < 0.5 ? "weapon" : "wingman";
+        pu2.type = Math.random() < 0.2 ? "optionForm" : Math.random() < 0.6 ? "weapon" : "wingman";
       }
     });
     state.monsters.releaseAll();
@@ -1011,6 +1052,7 @@ export default function RaidenGame() {
   }
 
   function drawMonsterShip(ctx: CanvasRenderingContext2D, m: Monster, x: number, y: number) {
+    const hitFlash = m.flashTimer > 0;
     const flash = stateRef.current.frameCount % 8 < 4;
     const f = stateRef.current.frameCount;
     ctx.save();
@@ -1125,6 +1167,16 @@ export default function RaidenGame() {
         break;
     }
     ctx.restore();
+    // hit flash overlay (pure white when hit)
+    if (hitFlash) {
+      ctx.save();
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = "#fff";
+      const mw2 = m.type === "bomber" ? 28 : m.type === "elite" ? 44 : 24;
+      const mh2 = m.type === "interceptor" ? 24 : m.type === "elite" ? 36 : 20;
+      ctx.fillRect(x, y, mw2, mh2);
+      ctx.restore();
+    }
   }
 
   function drawBossShip(
@@ -1340,6 +1392,114 @@ export default function RaidenGame() {
     ctx.restore();
   }
 
+  // ── Option / Slash Drawing ──
+
+  function drawGreenOption(ctx: CanvasRenderingContext2D, x: number, y: number) {
+    const f = stateRef.current.frameCount;
+    const cx = x + 8, cy = y + 8;
+    ctx.save();
+    // outer glow
+    ctx.shadowColor = "#4ade80";
+    ctx.shadowBlur = 24;
+    ctx.globalAlpha = 0.3 + Math.sin(f * 0.1) * 0.1;
+    const og = ctx.createRadialGradient(cx, cy, 2, cx, cy, GREEN_ORB_R + 6);
+    og.addColorStop(0, "rgba(74,222,128,0.4)");
+    og.addColorStop(1, "rgba(74,222,128,0)");
+    ctx.fillStyle = og;
+    ctx.beginPath(); ctx.arc(cx, cy, GREEN_ORB_R + 6, 0, Math.PI * 2); ctx.fill();
+    // main orb (radial gradient)
+    ctx.shadowBlur = 18;
+    ctx.globalAlpha = 0.95;
+    const g = ctx.createRadialGradient(cx - 2, cy - 2, 0, cx, cy, GREEN_ORB_R);
+    g.addColorStop(0, "#fff");
+    g.addColorStop(0.2, "#86efac");
+    g.addColorStop(0.5, "#4ade80");
+    g.addColorStop(0.8, "#22c55e");
+    g.addColorStop(1, "#166534");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, GREEN_ORB_R, 0, Math.PI * 2); ctx.fill();
+    // specular highlight
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(cx - 2, cy - 3, 2.5, 0, Math.PI * 2); ctx.fill();
+    // inner energy ring
+    ctx.globalAlpha = 0.4 + Math.sin(f * 0.12) * 0.2;
+    ctx.strokeStyle = "#86efac";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(cx, cy, 4 + Math.sin(f * 0.08) * 1, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPurpleWingOption(ctx: CanvasRenderingContext2D, x: number, y: number, progress: number) {
+    const f = stateRef.current.frameCount;
+    const alpha = progress; // 0→1 during transformation
+    const pulse = 0.85 + Math.sin(f * 0.12) * 0.15;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // wing aura glow
+    ctx.shadowColor = "#a855f7";
+    ctx.shadowBlur = 20;
+    ctx.globalAlpha = 0.2 * pulse * alpha;
+    const ag = ctx.createRadialGradient(x + 8, y + 8, 0, x + 8, y + 8, 18);
+    ag.addColorStop(0, "rgba(168,85,247,0.4)");
+    ag.addColorStop(1, "rgba(168,85,247,0)");
+    ctx.fillStyle = ag;
+    ctx.beginPath(); ctx.arc(x + 8, y + 8, 18, 0, Math.PI * 2); ctx.fill();
+    // main wing sprite
+    ctx.shadowBlur = 14;
+    ctx.globalAlpha = 0.9 * pulse * alpha;
+    drawSprite(ctx, PURPLE_WING, { p: "#c084fc", s: "#581c87" }, x, y, 2);
+    // purple energy sparkles
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = (0.5 + Math.sin(f * 0.15 + x) * 0.3) * alpha;
+    ctx.fillStyle = "#d8b4fe";
+    ctx.beginPath(); ctx.arc(x + 4 + Math.sin(f * 0.09) * 2, y + 4 + Math.cos(f * 0.11) * 2, 1.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#e9d5ff";
+    ctx.beginPath(); ctx.arc(x + 10 + Math.sin(f * 0.13 + 1) * 2, y + 2 + Math.cos(f * 0.07 + 1) * 2, 1, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#a855f7";
+    ctx.beginPath(); ctx.arc(x + 7 + Math.sin(f * 0.1 + 2) * 2.5, y + 12 + Math.cos(f * 0.09 + 2) * 1.5, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawSlashEffect(ctx: CanvasRenderingContext2D, se: SlashEffect) {
+    const progress = 1 - se.timer / se.maxTimer; // 0→1
+    const r = se.radius * progress;
+    const a = se.alpha * (1 - progress);
+    ctx.save();
+    // outer glow
+    ctx.shadowColor = "#fff";
+    ctx.shadowBlur = 30;
+    ctx.globalAlpha = a * 0.4;
+    ctx.fillStyle = "rgba(255,255,255,0.15)";
+    ctx.beginPath();
+    ctx.arc(se.x, se.y, r + 10, -Math.PI * 0.85, Math.PI * 0.85);
+    ctx.fill();
+    // main crescent
+    ctx.shadowBlur = 20;
+    ctx.globalAlpha = a * 0.8;
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.beginPath();
+    ctx.arc(se.x, se.y, r, -Math.PI * 0.8, Math.PI * 0.8);
+    ctx.fill();
+    // bright inner arc
+    ctx.shadowBlur = 14;
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(se.x, se.y, r * 0.6, -Math.PI * 0.7, Math.PI * 0.7);
+    ctx.stroke();
+    // white line slash
+    ctx.globalAlpha = a * 0.9;
+    ctx.strokeStyle = "#e0f2fe";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(se.x, se.y, r * 0.4, -Math.PI * 0.5, Math.PI * 0.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // ─── GAME LOOP ───
 
   useEffect(() => {
@@ -1521,6 +1681,43 @@ export default function RaidenGame() {
         p.x = Math.max(0, Math.min(CW - 24, p.x));
         p.y = Math.max(0, Math.min(CH - 32, p.y));
 
+        // ── Option (僚机) physics update ──
+        const optionOffX = 24;
+        const optionOffY = 18;
+        state.options[0].targetX = p.x - optionOffX;
+        state.options[0].targetY = p.y + optionOffY;
+        state.options[1].targetX = p.x + optionOffX + 16;
+        state.options[1].targetY = p.y + optionOffY;
+        for (const opt of state.options) {
+          opt.x += (opt.targetX - opt.x) * 0.08;
+          opt.y += (opt.targetY - opt.y) * 0.08;
+          opt.form = state.optionForm;
+          // transform progress
+          if (opt.form === "purpleWing" && opt.transformProgress < 1) {
+            opt.transformProgress = Math.min(1, opt.transformProgress + 0.04);
+          } else if (opt.form === "greenLaser" && opt.transformProgress > 0) {
+            opt.transformProgress = Math.max(0, opt.transformProgress - 0.04);
+          }
+          if (opt.slashCooldown > 0) opt.slashCooldown--;
+        }
+
+        // ── option thruster particles (arc-based) ──
+        if (f % 2 === 0) {
+          for (const opt of state.options) {
+            for (let i = 0; i < 2; i++) {
+              const e = exhaustPool.current.get();
+              e.x = opt.x + 7 + (Math.random() - 0.5) * 5;
+              e.y = opt.y + 13;
+              e.vx = (Math.random() - 0.5) * 0.4;
+              e.vy = 0.8 + Math.random() * 1.2;
+              e.alpha = 0.5 + Math.random() * 0.4;
+              e.size = 1.5 + Math.random() * 2;
+              e.life = 18 + Math.random() * 12;
+              e.maxLife = 30;
+            }
+          }
+        }
+
         // ── auto fire ──
         if (f % 8 === 0) {
           const lvl = state.weaponLevel;
@@ -1618,6 +1815,37 @@ export default function RaidenGame() {
         // ── wingman orbit angle ──
         if (state.wingmanLevel >= 3) {
           state.wingmanOrbitAngle += 0.04;
+        }
+
+        // ── Option (僚机) auto-fire ──
+        const optForm = state.optionForm;
+        if (optForm === "greenLaser") {
+          // Form A: green penetrating laser from each option
+          if (f % 10 === 0) {
+            for (const opt of state.options) {
+              if (opt.transformProgress > 0.3) continue;
+              const b = state.bullets.get();
+              b.x = opt.x + 7; b.y = opt.y - 2;
+              b.vx = 0; b.vy = -12;
+              b.type = "player"; b.wtype = undefined; b.wingman = false; b.lightning = true;
+            }
+          }
+        } else {
+          // Form B: white crescent spread from each option
+          if (f % 12 === 0) {
+            for (const opt of state.options) {
+              if (opt.transformProgress < 0.7) continue;
+              const cx = opt.x + 7;
+              const cy = opt.y;
+              for (let ang = -0.5; ang <= 0.5; ang += 0.25) {
+                const b = state.bullets.get();
+                b.x = cx; b.y = cy;
+                b.vx = Math.sin(ang) * 2.5;
+                b.vy = -8 - Math.abs(ang) * 2;
+                b.type = "player"; b.wtype = "wave"; b.wingman = false; b.lightning = false;
+              }
+            }
+          }
         }
 
         // ── homing missile ──
@@ -1906,6 +2134,11 @@ export default function RaidenGame() {
           if (pt.life <= 0) state.particles.release(pt);
         });
 
+        // ── monster flash timer decay ──
+        state.monsters.forEachActive((m) => {
+          if (m.flashTimer > 0) m.flashTimer--;
+        });
+
         // ── bullet vs monster ──
         state.bullets.forEachActive((b) => {
           let hit = false;
@@ -1915,6 +2148,7 @@ export default function RaidenGame() {
             const mh = m.type === "interceptor" ? 24 : m.type === "elite" ? 36 : 20;
             if (b.x > m.x && b.x < m.x + mw && b.y > m.y && b.y < m.y + mh) {
               m.hp--;
+              m.flashTimer = 3;
               state.bullets.release(b);
               emitExplosion(b.x, b.y, 3, ["#fbbf24"], 3);
               if (m.hp <= 0) {
@@ -1941,6 +2175,7 @@ export default function RaidenGame() {
             const mh = m.type === "interceptor" ? 24 : m.type === "elite" ? 36 : 20;
             if (ms.x > m.x && ms.x < m.x + mw && ms.y > m.y && ms.y < m.y + mh) {
               m.hp -= 3;
+              m.flashTimer = 3;
               state.missiles.release(ms);
               emitExplosion(ms.x, ms.y, 8, ["#f97316", "#fef08a", "#ef4444"], 5);
               if (m.hp <= 0) {
@@ -1965,7 +2200,12 @@ export default function RaidenGame() {
           const py = state.player.y;
           if (pu.x > px - 4 && pu.x < px + 32 && pu.y > py - 4 && pu.y < py + 32) {
             state.powerUps.release(pu);
-            if (pu.type === "wingman") {
+            if (pu.type === "optionForm") {
+              // S-item: switch Option form
+              state.optionForm = state.optionForm === "greenLaser" ? "purpleWing" : "greenLaser";
+              emitExplosion(pu.x, pu.y, 20, ["#a855f7", "#c084fc", "#fff"], 8, 35, 0.02, 5);
+              audio.powerUp();
+            } else if (pu.type === "wingman") {
               // Wingman power-up
               if (state.wingmanLevel < 4) {
                 state.wingmanLevel++;
@@ -2179,6 +2419,95 @@ export default function RaidenGame() {
             });
           }
         }
+
+        // ── Crisis Slash Detection (only in Form B: purpleWing) ──
+        const SLASH_RANGE = 70;
+        if (state.optionForm === "purpleWing") {
+          for (const opt of state.options) {
+            if (opt.transformProgress < 0.5) continue;
+            if (opt.slashCooldown > 0) continue;
+            let shouldSlash = false;
+            state.enemyBullets.forEachActive((eb) => {
+              if (shouldSlash) return;
+              const dx = eb.x - opt.x;
+              const dy = eb.y - opt.y;
+              if (dy < 0 && dx * dx + dy * dy < SLASH_RANGE * SLASH_RANGE) {
+                shouldSlash = true;
+              }
+            });
+            if (!shouldSlash) {
+              state.monsters.forEachActive((m) => {
+                if (shouldSlash) return;
+                const mcx = m.x + 12;
+                const mcy = m.y + 10;
+                const dx = mcx - opt.x;
+                const dy = mcy - opt.y;
+                if (dy < 0 && dx * dx + dy * dy < SLASH_RANGE * SLASH_RANGE) {
+                  shouldSlash = true;
+                }
+              });
+            }
+            if (shouldSlash) {
+              opt.slashCooldown = 90;
+              const toRelease: Bullet[] = [];
+              state.enemyBullets.forEachActive((eb) => {
+                const dx = eb.x - opt.x;
+                const dy = eb.y - opt.y;
+                if (dy < 0 && dx * dx + dy * dy < SLASH_RANGE * SLASH_RANGE) {
+                  toRelease.push(eb);
+                }
+              });
+              for (const eb of toRelease) state.enemyBullets.release(eb);
+              state.monsters.forEachActive((m) => {
+                const mcx = m.x + 12;
+                const mcy = m.y + 10;
+                const dx = mcx - opt.x;
+                const dy = mcy - opt.y;
+                if (dy < 0 && dx * dx + dy * dy < SLASH_RANGE * SLASH_RANGE) {
+                  m.hp -= 5;
+                  m.flashTimer = 3;
+                  emitExplosion(mcx, mcy, 4, ["#fff", "#e0f2fe"], 4, 15, 0.02, 3);
+                }
+              });
+              state.shakeX = Math.max(state.shakeX, 4);
+              state.shakeY = Math.max(state.shakeY, 4);
+              const se = state.slashEffects.get();
+              se.x = opt.x + 7; se.y = opt.y;
+              se.alpha = 1; se.radius = SLASH_RANGE;
+              se.timer = 0; se.maxTimer = 15;
+              for (let i = 0; i < 12; i++) {
+                const ang = -Math.PI * 0.5 + (Math.random() - 0.5) * 1.2;
+                const sp = 2 + Math.random() * 4;
+                spawnParticle(opt.x + 7, opt.y, Math.cos(ang) * sp, Math.sin(ang) * sp - 2, "#fff", 2 + Math.random() * 2, 12 + Math.random() * 8, 0.03);
+              }
+            }
+          }
+        }
+
+        // ── Update slash effects ──
+        state.slashEffects.forEachActive((se) => {
+          se.timer++;
+          se.alpha = 1 - se.timer / se.maxTimer;
+          if (se.timer >= se.maxTimer) state.slashEffects.release(se);
+        });
+
+        // ── Check for monsters killed by slash (hp <= 0 without normal hit logic) ──
+        const slashKilled: Monster[] = [];
+        state.monsters.forEachActive((m) => {
+          if (m.hp <= 0) {
+            slashKilled.push(m);
+          }
+        });
+        for (const m of slashKilled) {
+          const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
+          const base = m.type === "elite" ? 10 : m.type === "interceptor" ? 3 : m.type === "bomber" ? 2 : 1;
+          spawnCoin(m.x + 8, m.y + 4, isDouble ? base * 2 : base);
+          emitExplosion(m.x + 8, m.y + 8, 10, ["#ef4444", "#f97316", "#fff"], 6);
+          audio.explosion();
+          state.monsters.release(m);
+          setScore((prev) => { const n = prev + (m.type === "elite" ? 300 : 100); state.score = n; return n; });
+          checkFormationClear(m.x + 8, m.y + 8, m.formationGroup);
+        }
       }
 
       // ═══════════ RENDER ═══════════
@@ -2243,15 +2572,21 @@ export default function RaidenGame() {
       });
       ctx.globalAlpha = 1;
 
-      // ── engine exhaust ──
+      // ── engine exhaust (arc-based glow particles) ──
       for (const e of exhaustPool.current.items) {
         if (!e.alive) continue;
-        ctx.globalAlpha = e.alpha * 0.6;
+        // outer glow
+        ctx.globalAlpha = e.alpha * 0.25;
         ctx.fillStyle = "#f97316";
-        ctx.fillRect(e.x, e.y, 2, 2);
-        ctx.globalAlpha = e.alpha * 0.3;
-        ctx.fillStyle = "#fef08a";
-        ctx.fillRect(e.x - 0.5, e.y - 0.5, 3, 3);
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.size + 2, 0, Math.PI * 2); ctx.fill();
+        // main core
+        ctx.globalAlpha = e.alpha * 0.6;
+        ctx.fillStyle = "#fbbf24";
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.size * 0.7, 0, Math.PI * 2); ctx.fill();
+        // white hot center
+        ctx.globalAlpha = e.alpha * 0.4;
+        ctx.fillStyle = "#fff";
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.size * 0.3, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
 
@@ -2317,6 +2652,41 @@ export default function RaidenGame() {
 
       // player bullets with bloom
       state.bullets.forEachActive((b) => {
+        // ── Option green laser (no wtype, lightning flag) ──
+        if (!b.wingman && b.lightning && !b.wtype) {
+          const len = 22;
+          ctx.save();
+          // outer bloom
+          ctx.shadowColor = "#4ade80";
+          ctx.shadowBlur = 30;
+          ctx.globalAlpha = 0.25;
+          const lg = ctx.createRadialGradient(b.x, b.y - len / 2, 0, b.x, b.y - len / 2, 12);
+          lg.addColorStop(0, "rgba(255,255,255,0.3)");
+          lg.addColorStop(0.3, "rgba(74,222,128,0.3)");
+          lg.addColorStop(1, "rgba(74,222,128,0)");
+          ctx.fillStyle = lg;
+          ctx.fillRect(b.x - 8, b.y - len - 2, 16, len + 4);
+          // beam core
+          ctx.shadowBlur = 0;
+          ctx.globalAlpha = 0.9;
+          const cg = ctx.createLinearGradient(b.x - 3, 0, b.x + 3, 0);
+          cg.addColorStop(0, "rgba(255,255,255,0)");
+          cg.addColorStop(0.3, "#bbf7d0");
+          cg.addColorStop(0.5, "#4ade80");
+          cg.addColorStop(0.7, "#bbf7d0");
+          cg.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = cg;
+          ctx.fillRect(b.x - 3, b.y - len + 1, 6, len - 2);
+          // white core
+          ctx.fillStyle = "#fff";
+          ctx.shadowColor = "#4ade80";
+          ctx.shadowBlur = 12;
+          ctx.fillRect(b.x - 1, b.y - len + 2, 2, len - 3);
+          ctx.beginPath(); ctx.arc(b.x, b.y - len, 3, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+          return;
+        }
+
         if (b.wingman) {
           if (b.lightning) {
             // L3/L4 lightning bullet (cyan electric bolt)
@@ -2576,6 +2946,22 @@ export default function RaidenGame() {
         }
       }
 
+      // ── Option / Slash rendering ──
+      if (stateRef.current.gameStarted && !stateRef.current.isGameOver) {
+        for (const opt of state.options) {
+          if (opt.transformProgress > 0.1) {
+            drawPurpleWingOption(ctx, opt.x, opt.y, opt.transformProgress);
+          }
+          if (opt.transformProgress < 0.9) {
+            drawGreenOption(ctx, opt.x, opt.y);
+          }
+        }
+        // slash effects
+        state.slashEffects.forEachActive((se) => {
+          drawSlashEffect(ctx, se);
+        });
+      }
+
       // monsters
       state.monsters.forEachActive((m) => drawMonsterShip(ctx, m, m.x, m.y));
 
@@ -2596,13 +2982,14 @@ export default function RaidenGame() {
         ctx.restore();
       });
 
-      // power-ups (enhanced effect — blue for weapon, purple for wingman)
+      // power-ups (enhanced effect — blue for weapon, purple for wingman, gold for S)
       state.powerUps.forEachActive((pu) => {
         const pcx = pu.x + 6, pcy = pu.y + 6;
         const pulse = Math.sin(f * 0.1) * 0.3 + 0.7;
+        const isOptionForm = pu.type === "optionForm";
         const isWingman = pu.type === "wingman";
-        const col1 = isWingman ? "#a855f7" : "#38bdf8";
-        const col2 = isWingman ? "#c084fc" : "#7dd3fc";
+        const col1 = isOptionForm ? "#f97316" : isWingman ? "#a855f7" : "#38bdf8";
+        const col2 = isOptionForm ? "#fbbf24" : isWingman ? "#c084fc" : "#7dd3fc";
         ctx.save();
         // outer glow ring (rotating)
         ctx.shadowColor = col1;
@@ -2620,8 +3007,8 @@ export default function RaidenGame() {
         // main gradient sphere
         const pg = ctx.createRadialGradient(pcx, pcy, 0, pcx, pcy, 14);
         pg.addColorStop(0, "rgba(255,255,255,0.95)");
-        pg.addColorStop(0.3, isWingman ? "rgba(192,132,252,0.9)" : "rgba(125,211,252,0.9)");
-        pg.addColorStop(0.6, isWingman ? "rgba(168,85,247,0.6)" : "rgba(56,189,248,0.6)");
+        pg.addColorStop(0.3, isOptionForm ? "rgba(251,191,36,0.9)" : isWingman ? "rgba(192,132,252,0.9)" : "rgba(125,211,252,0.9)");
+        pg.addColorStop(0.6, isOptionForm ? "rgba(249,115,22,0.6)" : isWingman ? "rgba(168,85,247,0.6)" : "rgba(56,189,248,0.6)");
         pg.addColorStop(1, isWingman ? "rgba(168,85,247,0)" : "rgba(56,189,248,0)");
         ctx.globalAlpha = 0.9 * pulse;
         ctx.shadowColor = col1;
@@ -2649,7 +3036,7 @@ export default function RaidenGame() {
         }
         // hint letter
         ctx.globalAlpha = 0.7 * pulse;
-        drawText(ctx, isWingman ? "W" : "P", pcx, pcy + 0.5, "#fff", 8, "center", 1.5);
+        drawText(ctx, isOptionForm ? "S" : isWingman ? "W" : "P", pcx, pcy + 0.5, "#fff", 8, "center", 1.5);
         ctx.restore();
       });
 
@@ -2754,6 +3141,12 @@ export default function RaidenGame() {
     state.gachaCost = 10; state.formationGroupCounter = 0;
     state.overdriveTimer = 0; state.lastWaveSpawned = -1;
     state.bossCooldown = 0; state.minibossCooldown = 0; state.wingmanLevel = 0; state.wingmanOrbitAngle = 0; state.bossWarningTimer = 0;
+    state.optionForm = "greenLaser";
+    state.options[0].x = 156; state.options[0].y = 478; state.options[0].targetX = 156; state.options[0].targetY = 478;
+    state.options[0].form = "greenLaser"; state.options[0].transformProgress = 0; state.options[0].slashCooldown = 0;
+    state.options[1].x = 204; state.options[1].y = 478; state.options[1].targetX = 204; state.options[1].targetY = 478;
+    state.options[1].form = "greenLaser"; state.options[1].transformProgress = 0; state.options[1].slashCooldown = 0;
+    state.slashEffects.releaseAll();
     bgOffsetRef.current = 0;
     exhaustPool.current.releaseAll();
     setIsPaused(false); setShowGacha(false); setShowShop(false);

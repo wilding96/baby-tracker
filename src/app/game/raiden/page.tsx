@@ -4,12 +4,8 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Zap,
   Bomb,
-  Heart,
   Coins,
-  Sparkles,
-  Trophy,
 } from "lucide-react";
 import { useGameAudio } from "@/hooks/useGameAudio";
 
@@ -18,6 +14,31 @@ import { useGameAudio } from "@/hooks/useGameAudio";
 // ═══════════════════════════════════════════════════════════════════
 
 const PIXEL_FONT = '"Press Start 2P", "Courier New", monospace';
+
+// ═══════════════════════════════════════════════════════════════════
+// RAIDEN DESIGN DOC COLOR SYSTEM
+// ═══════════════════════════════════════════════════════════════════
+const COLORS = {
+  player: "#5AD9FF",
+  playerBullet: "#5AD9FF",
+  laser: "#FFFFFF",
+  enemy: "#FF6050",
+  enemyBullet: "#FF6050",
+  boss: "#A040FF",
+  bossBullet: "#A040FF",
+  explosion: "#FFD83D",
+  powerUp: "#FFE14A",
+  warning: "#FF2020",
+  dangerPulse: "#FF2020",
+  missile: "#FFD83D",
+  // backgrounds
+  bgDark: "#060A18",
+  bgMid: "#101C30",
+  uiBorder: "rgba(90,217,255,0.25)",
+  uiBg: "rgba(6,10,24,0.85)",
+  textDim: "rgba(148,163,184,0.5)",
+  textBright: "#FFFFFF",
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // PIXEL SPRITE DRAWING
@@ -325,6 +346,10 @@ interface Miniboss {
 interface CoinItem {
   x: number; y: number; value: number; alive: boolean;
 }
+interface EnergyFragment {
+  x: number; y: number; value: number; alive: boolean;
+  vx: number; vy: number;
+}
 interface Particle {
   x: number; y: number; vx: number; vy: number;
   alpha: number; color: string; size: number;
@@ -488,6 +513,8 @@ export default function RaidenGame() {
   const [wingmanLevel, setWingmanLevel] = useState(0);
   const [showShop, setShowShop] = useState(false);
   const [shopRefreshKey, setShopRefreshKey] = useState(0);
+  const [readyCountdown, setReadyCountdown] = useState(0); // 0=no countdown, >0=counting
+  const [respawnTimer, setRespawnTimer] = useState(0); // death respawn invincibility + blink
 
   // ── mutable game state ref (avoids useEffect dep explosion) ──
   const gameRef = useRef({
@@ -581,6 +608,12 @@ export default function RaidenGame() {
       targetX: 0, targetY: 0, alive: false,
     })),
     powerUps: new Pool<PowerUp>(() => ({ x: 0, y: 0, type: "weapon", alive: false })),
+    energyFrags: new Pool<EnergyFragment>(() => ({ x: 0, y: 0, value: 1, alive: false, vx: 0, vy: 0 })),
+    weaponEnergy: 0,
+    energyNeeded: 100,
+    comboKills: 0,
+    magnetModeTimer: 0,
+    levelUpFreezeTimer: 0,
     stars: starsRef.current,
     shakeX: 0, shakeY: 0,
     keys: {
@@ -591,12 +624,14 @@ export default function RaidenGame() {
     weaponType: "spread" as WeaponType,
     frameCount: 0,
     invincible: false, invincibleTimer: 0,
+    respawnTimer: 0,
     score: 0, wallet: 0,
     doubleCoinTimer: 0, hasHoming: false,
     formationTimer: 0, gachaLocked: false, gachaCost: 10,
     formationGroupCounter: 0, overdriveTimer: 0,
     lastWaveSpawned: -1,
     bossWarningTimer: 0,
+    preGameCountdown: 0, // 0 = no countdown; >0 = frames of countdown
     _carrierSpawnTimer: 0,
     bossCooldown: 0,
     minibossCooldown: 0,
@@ -670,6 +705,12 @@ export default function RaidenGame() {
     const m = stateRef.current.missiles.get();
     m.x = x; m.y = y; m.targetX = tx; m.targetY = ty; m.vx = 0; m.vy = -6;
   }
+  function spawnEnergyFragment(x: number, y: number, value: number) {
+    const e = stateRef.current.energyFrags.get();
+    e.x = x; e.y = y; e.value = value;
+    e.vx = (Math.random() - 0.5) * 3;
+    e.vy = -1 - Math.random() * 2;
+  }
 
   function emitExplosion(
     x: number, y: number, count: number,
@@ -693,10 +734,11 @@ export default function RaidenGame() {
     let alive = false;
     state.monsters.forEachActive((m) => { if (m.formationGroup === group) alive = true; });
     if (!alive) {
+      // Formation clear always drops W or S (never P), plus bonus energy
       const pu = state.powerUps.get();
       pu.x = x; pu.y = y;
-      const r = Math.random();
-      pu.type = r < 0.2 ? "optionForm" : r < 0.6 ? "weapon" : "wingman";
+      pu.type = Math.random() < 0.25 ? "optionForm" : "wingman";
+      for (let i = 0; i < 3; i++) spawnEnergyFragment(x + (Math.random() - 0.5) * 20, y + (Math.random() - 0.5) * 10, 5);
       emitExplosion(x, y, 15, ["#38bdf8", "#7dd3fc", "#fff"], 5, 35);
     }
   }
@@ -937,13 +979,10 @@ export default function RaidenGame() {
         upgrades.startWingman = false; saveChanged = true;
       }
       if (saveChanged) writeSave(saveRef.current);
+      // 3-2-1-GO countdown driven by game loop (180 frames = 3s at 60fps)
       setStartFadeOut(true);
-      stateRef.current.gameStarted = true;
-      if (waveTimeoutRef.current) clearTimeout(waveTimeoutRef.current);
-      waveTimeoutRef.current = setTimeout(() => {
-        waveTimeoutRef.current = null;
-        setGameStarted(true);
-      }, 500);
+      stateRef.current.preGameCountdown = 180;
+      setReadyCountdown(3);
     }
   }, [gameStarted, audio, shipType]);
 
@@ -1587,6 +1626,29 @@ export default function RaidenGame() {
       state.frameCount++;
       const f = state.frameCount;
 
+      // ── pre-game countdown (game loop driven, reliable) ──
+      if (state.preGameCountdown > 0) {
+        state.preGameCountdown--;
+        const prevVal = Math.ceil((state.preGameCountdown + 1) / 60);
+        const curVal = Math.ceil(state.preGameCountdown / 60);
+        if (prevVal !== curVal || state.preGameCountdown === 179) {
+          setReadyCountdown(curVal);
+        }
+        // Show "GO" for 30 frames (0.5s) before starting game
+        if (state.preGameCountdown <= 0) {
+          state.preGameCountdown = -30;
+          setReadyCountdown(0);
+        }
+      }
+      if (state.preGameCountdown < 0) {
+        state.preGameCountdown++;
+        if (state.preGameCountdown >= 0) {
+          setGameStarted(true);
+          setReadyCountdown(0);
+          state.gameStarted = true;
+        }
+      }
+
       // ── screen shake decay ──
       state.shakeX *= 0.85; state.shakeY *= 0.85;
       if (Math.abs(state.shakeX) < 0.3) state.shakeX = 0;
@@ -1595,6 +1657,11 @@ export default function RaidenGame() {
       if (state.invincible) {
         state.invincibleTimer--;
         if (state.invincibleTimer <= 0) { state.invincible = false; setInvincible(false); }
+      }
+      // respawn blink decay
+      if (state.respawnTimer > 0) {
+        state.respawnTimer--;
+        if (state.respawnTimer <= 0) setRespawnTimer(0);
       }
       if (state.doubleCoinTimer > 0) {
         state.doubleCoinTimer--;
@@ -1673,6 +1740,9 @@ export default function RaidenGame() {
       }
 
       if (stateRef.current.gameStarted && !stateRef.current.isPaused && !stateRef.current.isGameOver && !stateRef.current.showGacha && !stateRef.current.showShop) {
+        // ── level up visual timer ──
+        if (state.levelUpFreezeTimer > 0) state.levelUpFreezeTimer--;
+
         const p = state.player;
         if (state.keys.ArrowLeft || state.keys.a) p.x -= p.speed;
         if (state.keys.ArrowRight || state.keys.d) p.x += p.speed;
@@ -2155,11 +2225,20 @@ export default function RaidenGame() {
                 const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
                 const base = m.type === "elite" ? 10 : m.type === "interceptor" ? 3 : m.type === "bomber" ? 2 : 1;
                 spawnCoin(m.x + 8, m.y + 4, isDouble ? base * 2 : base);
-                emitExplosion(m.x + 8, m.y + 8, 10, ["#ef4444", "#f97316"], 6);
+                // energy fragments on death
+                const energyVal = m.type === "elite" ? 15 : m.type === "bomber" ? 8 : 5;
+                for (let ef = 0; ef < (m.type === "elite" ? 3 : 1); ef++) {
+                  spawnEnergyFragment(m.x + 4 + Math.random() * 12, m.y + 4 + Math.random() * 8, energyVal);
+                }
+                emitExplosion(m.x + 8, m.y + 8, 6, ["#FFD83D", "#FF6050"], 5, 25);
                 audio.explosion();
                 state.monsters.release(m);
                 setScore((prev) => { const n = prev + (m.type === "elite" ? 300 : 100); state.score = n; return n; });
                 checkFormationClear(m.x + 8, m.y + 8, m.formationGroup);
+                state.comboKills++;
+                if (state.comboKills >= 30 && state.magnetModeTimer <= 0) {
+                  state.magnetModeTimer = 300;
+                }
               }
               hit = true;
             }
@@ -2182,11 +2261,20 @@ export default function RaidenGame() {
                 const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
                 const base = m.type === "elite" ? 10 : m.type === "interceptor" ? 3 : m.type === "bomber" ? 2 : 1;
                 spawnCoin(m.x + 8, m.y + 4, isDouble ? base * 2 : base);
-                emitExplosion(m.x + 8, m.y + 8, 10, ["#ef4444", "#f97316"], 6);
+                // energy fragments on death
+                const energyVal = m.type === "elite" ? 15 : m.type === "bomber" ? 8 : 5;
+                for (let ef = 0; ef < (m.type === "elite" ? 3 : 1); ef++) {
+                  spawnEnergyFragment(m.x + 4 + Math.random() * 12, m.y + 4 + Math.random() * 8, energyVal);
+                }
+                emitExplosion(m.x + 8, m.y + 8, 6, ["#FFD83D", "#FF6050"], 5, 25);
                 audio.explosion();
                 state.monsters.release(m);
                 setScore((prev) => { const n = prev + (m.type === "elite" ? 300 : 100); state.score = n; return n; });
                 checkFormationClear(m.x + 8, m.y + 8, m.formationGroup);
+                state.comboKills++;
+                if (state.comboKills >= 30 && state.magnetModeTimer <= 0) {
+                  state.magnetModeTimer = 300;
+                }
               }
               hit = true;
             }
@@ -2381,6 +2469,62 @@ export default function RaidenGame() {
           }
         });
 
+        // ── energy fragments: movement + magnet + collection ──
+        const ENERGY_MAGNET = state.magnetModeTimer > 0 ? 200 : 100;
+        state.energyFrags.forEachActive((ef) => {
+          // basic movement (float up and slow down)
+          ef.x += ef.vx; ef.y += ef.vy;
+          ef.vx *= 0.97; ef.vy *= 0.97;
+          if (ef.vy > -0.2) ef.vy = -0.2 + Math.sin(f * 0.05 + ef.x) * 0.3;
+          // magnet pull toward player
+          const edx = (p.x + 14) - ef.x;
+          const edy = (p.y + 12) - ef.y;
+          const edist = Math.sqrt(edx * edx + edy * edy);
+          if (edist < ENERGY_MAGNET && edist > 2) {
+            const epull = (1 - edist / ENERGY_MAGNET) * 2.5 + 0.3;
+            ef.x += (edx / edist) * epull;
+            ef.y += (edy / edist) * epull;
+          }
+          // collection
+          if (ef.x > p.x - 4 && ef.x < p.x + 32 && ef.y > p.y - 4 && ef.y < p.y + 32) {
+            state.weaponEnergy += ef.value;
+            state.energyNeeded = 60 + state.weaponLevel * 20;
+            emitExplosion(ef.x, ef.y, 3, [COLORS.playerBullet, "#fff"], 3);
+            state.energyFrags.release(ef);
+            // level up check
+            if (state.weaponEnergy >= state.energyNeeded && state.weaponLevel < 4) {
+              state.weaponEnergy = 0;
+              if (state.overdriveTimer > 0) {
+                state.overdriveTimer += 120;
+                setOverdriveTimer(state.overdriveTimer);
+              } else if (state.weaponLevel >= 3) {
+                state.weaponLevel = 4; state.overdriveTimer = 300;
+                setWeaponLevel(4); setOverdriveTimer(300);
+              } else {
+                state.weaponLevel++;
+                setWeaponLevel(state.weaponLevel);
+              }
+              state.energyNeeded = state.weaponLevel < 4 ? 60 + state.weaponLevel * 20 : Infinity;
+              emitExplosion(p.x + 12, p.y + 12, 30, [COLORS.player, COLORS.playerBullet, "#fff"], 8, 45, 0.02, 5);
+              state.shakeX = Math.max(state.shakeX, 6);
+              state.shakeY = Math.max(state.shakeY, 6);
+              state.levelUpFreezeTimer = 48;
+              audio.powerUp();
+            }
+          }
+        });
+        // cull stray energy fragments
+        state.energyFrags.forEachActive((ef) => {
+          if (ef.y > CH + 10 || ef.y < -40 || ef.x < -40 || ef.x > CW + 40) {
+            state.energyFrags.release(ef);
+          }
+        });
+
+        // ── magnet mode countdown ──
+        if (state.magnetModeTimer > 0) {
+          state.magnetModeTimer--;
+        }
+
         // ── player hit ──
         if (!state.invincible) {
           const px = p.x + 10;
@@ -2409,12 +2553,34 @@ export default function RaidenGame() {
             state.miniboss.x < p.x + 24 && state.miniboss.x + 52 > p.x &&
             state.miniboss.y < p.y + 28 && state.miniboss.y + 40 > p.y + 4;
           if (hitMonster || hitBullet || hitBoss || hitMiniboss) {
-            emitExplosion(p.x + 12, p.y + 14, 15, ["#60a5fa", "#93c5fd"], 8);
+            emitExplosion(p.x + 12, p.y + 14, 20, ["#60a5fa", "#93c5fd", "#fff"], 10);
             audio.playerHit();
+            // Weapon downgrade: lose 2 levels (min Lv1)
+            const oldWpnLvl = state.weaponLevel;
+            state.weaponEnergy = 0;
+            state.energyNeeded = 100;
+            if (state.overdriveTimer > 0) {
+              state.overdriveTimer = 0;
+              setOverdriveTimer(0);
+              state.weaponLevel = Math.max(1, state.weaponLevel - 2);
+            } else {
+              state.weaponLevel = Math.max(1, state.weaponLevel - 2);
+            }
+            if (state.weaponLevel !== oldWpnLvl) {
+              setWeaponLevel(state.weaponLevel);
+              state.levelUpFreezeTimer = 0; // clear any pending level-up
+              // spawn red particles for power-down
+              for (let i = 0; i < 10; i++) {
+                const ang = Math.random() * Math.PI * 2;
+                spawnParticle(p.x + 12, p.y + 12, Math.cos(ang) * 4, Math.sin(ang) * 4 - 1, COLORS.warning, 4, 30, 0.02);
+              }
+            }
             setLives((prev) => {
               if (prev <= 1) { stateRef.current.isGameOver = true; setIsGameOver(true); return 0; }
-              state.invincible = true; state.invincibleTimer = 90;
-              setInvincible(true); state.shakeX = 6; state.shakeY = 6;
+              state.invincible = true; state.invincibleTimer = 120;
+              setInvincible(true); state.shakeX = 8; state.shakeY = 8;
+              state.respawnTimer = 60;
+              setRespawnTimer(60);
               return prev - 1;
             });
           }
@@ -2502,11 +2668,19 @@ export default function RaidenGame() {
           const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
           const base = m.type === "elite" ? 10 : m.type === "interceptor" ? 3 : m.type === "bomber" ? 2 : 1;
           spawnCoin(m.x + 8, m.y + 4, isDouble ? base * 2 : base);
+          const eVal = m.type === "elite" ? 15 : m.type === "bomber" ? 8 : 5;
+          for (let ef = 0; ef < (m.type === "elite" ? 3 : 1); ef++) {
+            spawnEnergyFragment(m.x + 4 + Math.random() * 12, m.y + 4 + Math.random() * 8, eVal);
+          }
           emitExplosion(m.x + 8, m.y + 8, 10, ["#ef4444", "#f97316", "#fff"], 6);
           audio.explosion();
           state.monsters.release(m);
           setScore((prev) => { const n = prev + (m.type === "elite" ? 300 : 100); state.score = n; return n; });
           checkFormationClear(m.x + 8, m.y + 8, m.formationGroup);
+          state.comboKills++;
+          if (state.comboKills >= 30 && state.magnetModeTimer <= 0) {
+            state.magnetModeTimer = 300;
+          }
         }
       }
 
@@ -2519,29 +2693,27 @@ export default function RaidenGame() {
         Math.round((Math.random() - 0.5) * state.shakeY),
       );
 
-      // background gradient (cached)
+      // background gradient (Raiden: #060A18 → #101C30)
       if (!bgGradientRef.current) {
         bgGradientRef.current = ctx.createLinearGradient(0, 0, 0, CH);
-        bgGradientRef.current.addColorStop(0, "#020617");
-        bgGradientRef.current.addColorStop(0.5, "#0c0a20");
-        bgGradientRef.current.addColorStop(1, "#1a0a2e");
+        bgGradientRef.current.addColorStop(0, COLORS.bgDark);
+        bgGradientRef.current.addColorStop(0.5, "#0A1024");
+        bgGradientRef.current.addColorStop(1, COLORS.bgMid);
       }
       ctx.fillStyle = bgGradientRef.current;
       ctx.fillRect(0, 0, CW, CH);
 
-      // nebula clouds
-      ctx.globalAlpha = 0.08;
-      ctx.fillStyle = "#3b0764";
+      // nebula clouds (subtle, 12% opacity)
+      ctx.globalAlpha = 0.06;
+      ctx.fillStyle = "#1a1040";
       ctx.beginPath(); ctx.arc(200, 150 + Math.sin(f * 0.005) * 30, 120, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#1e3a5f";
+      ctx.fillStyle = "#102840";
       ctx.beginPath(); ctx.arc(100, 400 + Math.sin(f * 0.007 + 1) * 40, 100, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#4a044e";
-      ctx.beginPath(); ctx.arc(300, 300 + Math.sin(f * 0.006 + 2) * 50, 90, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1;
 
-      // animated grid
+      // animated grid (subtle)
       const go = bgOffsetRef.current;
-      ctx.strokeStyle = "rgba(56,189,248,0.04)";
+      ctx.strokeStyle = "rgba(56,189,248,0.03)";
       ctx.lineWidth = 1;
       for (let gx = 0; gx < CW; gx += 40) {
         ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, CH); ctx.stroke();
@@ -2550,9 +2722,9 @@ export default function RaidenGame() {
         ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(CW, gy); ctx.stroke();
       }
 
-      // ── 5-layer parallax stars (deep parallax depth) ──
+      // ── 5-layer parallax stars (deep parallax depth, subtle) ──
       state.stars.forEach((s) => {
-        ctx.globalAlpha = Math.min(0.25, s.layer < 3 ? s.brightness : s.brightness * 0.3);
+        ctx.globalAlpha = Math.min(0.15, s.layer < 3 ? s.brightness * 0.5 : s.brightness * 0.15);
         if (s.layer === 4) {
           ctx.fillStyle = "#e2e8f0";
           ctx.beginPath(); ctx.arc(s.x + s.size / 2, s.y + s.size / 2, s.size * 0.8, 0, Math.PI * 2); ctx.fill();
@@ -2593,59 +2765,29 @@ export default function RaidenGame() {
       // ── START SCREEN: simple ship preview removed ──
       // We'll show ship selection in UI instead of canvas
 
-      // enemy bullets — enhanced bright red glow, large aurora + diamond + pulsing ring
+      // enemy bullets — simple red/orange pixel bullet (Raiden arcade)
       state.enemyBullets.forEachActive((b) => {
-        const flicker = Math.sin(f * 0.2 + b.x) * 0.2 + 0.8;
         ctx.save();
         ctx.translate(b.x, b.y);
-        // Pass 1: large outer pulsing aurora ring
-        ctx.globalAlpha = 0.4 * flicker;
-        ctx.shadowColor = "#FF0055";
-        ctx.shadowBlur = 28;
-        ctx.fillStyle = "rgba(255,0,85,0.03)";
-        ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = "rgba(255,0,85,0.25)";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.arc(0, 0, 14 + Math.sin(f * 0.08 + b.x) * 3, 0, Math.PI * 2); ctx.stroke();
+        // outer red glow (minimal)
+        ctx.shadowColor = COLORS.enemy;
+        ctx.shadowBlur = 8;
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = COLORS.enemyBullet;
+        ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill();
+        // dark outline ring
         ctx.shadowBlur = 0;
-        // Pass 2: elongated diamond shape — larger
-        ctx.globalAlpha = flicker;
-        ctx.shadowColor = "#FF0055";
-        ctx.shadowBlur = 20;
-        ctx.fillStyle = "#FF0055";
-        ctx.beginPath();
-        ctx.moveTo(0, -9);
-        ctx.lineTo(5, -3);
-        ctx.lineTo(6, 0);
-        ctx.lineTo(5, 3);
-        ctx.lineTo(0, 9);
-        ctx.lineTo(-5, 3);
-        ctx.lineTo(-6, 0);
-        ctx.lineTo(-5, -3);
-        ctx.closePath();
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        // Pass 3: bright inner diamond — lighter pink
-        ctx.globalAlpha = 0.8 * flicker;
-        ctx.strokeStyle = "#FF6699";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, -5);
-        ctx.lineTo(3, -1);
-        ctx.lineTo(0, 5);
-        ctx.lineTo(-3, -1);
-        ctx.closePath();
-        ctx.stroke();
-        // Pass 4: white-hot core with bloom
-        ctx.globalAlpha = flicker;
-        ctx.shadowColor = "#fff";
-        ctx.shadowBlur = 14;
-        ctx.fillStyle = "#fff";
+        ctx.globalAlpha = 0.8;
+        ctx.strokeStyle = "#8B0000";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(0, 0, 4.5, 0, Math.PI * 2); ctx.stroke();
+        // light pink core
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = "#FFB6C1";
         ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
-        // Pass 5: tiny orange center highlight
-        ctx.globalAlpha = 0.6 * flicker;
-        ctx.shadowBlur = 4;
-        ctx.fillStyle = "#ffe066";
+        // bright center dot
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = "#FFFFFF";
         ctx.beginPath(); ctx.arc(0, 0, 1.5, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
       });
@@ -2719,123 +2861,101 @@ export default function RaidenGame() {
             ctx.beginPath(); ctx.arc(lx, ly - 6, 2.5, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
           } else {
-            // wingman normal bullet — fireball with strong 3D glow
+            // wingman normal bullet — small blue-white oval (matching main gun)
             ctx.save();
-            ctx.shadowColor = "#f97316";
-            ctx.shadowBlur = 14;
+            ctx.shadowColor = COLORS.playerBullet;
+            ctx.shadowBlur = 10;
             ctx.globalAlpha = 0.4;
-            const wg2 = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 10);
-            wg2.addColorStop(0, "rgba(255,255,255,0.3)");
-            wg2.addColorStop(0.4, "rgba(251,146,60,0.3)");
-            wg2.addColorStop(1, "rgba(251,146,60,0)");
-            ctx.fillStyle = wg2;
-            ctx.beginPath(); ctx.arc(b.x, b.y, 10, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = COLORS.playerBullet;
+            ctx.beginPath(); ctx.ellipse(b.x, b.y, 4, 3, 0, 0, Math.PI * 2); ctx.fill();
             ctx.shadowBlur = 0;
             ctx.globalAlpha = 0.9;
-            const fb2 = ctx.createRadialGradient(b.x - 1, b.y - 1, 0, b.x + 1, b.y + 1, 5);
-            fb2.addColorStop(0, "#fff");
-            fb2.addColorStop(0.3, "#fef08a");
-            fb2.addColorStop(0.6, "#f97316");
-            fb2.addColorStop(1, "rgba(234,88,12,0.3)");
-            ctx.fillStyle = fb2;
-            ctx.beginPath(); ctx.arc(b.x, b.y, 4.5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "#FFFFFF";
+            ctx.beginPath(); ctx.ellipse(b.x, b.y, 2.5, 2, 0, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
           }
         } else if (b.wtype === "laser") {
-          // ── LASER: strong bloom bar with bright core, lightning-style ──
-          const od = stateRef.current.overdriveTimer > 0;
-          const len = od ? 24 : 16;
+          // ── LASER: white+cyan beam, Raiden arcade style ──
           ctx.save();
-          // Pass 1: wide outer bloom
-          ctx.shadowColor = od ? "#f97316" : "#22d3ee";
-          ctx.shadowBlur = 28;
-          ctx.globalAlpha = 0.3;
-          const lg2 = ctx.createRadialGradient(b.x, b.y - len / 2, 0, b.x, b.y - len / 2, od ? 16 : 10);
-          lg2.addColorStop(0, od ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.3)");
-          lg2.addColorStop(0.3, od ? "rgba(251,146,60,0.3)" : "rgba(34,211,238,0.3)");
-          lg2.addColorStop(1, od ? "rgba(251,146,60,0)" : "rgba(34,211,238,0)");
-          ctx.fillStyle = lg2;
-          ctx.fillRect(b.x - (od ? 10 : 7), b.y - len - 2, (od ? 20 : 14), len + 6);
-          // Pass 2: bright beam with gradient width
-          ctx.shadowBlur = 0;
-          ctx.globalAlpha = 0.9;
-          const cg2 = ctx.createLinearGradient(b.x - (od ? 4 : 3), 0, b.x + (od ? 4 : 3), 0);
-          cg2.addColorStop(0, "rgba(255,255,255,0)");
-          cg2.addColorStop(0.3, od ? "#fef08a" : "#e0f2fe");
-          cg2.addColorStop(0.5, od ? "#f97316" : "#22d3ee");
-          cg2.addColorStop(0.7, od ? "#fef08a" : "#e0f2fe");
-          cg2.addColorStop(1, "rgba(255,255,255,0)");
-          ctx.fillStyle = cg2;
-          ctx.fillRect(b.x - (od ? 4 : 3), b.y - len + 1, od ? 8 : 6, len - 2);
-          // Pass 3: white core line
-          ctx.fillStyle = "#fff";
-          ctx.shadowColor = od ? "#f97316" : "#22d3ee";
+          const od = stateRef.current.overdriveTimer > 0;
+          const w = od ? 7 : 5;
+          const len = od ? 22 : 14;
+          // outer cyan edge glow (thin)
+          ctx.shadowColor = COLORS.playerBullet;
           ctx.shadowBlur = 14;
-          ctx.fillRect(b.x - 1, b.y - len + 2, 2, len - 3);
-          // Pass 4: bright tip glow sphere
-          ctx.beginPath(); ctx.arc(b.x, b.y - len, od ? 4 : 3, 0, Math.PI * 2); ctx.fill();
-          ctx.restore();
-        } else if (b.wtype === "wave") {
-          // ── WAVE: pulsing energy ring with 3D depth ──
-          const od = stateRef.current.overdriveTimer > 0;
-          const pulseR = od ? 8 + Math.sin(f * 0.25) * 4 : 5 + Math.sin(f * 0.18) * 2;
-          ctx.save();
-          // Pass 1: outer bloom
-          ctx.shadowColor = od ? "#f97316" : "#4ade80";
-          ctx.shadowBlur = 26;
-          ctx.globalAlpha = 0.35;
-          const wg3 = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, pulseR + (od ? 12 : 8));
-          wg3.addColorStop(0, od ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.3)");
-          wg3.addColorStop(0.4, od ? "rgba(251,146,60,0.3)" : "rgba(74,222,128,0.3)");
-          wg3.addColorStop(1, od ? "rgba(251,146,60,0)" : "rgba(74,222,128,0)");
-          ctx.fillStyle = wg3;
-          ctx.beginPath(); ctx.arc(b.x, b.y, pulseR + (od ? 12 : 8), 0, Math.PI * 2); ctx.fill();
-          // Pass 2: bright ring with glow
-          ctx.shadowBlur = 0;
-          ctx.globalAlpha = 0.85;
-          ctx.strokeStyle = od ? "#f97316" : "#4ade80";
-          ctx.lineWidth = od ? 3.5 : 2.5;
-          ctx.beginPath(); ctx.arc(b.x, b.y, pulseR, 0, Math.PI * 2); ctx.stroke();
-          // Pass 3: inner ring glint
           ctx.globalAlpha = 0.5;
-          ctx.strokeStyle = od ? "#fef08a" : "#bbf7d0";
-          ctx.lineWidth = 1.5;
-          ctx.beginPath(); ctx.arc(b.x - 1, b.y - 1, pulseR * 0.6, 0, Math.PI * 2); ctx.stroke();
-          // Pass 4: white core
-          ctx.globalAlpha = 1;
-          ctx.shadowColor = od ? "#f97316" : "#4ade80";
-          ctx.shadowBlur = 10;
-          ctx.fillStyle = "#fff";
-          ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI * 2); ctx.fill();
-          ctx.restore();
-        } else {
-          // ── SPREAD: 3D fireball with layered glow ──
-          const od = stateRef.current.overdriveTimer > 0;
-          ctx.save();
-          // Pass 1: huge outer glow
-          ctx.shadowColor = od ? "#f97316" : "#fbbf24";
-          ctx.shadowBlur = 26;
-          ctx.globalAlpha = 0.3;
-          const sg2 = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, od ? 14 : 10);
-          sg2.addColorStop(0, od ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.3)");
-          sg2.addColorStop(0.3, od ? "rgba(251,146,60,0.3)" : "rgba(251,191,36,0.3)");
-          sg2.addColorStop(1, od ? "rgba(251,146,60,0)" : "rgba(251,191,36,0)");
-          ctx.fillStyle = sg2;
-          ctx.fillRect(b.x - (od ? 14 : 10), b.y - (od ? 14 : 10), (od ? 28 : 20), (od ? 28 : 20));
-          // Pass 2: 3D sphere (radial gradient core)
+          ctx.fillStyle = COLORS.playerBullet;
+          ctx.fillRect(b.x - w/2 - 1, b.y - len, w + 2, len);
+          // solid white center beam
           ctx.shadowBlur = 0;
           ctx.globalAlpha = 0.95;
-          const sp2 = ctx.createRadialGradient(b.x - 1.5, b.y - 1.5, 0, b.x + 1, b.y + 1, od ? 6 : 4.5);
-          sp2.addColorStop(0, "#fff");
-          sp2.addColorStop(0.3, od ? "#fef08a" : "#fef08a");
-          sp2.addColorStop(0.6, od ? "#f97316" : "#fbbf24");
-          sp2.addColorStop(1, od ? "rgba(234,88,12,0.3)" : "rgba(217,119,6,0.3)");
-          ctx.fillStyle = sp2;
-          ctx.beginPath(); ctx.arc(b.x, b.y, od ? 6 : 4.5, 0, Math.PI * 2); ctx.fill();
-          // Pass 3: specular highlight
-          ctx.globalAlpha = 0.7;
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(b.x - w/2 + 1, b.y - len, w - 2, len);
+          // sharp pixel tip
+          ctx.shadowColor = COLORS.playerBullet;
+          ctx.shadowBlur = 8;
+          ctx.fillRect(b.x - 1, b.y - len - 1, 2, 3);
+          ctx.restore();
+        } else if (b.wtype === "wave") {
+          // ── WAVE: blue plasma ring, Raiden arcade style ──
+          const od = stateRef.current.overdriveTimer > 0;
+          const pulseR = od ? 7 + Math.sin(f * 0.2) * 3 : 5 + Math.sin(f * 0.15) * 2;
+          ctx.save();
+          // Pass 1: outer cyan glow
+          ctx.shadowColor = COLORS.playerBullet;
+          ctx.shadowBlur = 20;
+          ctx.globalAlpha = 0.25;
+          const wg3 = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, pulseR + 8);
+          wg3.addColorStop(0, "rgba(255,255,255,0.15)");
+          wg3.addColorStop(0.5, "rgba(90,217,255,0.1)");
+          wg3.addColorStop(1, "rgba(90,217,255,0)");
+          ctx.fillStyle = wg3;
+          ctx.beginPath(); ctx.arc(b.x, b.y, pulseR + 8, 0, Math.PI * 2); ctx.fill();
+          // Pass 2: cyan edge ring
+          ctx.shadowBlur = 0;
+          ctx.globalAlpha = 0.8;
+          ctx.strokeStyle = COLORS.playerBullet;
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(b.x, b.y, pulseR, 0, Math.PI * 2); ctx.stroke();
+          // Pass 3: transparent center with faint inner
+          ctx.globalAlpha = 0.25;
+          ctx.strokeStyle = "#FFFFFF";
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.arc(b.x, b.y, pulseR * 0.5, 0, Math.PI * 2); ctx.stroke();
+          // Pass 4: white core dot
+          ctx.globalAlpha = 0.9;
+          ctx.shadowColor = COLORS.playerBullet;
+          ctx.shadowBlur = 6;
           ctx.fillStyle = "#fff";
-          ctx.beginPath(); ctx.arc(b.x - 1.5, b.y - 2, od ? 2.5 : 1.8, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        } else {
+          // ── SPREAD: blue-white oval bullet (Raiden arcade style) ──
+          ctx.save();
+          const od = stateRef.current.overdriveTimer > 0;
+          const r = od ? 5 : 3.5;
+          // white solid core (slightly offset upward for motion feel)
+          ctx.fillStyle = "#FFFFFF";
+          ctx.shadowColor = COLORS.playerBullet;
+          ctx.shadowBlur = 10;
+          ctx.globalAlpha = 0.95;
+          ctx.beginPath();
+          ctx.ellipse(b.x, b.y - 1, r * 0.8, r, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // cyan outline
+          ctx.shadowBlur = 0;
+          ctx.globalAlpha = 0.7;
+          ctx.strokeStyle = COLORS.playerBullet;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.ellipse(b.x, b.y - 1, r * 0.8, r, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          // tiny afterimage trail
+          ctx.globalAlpha = 0.2;
+          ctx.fillStyle = COLORS.playerBullet;
+          ctx.beginPath();
+          ctx.ellipse(b.x, b.y, r * 0.5, r * 0.6, 0, 0, Math.PI * 2);
+          ctx.fill();
           ctx.restore();
         }
       });
@@ -2944,6 +3064,33 @@ export default function RaidenGame() {
           ctx.beginPath(); ctx.arc(sp.x + 12, sp.y + 12, 30, 0, Math.PI * 2); ctx.fill();
           ctx.globalAlpha = 1;
         }
+
+        // ── level-up glow + text during freeze ──
+        if (state.levelUpFreezeTimer > 0) {
+          const lpT = state.levelUpFreezeTimer / 48;
+          ctx.save();
+          // expanding ring
+          const ringR = 20 + (1 - lpT) * 60;
+          ctx.globalAlpha = Math.min(1, lpT * 2);
+          ctx.strokeStyle = COLORS.playerBullet;
+          ctx.lineWidth = 3;
+          ctx.shadowColor = COLORS.playerBullet;
+          ctx.shadowBlur = 20;
+          ctx.beginPath(); ctx.arc(sp.x + 12, sp.y + 12, ringR, 0, Math.PI * 2); ctx.stroke();
+          ctx.shadowBlur = 0;
+          // player glow burst
+          ctx.globalAlpha = Math.min(0.5, lpT * 1.2);
+          const glowGrad = ctx.createRadialGradient(sp.x + 12, sp.y + 12, 5, sp.x + 12, sp.y + 12, 60);
+          glowGrad.addColorStop(0, "rgba(90,217,255,0.6)");
+          glowGrad.addColorStop(1, "rgba(90,217,255,0)");
+          ctx.fillStyle = glowGrad;
+          ctx.beginPath(); ctx.arc(sp.x + 12, sp.y + 12, 60, 0, Math.PI * 2); ctx.fill();
+          // LEVEL UP text
+          ctx.globalAlpha = Math.min(1, lpT * 2.5);
+          const textY = sp.y - 18 - (1 - lpT) * 30;
+          drawText(ctx, "LEVEL UP!", sp.x + 12, textY, COLORS.powerUp, 14, "center", 3);
+          ctx.restore();
+        }
       }
 
       // ── Option / Slash rendering ──
@@ -3040,6 +3187,33 @@ export default function RaidenGame() {
         ctx.restore();
       });
 
+      // ── energy fragments (blue floating diamonds) ──
+      state.energyFrags.forEachActive((ef) => {
+        const pulse = Math.sin(f * 0.1 + ef.x) * 0.2 + 0.8;
+        const floatY = Math.sin(f * 0.08 + ef.x * 0.05) * 2;
+        ctx.save();
+        ctx.globalAlpha = 0.7 * pulse;
+        ctx.translate(ef.x + 5, ef.y + 5 + floatY);
+        // diamond shape
+        ctx.fillStyle = COLORS.playerBullet;
+        ctx.shadowColor = COLORS.playerBullet;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.moveTo(0, -5);
+        ctx.lineTo(4, 0);
+        ctx.lineTo(0, 5);
+        ctx.lineTo(-4, 0);
+        ctx.closePath();
+        ctx.fill();
+        // bright core
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(0, 0, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+
       // particles (batch-rendered 2-pass: glow first, then core, to minimize ctx state changes)
       // pass 1: glow (larger particles with shadow)
       ctx.save();
@@ -3059,6 +3233,41 @@ export default function RaidenGame() {
         ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size * 0.6, 0, Math.PI * 2); ctx.fill();
       });
       ctx.globalAlpha = 1;
+
+      // ── weapon energy bar (bottom-left) ──
+      const barX = 6, barY = CH - 20, barW = 100, barH = 6;
+      const energyPct = Math.min(1, state.weaponEnergy / state.energyNeeded);
+      ctx.globalAlpha = 0.8;
+      // border
+      ctx.strokeStyle = COLORS.uiBorder;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(barX, barY, barW, barH);
+      // fill
+      const barGrad = ctx.createLinearGradient(barX, barY, barX + barW, barY);
+      barGrad.addColorStop(0, COLORS.playerBullet);
+      barGrad.addColorStop(1, "#ffffff");
+      ctx.fillStyle = barGrad;
+      ctx.fillRect(barX + 1, barY + 1, (barW - 2) * energyPct, barH - 2);
+      // label
+      drawText(ctx, `POW LV${state.weaponLevel}`, barX + 2, barY - 6, COLORS.textDim, 6, "left", 1);
+      ctx.globalAlpha = 1;
+
+      // ── magnet mode indicator ──
+      if (state.magnetModeTimer > 0) {
+        const magPulse = Math.sin(f * 0.08) * 0.3 + 0.7;
+        ctx.globalAlpha = 0.6 * magPulse;
+        ctx.strokeStyle = COLORS.playerBullet;
+        ctx.lineWidth = 1;
+        ctx.shadowColor = COLORS.playerBullet;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(state.player.x + 12, state.player.y + 12, 40 + Math.sin(f * 0.06) * 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 0.9 * magPulse;
+        drawText(ctx, "MAGNET", state.player.x + 12, state.player.y - 14, COLORS.playerBullet, 7, "center", 2);
+        ctx.globalAlpha = 1;
+      }
 
       ctx.restore();
 
@@ -3130,17 +3339,24 @@ export default function RaidenGame() {
     state.particles.releaseAll();
     state.missiles.releaseAll();
     state.powerUps.releaseAll();
+    state.energyFrags.releaseAll();
+    state.weaponEnergy = 0;
+    state.energyNeeded = 100;
+    state.comboKills = 0;
+    state.magnetModeTimer = 0;
+    state.levelUpFreezeTimer = 0;
     state.boss = null;
     state.miniboss = null;
     state.player = { x: 180, y: 460, speed: 5 };
     state.invincible = false; state.invincibleTimer = 0;
+    state.respawnTimer = 0;
     state.shakeX = 0; state.shakeY = 0;
     state.score = 0; state.wallet = 0;
     state.doubleCoinTimer = 0; state.hasHoming = false;
     state.formationTimer = 0; state.gachaLocked = false;
     state.gachaCost = 10; state.formationGroupCounter = 0;
     state.overdriveTimer = 0; state.lastWaveSpawned = -1;
-    state.bossCooldown = 0; state.minibossCooldown = 0; state.wingmanLevel = 0; state.wingmanOrbitAngle = 0; state.bossWarningTimer = 0;
+    state.bossCooldown = 0; state.minibossCooldown = 0; state.wingmanLevel = 0; state.wingmanOrbitAngle = 0; state.bossWarningTimer = 0; state.preGameCountdown = 0;
     state.optionForm = "greenLaser";
     state.options[0].x = 156; state.options[0].y = 478; state.options[0].targetX = 156; state.options[0].targetY = 478;
     state.options[0].form = "greenLaser"; state.options[0].transformProgress = 0; state.options[0].slashCooldown = 0;
@@ -3156,6 +3372,7 @@ export default function RaidenGame() {
     setDoubleCoinTimer(0); setHasHoming(false);
     setGachaCost(10); setOverdriveTimer(0); setWaveAnnounce("");
     setWingmanLevel(0); setBossWarning(false); setGameStarted(false); setStartFadeOut(false);
+    setReadyCountdown(0); setRespawnTimer(0);
     state.isPaused = false; state.isGameOver = false; state.gameStarted = false;
   };
 
@@ -3266,7 +3483,8 @@ export default function RaidenGame() {
           <div className="flex items-center justify-between mb-3">
             <Link
               href="/game"
-              className="pixel-font text-[10px] text-[#38bdf8] hover:text-[#7dd3fc] transition-colors tracking-wider"
+              className="pixel-font text-[10px] hover:text-[#7dd3fc] transition-colors tracking-wider"
+              style={{ color: COLORS.player }}
             >
               &lt; RET
             </Link>
@@ -3296,7 +3514,7 @@ export default function RaidenGame() {
                 className={`absolute inset-0 flex flex-col z-20 transition-opacity duration-500 ${startFadeOut ? "opacity-0 pointer-events-none" : "opacity-100"}`}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleStart(); } }}
                 tabIndex={0}
-                style={{ background: "rgba(2,6,23,0.55)" }}
+                style={{ background: "rgba(6,10,24,0.65)" }}
               >
                 {/* Neon title: THUNDER FIGHTER */}
                 <div className="text-center px-4 pt-5 flex-shrink-0">
@@ -3306,12 +3524,12 @@ export default function RaidenGame() {
                       fontFamily: PIXEL_FONT,
                       fontSize: "20px",
                       letterSpacing: "6px",
-                      background: "linear-gradient(90deg, #ff1493, #00bfff, #ff1493)",
+                      background: "linear-gradient(90deg, #5AD9FF, #FFFFFF, #5AD9FF)",
                       backgroundSize: "200% auto",
                       WebkitBackgroundClip: "text",
                       WebkitTextFillColor: "transparent",
                       backgroundClip: "text",
-                      filter: "drop-shadow(0 0 10px rgba(255,20,147,0.6)) drop-shadow(0 0 20px rgba(0,191,255,0.4))",
+                      filter: "drop-shadow(0 0 10px rgba(90,217,255,0.6)) drop-shadow(0 0 20px rgba(90,217,255,0.3))",
                       animation: "gradient-shift 3s linear infinite",
                     }}
                   >
@@ -3323,12 +3541,12 @@ export default function RaidenGame() {
                       fontFamily: PIXEL_FONT,
                       fontSize: "15px",
                       letterSpacing: "12px",
-                      background: "linear-gradient(90deg, #00bfff, #ff1493, #00bfff)",
+                      background: "linear-gradient(90deg, #FFFFFF, #5AD9FF, #FFFFFF)",
                       backgroundSize: "200% auto",
                       WebkitBackgroundClip: "text",
                       WebkitTextFillColor: "transparent",
                       backgroundClip: "text",
-                      filter: "drop-shadow(0 0 10px rgba(0,191,255,0.6)) drop-shadow(0 0 20px rgba(255,20,147,0.4))",
+                      filter: "drop-shadow(0 0 10px rgba(90,217,255,0.6)) drop-shadow(0 0 20px rgba(90,217,255,0.3))",
                       animation: "gradient-shift 3s linear infinite",
                     }}
                   >
@@ -3371,7 +3589,7 @@ export default function RaidenGame() {
                         </span>
                         <span
                           className="pixel-font text-[12px] tracking-wider"
-                          style={{ color: "#38bdf8", textShadow: "0 0 8px rgba(56,189,248,0.5)" }}
+                          style={{ color: COLORS.player, textShadow: `0 0 8px ${COLORS.player}50` }}
                         >
                           {ship.label}
                         </span>
@@ -3495,8 +3713,8 @@ export default function RaidenGame() {
                 <div className="flex flex-col items-center pb-5 gap-2 flex-shrink-0">
                   <div className="flex items-center gap-3">
                     <div className="flex flex-col items-center">
-                      <p className="pixel-font text-[7px] tracking-[2px]" style={{ color: "rgba(148,163,184,0.7)", textShadow: "0 0 4px rgba(148,163,184,0.3)" }}>HIGH SCORE</p>
-                      <p className="pixel-font text-[11px]" style={{ color: "#fbbf24", textShadow: "0 0 8px rgba(251,191,36,0.5), 0 0 16px rgba(251,191,36,0.2)" }}>{formatScore(highScore)}</p>
+                      <p className="pixel-font text-[7px] tracking-[2px]" style={{ color: COLORS.textDim }}>HIGH SCORE</p>
+                      <p className="pixel-font text-[11px]" style={{ color: COLORS.powerUp, textShadow: `0 0 8px ${COLORS.powerUp}60` }}>{formatScore(highScore)}</p>
                     </div>
                     <div style={{ width: 1, height: 20, background: "rgba(56,189,248,0.2)" }} />
                     <button
@@ -3513,11 +3731,11 @@ export default function RaidenGame() {
                     className="float-on-hover px-8 py-2.5 transition-all active:scale-95"
                     style={{
                       background: "transparent",
-                      border: "1px solid rgba(56,189,248,0.6)",
-                      boxShadow: "0 0 8px rgba(56,189,248,0.3), 0 0 20px rgba(56,189,248,0.15), inset 0 0 8px rgba(56,189,248,0.1)",
+                      border: `1px solid ${COLORS.uiBorder}`,
+                      boxShadow: `0 0 8px ${COLORS.player}30, 0 0 20px ${COLORS.player}15, inset 0 0 8px ${COLORS.player}10`,
                     }}
                   >
-                    <span className="pixel-font text-[12px] tracking-[6px]" style={{ color: "#38bdf8", textShadow: "0 0 8px rgba(56,189,248,0.6), 0 0 16px rgba(56,189,248,0.3)" }}>START GAME</span>
+                    <span className="pixel-font text-[12px] tracking-[6px]" style={{ color: COLORS.player, textShadow: `0 0 8px ${COLORS.player}60` }}>START GAME</span>
                   </button>
 
                   <p className="pixel-font text-[6px] tracking-[2px]" style={{ color: "rgba(71,85,105,0.5)", textShadow: "0 0 4px rgba(71,85,105,0.2)" }}>WASD/ARROWS · SPACE BOMB · ESC PAUSE</p>
@@ -3525,140 +3743,143 @@ export default function RaidenGame() {
               </div>
             )}
 
-            {/* ═══ IN-GAME HUD ═══ */}
+              {/* ═══ IN-GAME HUD ═══ */}
             {(gameStarted || startFadeOut) && (
               <>
-                {/* Top gradient mask to isolate HUD from starfield */}
+                {/* Top gradient mask */}
                 <div
                   className="absolute top-0 left-0 right-0 pointer-events-none z-0"
                   style={{
                     height: "48px",
-                    background: "linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)",
+                    background: "linear-gradient(to bottom, rgba(6,10,24,0.85) 0%, rgba(6,10,24,0.3) 60%, transparent 100%)",
                   }}
                 />
 
-                {/* Top-left: lives + coins */}
-                <div className="absolute top-2 left-2 pixel-hud px-2 py-1 flex items-center gap-2" style={{ zIndex: 1 }}>
-                  <div className="flex items-center gap-0.5">
-                    {Array.from({ length: lives }).map((_, i) => (
-                      <Heart key={i} className="w-2.5 h-2.5 text-rose-400" fill="#e11d48" />
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-0.5">
-                    <Coins className="w-2.5 h-2.5 text-yellow-400" />
-                    <span className="pixel-font text-[10px] text-yellow-300">{coins}</span>
-                  </div>
-                  {invincible && (
-                    <span className="pixel-font text-[8px] text-yellow-300 animate-blink">SHIELD</span>
-                  )}
-                  {overdriveTimer > 0 && (
-                    <span className="pixel-font text-[8px] text-orange-400 animate-blink">MAX</span>
-                  )}
+                {/* Arcade-style HUD: SCORE top center */}
+                <div className="absolute top-1.5 left-1/2 -translate-x-1/2 flex flex-col items-center" style={{ zIndex: 1 }}>
+                  <p className="pixel-font text-[6px] tracking-[3px]" style={{ color: COLORS.textDim }}>SCORE</p>
+                  <p className="pixel-font text-[14px] leading-tight" style={{ color: COLORS.explosion, textShadow: `0 0 10px ${COLORS.explosion}60` }}>
+                    {formatScore(score)}
+                  </p>
                 </div>
 
-                {/* Top-right: ship + weapon info + pause */}
-                <div className="absolute top-2 right-2 flex items-center gap-1" style={{ zIndex: 1 }}>
-                  <div className="pixel-hud px-1.5 py-1">
-                    <span className="pixel-font text-[9px] text-[#38bdf8] leading-[12px]">
-                      {WEAPON_ICONS[weaponType]} {WEAPON_NAMES[weaponType]}
-                    </span>
+                {/* Top-left: LIFE */}
+                <div className="absolute top-1.5 left-1.5 flex flex-col" style={{ zIndex: 1 }}>
+                  <p className="pixel-font text-[5px] tracking-[2px]" style={{ color: COLORS.textDim }}>LIFE</p>
+                  <p className="pixel-font text-[12px] leading-tight" style={{ color: COLORS.player, textShadow: `0 0 6px ${COLORS.player}60` }}>
+                    {Array.from({ length: Math.max(1, lives) }).map((_, i) => (
+                      <span key={i} className={i === lives - 1 && respawnTimer > 0 ? "animate-blink" : ""} style={{ marginRight: "2px" }}>&#9829;</span>
+                    ))}
+                    {lives <= 0 && <span style={{ color: COLORS.warning }}>x</span>}
+                  </p>
+                </div>
+
+                {/* Top-right: BOMB + POW + WINGMAN */}
+                <div className="absolute top-1.5 right-1.5 flex items-start gap-2" style={{ zIndex: 1 }}>
+                  <div className="flex flex-col items-end">
+                    <p className="pixel-font text-[5px] tracking-[2px]" style={{ color: COLORS.textDim }}>BOMB</p>
+                    <p className="pixel-font text-[10px] leading-tight" style={{ color: COLORS.missile, textShadow: `0 0 6px ${COLORS.missile}60` }}>
+                      {"B".repeat(Math.max(0, bombCount))}
+                      {bombCount <= 0 && <span style={{ color: COLORS.textDim }}>-</span>}
+                    </p>
                   </div>
-                  <button
-                    onClick={togglePause}
-                    className="pixel-hud w-6 h-6 flex items-center justify-center hover:bg-[rgba(56,189,248,0.15)] active:scale-90 transition-all"
-                  >
-                    <span className="text-white text-[10px]">{isPaused ? "▶" : "⏸"}</span>
-                  </button>
+                  <div className="flex flex-col items-end">
+                    <p className="pixel-font text-[5px] tracking-[2px]" style={{ color: COLORS.textDim }}>POW</p>
+                    <p className="pixel-font text-[10px] leading-tight" style={{ color: overdriveTimer > 0 ? "#f97316" : COLORS.playerBullet, textShadow: `0 0 6px ${COLORS.playerBullet}60` }}>
+                      {overdriveTimer > 0 ? "MAX" : "Lv" + Math.min(stateRef.current.weaponLevel, 4)}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <p className="pixel-font text-[5px] tracking-[2px]" style={{ color: COLORS.textDim }}>WING</p>
+                    <p className="pixel-font text-[9px] leading-tight" style={{ color: wingmanLevel > 0 ? "#c084fc" : COLORS.textDim, textShadow: `0 0 4px #c084fc40` }}>
+                      {wingmanLevel > 0 ? "Lv" + wingmanLevel : "-"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Pause button — minimal pixel */}
+                <button
+                  onClick={togglePause}
+                  className="absolute top-[38px] right-1.5 flex items-center justify-center"
+                  style={{ zIndex: 1, width: "20px", height: "14px", border: `1px solid ${COLORS.uiBorder}`, background: COLORS.uiBg }}
+                >
+                  <span className="pixel-font text-[7px]" style={{ color: COLORS.textDim }}>II</span>
+                </button>
+
+                {/* Coins display */}
+                <div className="absolute top-[38px] left-1.5 flex items-center gap-1" style={{ zIndex: 1 }}>
+                  <p className="pixel-font text-[7px] leading-tight" style={{ color: COLORS.powerUp, textShadow: `0 0 4px ${COLORS.powerUp}40` }}>${coins}</p>
+                  {invincible && <p className="pixel-font text-[6px] leading-tight animate-blink" style={{ color: COLORS.player }}>S</p>}
+                </div>
+
+                {/* Weapon type indicator */}
+                <div className="absolute top-[38px] left-1/2 -translate-x-1/2" style={{ zIndex: 1 }}>
+                  <p className="pixel-font text-[6px] tracking-[2px]" style={{ color: COLORS.textDim }}>{WEAPON_NAMES[weaponType]}</p>
                 </div>
 
                 {/* Boss HP bar */}
                 {stateRef.current.boss && bossHp > 0 && (
-                  <div className="absolute top-2 left-1/2 -translate-x-1/2 pixel-hud px-2 py-1 flex items-center gap-1.5" style={{ zIndex: 1 }}>
-                    <span className="text-red-400 text-[10px]">☠</span>
-                    <div className="w-16 h-1.5 bg-black/60 overflow-hidden" style={{ borderRadius: 0 }}>
+                  <div className="absolute top-[36px] left-1/2 -translate-x-1/2 flex items-center gap-1.5" style={{ zIndex: 2, background: COLORS.uiBg, border: `1px solid ${COLORS.boss}40`, padding: "1px 6px" }}>
+                    <p className="pixel-font text-[6px]" style={{ color: COLORS.boss }}>&#9829;</p>
+                    <div className="w-16 h-1.5 bg-black/80 overflow-hidden" style={{ borderRadius: 0 }}>
                       <div
-                        className="h-full bg-[#22c55e] transition-all duration-200"
-                        style={{ width: `${(bossHp / 50) * 100}%` }}
+                        className="h-full transition-all duration-200"
+                        style={{ width: `${(bossHp / 50) * 100}%`, background: COLORS.explosion }}
                       />
                     </div>
                   </div>
                 )}
 
-                {/* Bomb button — flashy */}
+                {/* Bomb button — pixel arcade style */}
                 <button
                   onClick={triggerBomb}
                   disabled={bombCount <= 0 || isGameOver || isPaused}
-                  className="absolute bottom-16 right-2 flex items-center gap-1 transition-all"
+                  className="absolute bottom-14 right-1.5 flex items-center gap-1 transition-all active:scale-95"
                   style={{
                     zIndex: 1,
-                    padding: "5px 10px",
-                    border: bombCount > 0
-                      ? "1px solid rgba(249,115,22,0.6)"
-                      : "1px solid rgba(100,100,100,0.3)",
-                    background: bombCount > 0
-                      ? "linear-gradient(135deg, rgba(127,29,29,0.85), rgba(194,65,12,0.7))"
-                      : "rgba(30,30,30,0.75)",
-                    boxShadow: bombCount > 0
-                      ? "0 0 8px rgba(249,115,22,0.4), 0 0 20px rgba(234,88,12,0.25), inset 0 0 10px rgba(251,146,60,0.15)"
-                      : "none",
+                    padding: "3px 8px",
+                    border: bombCount > 0 ? `1px solid ${COLORS.missile}80` : `1px solid rgba(100,100,100,0.3)`,
+                    background: bombCount > 0 ? "rgba(194,65,12,0.6)" : "rgba(30,30,30,0.5)",
+                    boxShadow: bombCount > 0 ? "0 0 6px rgba(255,216,61,0.3)" : "none",
                     borderRadius: 0,
                     opacity: bombCount <= 0 || isGameOver || isPaused ? 0.3 : 1,
-                    animation: bombCount > 0 ? "bomb-pulse 2s ease-in-out infinite" : "none",
                   }}
                 >
-                  {/* Fire icon glow */}
                   <span
+                    className="pixel-font text-[9px]"
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      filter: bombCount > 0 ? "drop-shadow(0 0 4px rgba(251,146,60,0.8))" : "none",
+                      color: bombCount > 0 ? COLORS.missile : "#666",
+                      textShadow: bombCount > 0 ? `0 0 6px ${COLORS.missile}60` : "none",
                     }}
                   >
-                    <Bomb className="w-3.5 h-3.5 text-orange-400" />
+                    B{bombCount}
                   </span>
-                  {/* Count with glow */}
-                  <span
-                    className="pixel-font text-[10px]"
-                    style={{
-                      color: bombCount > 0 ? "#fb923c" : "#666",
-                      textShadow: bombCount > 0
-                        ? "0 0 6px rgba(251,146,60,0.6), 0 0 12px rgba(234,88,12,0.3)"
-                        : "none",
-                    }}
-                  >
-                    ×{bombCount}
-                  </span>
-                  {/* Fire accent dot */}
-                  {bombCount > 0 && (
-                    <span
-                      className="animate-blink"
-                      style={{
-                        position: "absolute",
-                        top: "-2px",
-                        right: "-2px",
-                        width: "6px",
-                        height: "6px",
-                        borderRadius: "50%",
-                        background: "#ef4444",
-                        boxShadow: "0 0 6px #ef4444, 0 0 12px rgba(239,68,68,0.5)",
-                      }}
-                    />
-                  )}
                 </button>
 
-                {/* Bottom HUD bar: level + fire power indicator */}
-                <div className="absolute bottom-2 left-2 pixel-hud px-2 py-1" style={{ zIndex: 1 }}>
-                  <span className="pixel-font text-[8px] text-[#facc15]">
-                    LV {Math.min(stateRef.current.weaponLevel, 4)}
-                  </span>
-                </div>
-                <div className="absolute bottom-2 right-2 pixel-hud px-2 py-1" style={{ zIndex: 1 }}>
-                  <span className="pixel-font text-[8px] text-[#475569]">
+                {/* Bottom-left: WAVE */}
+                <div className="absolute bottom-1.5 left-1.5" style={{ zIndex: 1 }}>
+                  <p className="pixel-font text-[6px]" style={{ color: COLORS.textDim }}>
                     WAVE {Math.max(0, stateRef.current.lastWaveSpawned + 1)}
-                  </span>
+                  </p>
                 </div>
               </>
+            )}
+
+            {/* READY Countdown overlay */}
+            {(startFadeOut && !gameStarted) && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10" style={{ background: "rgba(6,10,24,0.55)" }}>
+                <p
+                  className="text-[48px] font-black tracking-[8px]"
+                  style={{
+                    fontFamily: PIXEL_FONT,
+                    color: readyCountdown > 0 ? COLORS.player : COLORS.powerUp,
+                    textShadow: `-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0 0 24px ${readyCountdown > 0 ? COLORS.player : COLORS.powerUp}`,
+                    animation: "gacha-card-pop 0.3s ease-out",
+                  }}
+                >
+                  {readyCountdown > 0 ? String(readyCountdown) : "GO!"}
+                </p>
+              </div>
             )}
 
             {/* Boss Warning overlay */}
@@ -3729,21 +3950,21 @@ export default function RaidenGame() {
             )}
 
             {/* Game over */}
-            {isGameOver && (
+              {isGameOver && (
               <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center text-center p-6 z-10">
-                <p className="pixel-font text-[16px] text-rose-500 tracking-[3px] mb-3" style={{ textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000" }}>GAME OVER</p>
+                <p className="pixel-font text-[16px] text-red-500 tracking-[3px] mb-3" style={{ textShadow: "-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000" }}>GAME OVER</p>
                 <div className="pixel-hud px-4 py-2 mb-2">
-                  <p className="pixel-font text-[7px] text-[#64748b] mb-1">SCORE</p>
-                  <p className="pixel-font text-[12px] text-[#fbbf24]" style={{ textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000" }}>{formatScore(score)}</p>
+                  <p className="pixel-font text-[7px] mb-1" style={{ color: COLORS.textDim }}>SCORE</p>
+                  <p className="pixel-font text-[12px]" style={{ color: COLORS.powerUp, textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000" }}>{formatScore(score)}</p>
                 </div>
                 <div className="pixel-hud px-3 py-1 mb-5">
-                  <p className="pixel-font text-[6px] text-[#475569]">BEST {formatScore(highScore)}</p>
+                  <p className="pixel-font text-[6px]" style={{ color: COLORS.textDim }}>BEST {formatScore(highScore)}</p>
                 </div>
                 <button
                   onClick={restartGame}
-                  className="pixel-hud px-4 py-2 bg-[rgba(56,189,248,0.15)] hover:bg-[rgba(56,189,248,0.25)] active:scale-95 transition-all"
+                  className="pixel-hud px-4 py-2 bg-[rgba(90,217,255,0.15)] hover:bg-[rgba(90,217,255,0.25)] active:scale-95 transition-all"
                 >
-                  <span className="pixel-font text-[8px] text-[#38bdf8] tracking-[2px]">CONTINUE</span>
+                  <span className="pixel-font text-[8px] tracking-[2px]" style={{ color: COLORS.player }}>CONTINUE</span>
                 </button>
               </div>
             )}

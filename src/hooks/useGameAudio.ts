@@ -5,6 +5,8 @@ import { useEffect, useRef, useCallback } from "react";
 export interface GameAudio {
   initAudio: () => void;
   shoot: () => void;
+  shootLaser: () => void;
+  shootWave: () => void;
   explosion: () => void;
   bossExplosion: () => void;
   playerHit: () => void;
@@ -23,8 +25,10 @@ function noop() {}
 export function useGameAudio(): GameAudio {
   const ctxRef = useRef<AudioContext | null>(null);
   const masterRef = useRef<GainNode | null>(null);
-  const bgmNodesRef = useRef<OscillatorNode[]>([]);
+  const bgmNodesRef = useRef<Set<OscillatorNode | AudioBufferSourceNode>>(new Set());
   const coinCooldownRef = useRef(0);
+  const shootCooldownRef = useRef(0);  // throttle rapid shoot sfx
+  const maxBgmNodes = 180;  // hard cap to prevent runaway
 
   const getCtx = useCallback(() => {
     if (typeof window === "undefined") return null;
@@ -147,12 +151,122 @@ export function useGameAudio(): GameAudio {
     [getCtx, ensureRunning],
   );
 
-  const shoot = noop;
+  const shoot = useCallback(() => {
+    const ctx = getCtx();
+    if (!ctx || !ensureRunning(ctx) || !masterRef.current) return;
+    // throttle: max 1 shoot sfx per 40ms (game requests ~every 133ms, so usually no-op)
+    if (shootCooldownRef.current > 0) { shootCooldownRef.current--; return; }
+    shootCooldownRef.current = 2;  // ~2 frames cooldown
+    // crisp high-frequency zap — classic STG shoot
+    const osc = ctx.createOscillator();
+    osc.type = "square";
+    osc.frequency.setValueAtTime(1400, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.06);
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 3000;
+    osc.connect(lp);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.09, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
+    lp.connect(gain);
+    gain.connect(masterRef.current);
+
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.08);
+    osc.onended = () => { gain.disconnect(); lp.disconnect(); osc.disconnect(); };
+  }, [getCtx, ensureRunning]);
+
+  // laser shoot — higher, piercing whine
+  const shootLaser = useCallback(() => {
+    const ctx = getCtx();
+    if (!ctx || !ensureRunning(ctx) || !masterRef.current) return;
+    if (shootCooldownRef.current > 0) { shootCooldownRef.current--; return; }
+    shootCooldownRef.current = 2;
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(2200, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.08);
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 4000;
+    osc.connect(lp);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.06, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
+    lp.connect(gain);
+    gain.connect(masterRef.current);
+
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.1);
+    osc.onended = () => { gain.disconnect(); lp.disconnect(); osc.disconnect(); };
+  }, [getCtx, ensureRunning]);
+
+  // wave shoot — soft plasma pulse
+  const shootWave = useCallback(() => {
+    const ctx = getCtx();
+    if (!ctx || !ensureRunning(ctx) || !masterRef.current) return;
+    if (shootCooldownRef.current > 0) { shootCooldownRef.current--; return; }
+    shootCooldownRef.current = 2;
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(600, ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(300, ctx.currentTime + 0.05);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.07, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+    osc.connect(gain);
+    gain.connect(masterRef.current);
+
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.07);
+    osc.onended = () => { gain.disconnect(); osc.disconnect(); };
+  }, [getCtx, ensureRunning]);
 
   const explosion = useCallback(() => {
-    playNoise(0.2, 0.25, "bandpass", 800, 0.5);
-    playTone("sawtooth", 400, 80, 0.12, 0.2);
-  }, [playNoise, playTone]);
+    const ctx = getCtx();
+    if (!ctx || !ensureRunning(ctx) || !masterRef.current) return;
+    // Layer 1: low thump
+    const sub = ctx.createOscillator();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(120, ctx.currentTime);
+    sub.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 0.15);
+    const subGain = ctx.createGain();
+    subGain.gain.setValueAtTime(0.25, ctx.currentTime);
+    subGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+    sub.connect(subGain);
+    subGain.connect(masterRef.current!);
+    sub.start(ctx.currentTime);
+    sub.stop(ctx.currentTime + 0.21);
+    sub.onended = () => { subGain.disconnect(); sub.disconnect(); };
+
+    // Layer 2: crackle noise (short burst)
+    const sr = ctx.sampleRate;
+    const len = Math.floor(sr * 0.12);
+    const buf = ctx.createBuffer(1, len, sr);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 1200;
+    bp.Q.value = 0.5;
+    src.connect(bp);
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.18, ctx.currentTime);
+    ng.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+    bp.connect(ng);
+    ng.connect(masterRef.current!);
+    src.start(ctx.currentTime);
+    src.stop(ctx.currentTime + 0.13);
+    src.onended = () => { ng.disconnect(); bp.disconnect(); src.disconnect(); };
+  }, [getCtx, ensureRunning]);
 
   const bossExplosion = useCallback(() => {
     playNoise(0.3, 0.5, "bandpass", 500, 0.5);
@@ -316,71 +430,106 @@ export function useGameAudio(): GameAudio {
     playTone("square", 800, undefined, 0.06, 0.02);
   }, [playTone]);
 
-  // ─── BGM: chiptune-style loop ──────────────────────────────────
+  // ─── BGM: chiptune-style with proper chord progression ────────────────────
+  // Key: A minor — classic moody STG feel
+  // Chord progression: Am - F - C - G (vi-IV-I-V in C, very melodic)
 
-  const beatLen = 0.4; // 150 BPM
-  const barLen = beatLen * 4; // 1.6s per bar
-  const loopLen = barLen * 4; // 6.4s total loop
+  const beatLen = 0.375; // 160 BPM (0.375s per beat)
+  const barLen = beatLen * 4; // 1.5s per bar
+  const loopLen = barLen * 8; // 8 bars = 12s loop — longer = less repetitive
 
-  interface Note { freq: number; start: number; dur: number; }
+  interface BgmNote { freq: number; start: number; dur: number; type: OscillatorType; vol: number; }
 
-  // Melody — square wave, higher octave
-  const melodyNotes: Note[] = [
-    // Bar 1
-    { freq: 659, start: 0, dur: 0.6 },
-    { freq: 587, start: 1.2, dur: 0.2 },
-    { freq: 523, start: 1.6, dur: 0.6 },
-    { freq: 587, start: 2.8, dur: 0.2 },
-    { freq: 659, start: 3.2, dur: 0.9 },
-    { freq: 784, start: 4.8, dur: 0.4 },
-    // Bar 2
-    { freq: 880, start: 6.4, dur: 0.6 },
-    { freq: 784, start: 7.6, dur: 0.2 },
-    { freq: 659, start: 8.0, dur: 0.6 },
-    { freq: 587, start: 9.2, dur: 0.2 },
-    { freq: 523, start: 9.6, dur: 0.9 },
-    // Bar 3
-    { freq: 659, start: 12.8, dur: 0.2 },
-    { freq: 784, start: 13.2, dur: 0.2 },
-    { freq: 880, start: 13.6, dur: 0.2 },
-    { freq: 1047, start: 14.0, dur: 0.2 },
-    { freq: 1175, start: 14.4, dur: 0.6 },
-    { freq: 1047, start: 15.6, dur: 0.2 },
-    { freq: 880, start: 16.0, dur: 0.6 },
-    // Bar 4
-    { freq: 784, start: 19.2, dur: 0.4 },
-    { freq: 659, start: 20.0, dur: 0.4 },
-    { freq: 587, start: 20.8, dur: 0.4 },
-    { freq: 523, start: 21.6, dur: 0.6 },
+  // Chord tones for A-minor progression
+  // Am: A C E  / F: F A C  / C: C E G  / G: G B D
+  const f = (base: number, semi: number) => base * Math.pow(2, semi / 12);
+
+  const A2 = 110, A3 = 220, A4 = 440, A5 = 880;
+  const C4 = f(A3, 3), E4 = f(A3, 7), G4 = f(A3, 10);
+  const F3 = f(A3, -4), F4 = f(A4, -4);
+  const D4 = f(A3, 5), B3 = f(A3, 2), G3 = f(A3, -2);
+
+  // Arpeggiated melody — plays chord tones in quick sequence (very STG)
+  // 8-bar loop: Am - F - C - G - Am - F - C - G
+  const melodyNotes: BgmNote[] = [
+    // Bar 1 (Am)
+    { freq: A4,   start: 0,               dur: 0.12, type: "square", vol: 0.05 },
+    { freq: C4,   start: beatLen,         dur: 0.10, type: "square", vol: 0.045 },
+    { freq: E4,   start: beatLen * 2,     dur: 0.10, type: "square", vol: 0.045 },
+    { freq: A4,   start: beatLen * 2.75,  dur: 0.10, type: "square", vol: 0.045 },
+    { freq: C4,   start: beatLen * 3.5,   dur: 0.08, type: "square", vol: 0.04 },
+    // Bar 2 (F)
+    { freq: F4,   start: barLen,          dur: 0.12, type: "square", vol: 0.05 },
+    { freq: A3,   start: barLen + beatLen, dur: 0.10, type: "square", vol: 0.045 },
+    { freq: C4,   start: barLen + beatLen * 2, dur: 0.10, type: "square", vol: 0.045 },
+    { freq: F4,   start: barLen + beatLen * 2.75, dur: 0.10, type: "square", vol: 0.045 },
+    { freq: A3,   start: barLen + beatLen * 3.5, dur: 0.08, type: "square", vol: 0.04 },
+    // Bar 3 (C)
+    { freq: C4,   start: barLen * 2,      dur: 0.12, type: "square", vol: 0.05 },
+    { freq: E4,   start: barLen * 2 + beatLen, dur: 0.10, type: "square", vol: 0.045 },
+    { freq: G4,   start: barLen * 2 + beatLen * 2, dur: 0.10, type: "square", vol: 0.045 },
+    { freq: C4,   start: barLen * 2 + beatLen * 3, dur: 0.14, type: "square", vol: 0.05 },
+    // Bar 4 (G) — resolving
+    { freq: B3,   start: barLen * 3,      dur: 0.10, type: "square", vol: 0.045 },
+    { freq: D4,   start: barLen * 3 + beatLen, dur: 0.10, type: "square", vol: 0.045 },
+    { freq: G4,   start: barLen * 3 + beatLen * 2, dur: 0.12, type: "square", vol: 0.045 },
+    { freq: A4,   start: barLen * 3 + beatLen * 3.5, dur: 0.20, type: "square", vol: 0.05 },
+    // Bar 5 (Am) — variation with higher octave
+    { freq: A5,   start: barLen * 4,      dur: 0.08, type: "square", vol: 0.05 },
+    { freq: A4,   start: barLen * 4 + beatLen * 0.5, dur: 0.07, type: "square", vol: 0.04 },
+    { freq: E4,   start: barLen * 4 + beatLen, dur: 0.10, type: "square", vol: 0.045 },
+    { freq: C4,   start: barLen * 4 + beatLen * 2, dur: 0.10, type: "square", vol: 0.045 },
+    { freq: A4,   start: barLen * 4 + beatLen * 3, dur: 0.12, type: "square", vol: 0.05 },
+    // Bar 6 (F) — variation
+    { freq: F4,   start: barLen * 5,      dur: 0.10, type: "square", vol: 0.045 },
+    { freq: F3,   start: barLen * 5 + beatLen, dur: 0.10, type: "square", vol: 0.04 },
+    { freq: C4,   start: barLen * 5 + beatLen * 2, dur: 0.10, type: "square", vol: 0.045 },
+    { freq: F4,   start: barLen * 5 + beatLen * 3, dur: 0.14, type: "square", vol: 0.05 },
+    // Bar 7 (C) — variation
+    { freq: G4,   start: barLen * 6,      dur: 0.10, type: "square", vol: 0.045 },
+    { freq: E4,   start: barLen * 6 + beatLen, dur: 0.10, type: "square", vol: 0.045 },
+    { freq: C4,   start: barLen * 6 + beatLen * 2, dur: 0.12, type: "square", vol: 0.05 },
+    { freq: E4,   start: barLen * 6 + beatLen * 3.5, dur: 0.07, type: "square", vol: 0.04 },
+    // Bar 8 (G) — resolving with flourish
+    { freq: D4,   start: barLen * 7,      dur: 0.10, type: "square", vol: 0.045 },
+    { freq: G4,   start: barLen * 7 + beatLen, dur: 0.10, type: "square", vol: 0.045 },
+    { freq: B3,   start: barLen * 7 + beatLen * 2, dur: 0.12, type: "square", vol: 0.045 },
+    { freq: A4,   start: barLen * 7 + beatLen * 3.5, dur: 0.20, type: "square", vol: 0.05 },
   ];
 
-  // Bass — triangle wave, lower octave
-  const bassNotes: Note[] = [
-    // Bar 1
-    { freq: 220, start: 0, dur: 0.6 },
-    { freq: 165, start: 1.6, dur: 0.6 },
-    { freq: 220, start: 3.2, dur: 0.6 },
-    { freq: 262, start: 4.8, dur: 0.6 },
-    // Bar 2
-    { freq: 175, start: 6.4, dur: 0.6 },
-    { freq: 262, start: 8.0, dur: 0.6 },
-    { freq: 220, start: 9.6, dur: 0.6 },
-    { freq: 165, start: 11.2, dur: 0.6 },
-    // Bar 3
-    { freq: 220, start: 12.8, dur: 0.6 },
-    { freq: 262, start: 14.4, dur: 0.9 },
-    { freq: 294, start: 17.6, dur: 0.6 },
-    // Bar 4
-    { freq: 330, start: 19.2, dur: 0.6 },
-    { freq: 262, start: 20.8, dur: 0.6 },
-    { freq: 220, start: 22.4, dur: 0.6 },
-    { freq: 165, start: 24.0, dur: 0.6 },
+  const bassNotes: BgmNote[] = [
+    // 8-bar loop
+    { freq: A2, start: 0,        dur: 0.30, type: "square", vol: 0.055 },
+    { freq: A2, start: beatLen * 2, dur: 0.30, type: "square", vol: 0.05 },
+    { freq: F3, start: barLen,   dur: 0.30, type: "square", vol: 0.055 },
+    { freq: F3, start: barLen + beatLen * 2, dur: 0.30, type: "square", vol: 0.05 },
+    { freq: A2, start: barLen * 2, dur: 0.30, type: "square", vol: 0.055 },
+    { freq: A2, start: barLen * 2 + beatLen * 2, dur: 0.30, type: "square", vol: 0.05 },
+    { freq: F3, start: barLen * 3, dur: 0.30, type: "square", vol: 0.055 },
+    { freq: F3, start: barLen * 3 + beatLen * 2, dur: 0.30, type: "square", vol: 0.05 },
+    { freq: A2, start: barLen * 4, dur: 0.30, type: "square", vol: 0.055 },
+    { freq: A2, start: barLen * 4 + beatLen * 2, dur: 0.30, type: "square", vol: 0.05 },
+    { freq: F3, start: barLen * 5, dur: 0.30, type: "square", vol: 0.055 },
+    { freq: F3, start: barLen * 5 + beatLen * 2, dur: 0.30, type: "square", vol: 0.05 },
+    { freq: A2, start: barLen * 6, dur: 0.30, type: "square", vol: 0.055 },
+    { freq: A2, start: barLen * 6 + beatLen * 2, dur: 0.30, type: "square", vol: 0.05 },
+    { freq: F3, start: barLen * 7, dur: 0.30, type: "square", vol: 0.055 },
+    { freq: F3, start: barLen * 7 + beatLen * 2, dur: 0.30, type: "square", vol: 0.05 },
   ];
 
-  // Percussion — noise ticks every quarter note (reduced from 8th for performance)
-  const beatTicks: number[] = [];
-  for (let b = 0; b < 16; b++) {
-    beatTicks.push(b * beatLen); // quarter notes
+  // Percussion — 8-bar loop pattern
+  const kickTicks: number[] = [];
+  const snareTicks: number[] = [];
+  const hatTicks: number[] = [];
+  for (let bar = 0; bar < 8; bar++) {
+    for (let b = 0; b < 4; b++) {
+      kickTicks.push(bar * barLen + b * beatLen);
+      if (b === 1 || b === 3) {
+        snareTicks.push(bar * barLen + b * beatLen);
+      }
+      hatTicks.push(bar * barLen + b * beatLen);
+      hatTicks.push(bar * barLen + b * beatLen + beatLen / 2);
+    }
   }
 
   // Pre-generated noise buffer reused across all percussion ticks
@@ -398,8 +547,10 @@ export function useGameAudio(): GameAudio {
     const nodes = bgmNodesRef.current;
     for (const n of nodes) {
       try { n.stop(); } catch {}
+      // disconnect all outgoing connections
+      n.disconnect();
     }
-    bgmNodesRef.current = [];
+    bgmNodesRef.current.clear();
   }, []);
 
   const startBGM = useCallback(() => {
@@ -421,105 +572,137 @@ export function useGameAudio(): GameAudio {
     const scheduleBGMBlock = (offset: number) => {
       const master = masterRef.current!;
       const baseT = offset;
+      // Hard cap — if we already have too many nodes, skip scheduling new ones
+      if (bgmNodesRef.current.size > maxBgmNodes) return;
 
-      // Melody — square wave with vibrato via low-pass filter
+      const makeOscNode = (
+        type: OscillatorType,
+        freq: number,
+        dur: number,
+        vol: number,
+        lpCut: number,
+        startOffset: number,
+        onTick?: (osc: OscillatorNode, gain: GainNode, start: number) => void,
+      ) => {
+        const osc = ctx.createOscillator();
+        osc.type = type;
+        osc.frequency.value = freq;
+
+        const lp = ctx.createBiquadFilter();
+        lp.type = "lowpass";
+        lp.frequency.value = lpCut;
+        osc.connect(lp);
+
+        const gain = ctx.createGain();
+        const s = baseT + startOffset;
+        gain.gain.setValueAtTime(0.001, s);
+        gain.gain.linearRampToValueAtTime(vol, s + 0.003);
+        gain.gain.setValueAtTime(vol * 0.66, s + dur * 0.5);
+        gain.gain.exponentialRampToValueAtTime(0.001, s + dur);
+        lp.connect(gain);
+        gain.connect(master);
+
+        bgmNodesRef.current.add(osc);
+        osc.start(s);
+        osc.stop(s + dur + 0.02);
+        osc.onended = () => {
+          bgmNodesRef.current.delete(osc);
+          gain.disconnect(); lp.disconnect(); osc.disconnect();
+        };
+        if (onTick) onTick(osc, gain, s);
+      };
+
+      // Melody (square-arp) — uses n.start for timing
       melodyNotes.forEach((n) => {
-        const osc = ctx.createOscillator();
-        osc.type = "square";
-        osc.frequency.value = n.freq;
-
-        const lp = ctx.createBiquadFilter();
-        lp.type = "lowpass";
-        lp.frequency.value = n.freq * 1.5;
-        osc.connect(lp);
-
-        const gain = ctx.createGain();
-        const s = baseT + n.start;
-        gain.gain.setValueAtTime(0.001, s);
-        gain.gain.linearRampToValueAtTime(0.06, s + 0.005);
-        gain.gain.setValueAtTime(0.06, s + n.dur * 0.7);
-        gain.gain.exponentialRampToValueAtTime(0.001, s + n.dur);
-        lp.connect(gain);
-        gain.connect(master);
-
-        bgmNodesRef.current.push(osc);
-        osc.start(s);
-        osc.stop(s + n.dur + 0.02);
-        osc.onended = () => {
-          const idx = bgmNodesRef.current.indexOf(osc);
-          if (idx >= 0) bgmNodesRef.current.splice(idx, 1);
-          gain.disconnect(); lp.disconnect(); osc.disconnect();
-        };
+        makeOscNode("square", n.freq, n.dur, n.vol, n.freq * 1.8, n.start);
       });
 
-      // Bass — triangle wave
+      // Bass (square with dip) — uses n.start for timing
       bassNotes.forEach((n) => {
-        const osc = ctx.createOscillator();
-        osc.type = "triangle";
-        osc.frequency.value = n.freq;
+        makeOscNode("square", n.freq * 1.2, n.dur, n.vol, 250, n.start, (osc, gain, s) => {
+          osc.frequency.exponentialRampToValueAtTime(n.freq, s + 0.02);
+        });
+      });
 
-        const lp = ctx.createBiquadFilter();
-        lp.type = "lowpass";
-        lp.frequency.value = 350;
-        osc.connect(lp);
+      // Kick (sub sine sweep)
+      kickTicks.forEach((b) => {
+        const s = baseT + b;
+        const kickOsc = ctx.createOscillator();
+        kickOsc.type = "sine";
+        kickOsc.frequency.setValueAtTime(120, s);
+        kickOsc.frequency.exponentialRampToValueAtTime(40, s + 0.08);
 
-        const gain = ctx.createGain();
-        const s = baseT + n.start;
-        gain.gain.setValueAtTime(0.001, s);
-        gain.gain.linearRampToValueAtTime(0.05, s + 0.008);
-        gain.gain.setValueAtTime(0.05, s + n.dur * 0.7);
-        gain.gain.exponentialRampToValueAtTime(0.001, s + n.dur);
-        lp.connect(gain);
-        gain.connect(master);
+        const kickGain = ctx.createGain();
+        kickGain.gain.setValueAtTime(0.12, s);
+        kickGain.gain.exponentialRampToValueAtTime(0.001, s + 0.12);
+        kickOsc.connect(kickGain);
+        kickGain.connect(master);
 
-        bgmNodesRef.current.push(osc);
-        osc.start(s);
-        osc.stop(s + n.dur + 0.02);
-        osc.onended = () => {
-          const idx = bgmNodesRef.current.indexOf(osc);
-          if (idx >= 0) bgmNodesRef.current.splice(idx, 1);
-          gain.disconnect(); lp.disconnect(); osc.disconnect();
+        bgmNodesRef.current.add(kickOsc);
+        kickOsc.start(s);
+        kickOsc.stop(s + 0.13);
+        kickOsc.onended = () => {
+          bgmNodesRef.current.delete(kickOsc);
+          kickGain.disconnect(); kickOsc.disconnect();
         };
       });
 
-      // Percussion — noise tick on each quarter note (reused buffer)
-      beatTicks.forEach((b) => {
+      // Snare (noise burst + bandpass)
+      snareTicks.forEach((b) => {
+        const s = baseT + b;
+        const len = Math.floor(ctx.sampleRate * 0.08);
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const bp = ctx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.value = 3500;
+        bp.Q.value = 0.8;
+        src.connect(bp);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.06, s);
+        gain.gain.exponentialRampToValueAtTime(0.001, s + 0.08);
+        bp.connect(gain);
+        gain.connect(master);
+        src.start(s);
+        src.stop(s + 0.09);
+        // Note: AudioBufferSourceNodes auto-stop; don't add to bgmNodes set (they self-clean)
+      });
+
+      // Hi-hat (short noise tick)
+      hatTicks.forEach((b) => {
+        const s = baseT + b;
         const src = ctx.createBufferSource();
         src.buffer = noiseBufRef.current!;
-
         const hp = ctx.createBiquadFilter();
         hp.type = "highpass";
-        hp.frequency.value = 3000;
+        hp.frequency.value = 6000;
         src.connect(hp);
-
         const gain = ctx.createGain();
-        const s = baseT + b;
-        gain.gain.setValueAtTime(0.025, s);
-        gain.gain.exponentialRampToValueAtTime(0.001, s + 0.015);
+        gain.gain.setValueAtTime(0.015, s);
+        gain.gain.exponentialRampToValueAtTime(0.001, s + 0.01);
         hp.connect(gain);
         gain.connect(master);
-
         src.start(s);
-        src.stop(s + 0.02);
-        src.onended = () => { gain.disconnect(); hp.disconnect(); src.disconnect(); };
+        src.stop(s + 0.015);
       });
     };
 
     const scheduleLoop = () => {
       const now = ctx.currentTime;
-      const nextStart = Math.max(now, bgmScheduledRef.current);
-      // Only schedule if we're running low — schedule 1 loop at a time, further apart
-      if (nextStart > now + loopLen * 0.5) return;
-
-      // Schedule only 1 loop ahead instead of 2
-      while (bgmScheduledRef.current < now + loopLen) {
-        scheduleBGMBlock(bgmScheduledRef.current);
-        bgmScheduledRef.current += loopLen;
-      }
+      // Only schedule when we're within 0.75 loop lengths of running out
+      if (bgmScheduledRef.current > now + loopLen * 0.75) return;
+      scheduleBGMBlock(bgmScheduledRef.current);
+      bgmScheduledRef.current += loopLen;
     };
 
+    // kick off immediately
     scheduleLoop();
-    bgmIntervalRef.current = setInterval(scheduleLoop, 5000);
+    // poll at 60% of loop duration — keeps ~1.5 loops ahead, never 3+
+    const pollMs = Math.max(1500, Math.floor(loopLen * 600));
+    bgmIntervalRef.current = setInterval(scheduleLoop, pollMs);
   }, [getCtx, ensureRunning, stopBGM]);
 
   useEffect(() => {
@@ -535,6 +718,8 @@ export function useGameAudio(): GameAudio {
   return {
     initAudio,
     shoot,
+    shootLaser,
+    shootWave,
     explosion,
     bossExplosion,
     playerHit,

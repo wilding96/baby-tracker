@@ -4,8 +4,6 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Bomb,
-  Coins,
 } from "lucide-react";
 import { useGameAudio } from "@/hooks/useGameAudio";
 
@@ -194,7 +192,7 @@ const BOSS_EYE_SPRITE = [
 ];
 const BOSS_EYE_CORE = ["hh", "hh"];
 
-const COIN_SPRITE = [".hb.", "hbbh", "b..b", ".ss."];
+
 
 const PURPLE_WING = [
   "..p..p..",
@@ -219,32 +217,11 @@ interface CardDef {
   rarity: "SR" | "SSR";
   desc: string;
 }
-// ═══════════════════════════════════════════════════════════════════
-// SHOP ITEMS
-// ═══════════════════════════════════════════════════════════════════
-
-interface ShopItemDef {
-  id: keyof SaveData["upgrades"];
-  icon: string;
-  name: string;
-  desc: string;
-  price: number;
-  owned: (upgrades: SaveData["upgrades"]) => boolean;
-}
-const SHOP_ITEMS: ShopItemDef[] = [
-  { id: "extraBomb", icon: "💣", name: "初始炸弹+1", desc: "开局多一枚炸弹", price: 5, owned: (u) => u.extraBomb > 0 },
-  { id: "weaponBoost", icon: "⚡", name: "初始火力+1", desc: "开局Lv2武器", price: 8, owned: (u) => u.weaponBoost },
-  { id: "startShield", icon: "🛡️", name: "开局护盾", desc: "开局3秒无敌", price: 6, owned: (u) => u.startShield },
-  { id: "startWingman", icon: "✈️", name: "僚机开局", desc: "开局携带僚机", price: 12, owned: (u) => u.startWingman },
-  { id: "permaDouble", icon: "🪙", name: "双倍金币卡", desc: "本局金币翻倍", price: 10, owned: (u) => u.permaDouble },
-];
-
 const SR_CARDS: CardDef[] = [
   { id: "power_up", name: "火力升级", icon: "⚡", rarity: "SR", desc: "武器等级 +1" },
   { id: "bomb_give", name: "炸弹补给", icon: "💣", rarity: "SR", desc: "炸弹 +1" },
   { id: "life_give", name: "生命之心", icon: "❤️", rarity: "SR", desc: "生命 +1" },
   { id: "shield_s", name: "护盾", icon: "🛡️", rarity: "SR", desc: "3 秒无敌" },
-  { id: "double_coin", name: "双倍金币", icon: "🪙", rarity: "SR", desc: "30s 金币翻倍" },
   { id: "wingmanUp", name: "僚机升级", icon: "✈️", rarity: "SR", desc: "僚机等级 +1" },
 ];
 const SSR_CARDS: CardDef[] = [
@@ -252,7 +229,6 @@ const SSR_CARDS: CardDef[] = [
   { id: "fire_storm", name: "火力风暴", icon: "🔥", rarity: "SSR", desc: "MAX 火力5秒" },
   { id: "life_pack", name: "生命补给", icon: "💖", rarity: "SSR", desc: "额外 +2 命" },
   { id: "nuke", name: "核弹", icon: "☢️", rarity: "SSR", desc: "全屏清怪 +2 炸弹" },
-  { id: "coin_burst", name: "金币爆裂", icon: "💰", rarity: "SSR", desc: "获得 15 金币" },
 ];
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -341,11 +317,8 @@ interface Miniboss {
   type: BossType;
   attackTimer: number;
   enterAnim: number; // animation timer, counts down; >0 means in entrance animation
-  dropCoins: number; // how many coins to drop on death
 }
-interface CoinItem {
-  x: number; y: number; value: number; alive: boolean;
-}
+
 interface EnergyFragment {
   x: number; y: number; value: number; alive: boolean;
   vx: number; vy: number;
@@ -397,7 +370,6 @@ const WAVE_TABLE: WaveEntry[] = [
 // ═══════════════════════════════════════════════════════════════════
 
 interface SaveData {
-  totalCoins: number;
   highScore: number;
   totalGames: number;
   upgrades: {
@@ -405,7 +377,6 @@ interface SaveData {
     weaponBoost: boolean;
     startShield: boolean;
     startWingman: boolean;
-    permaDouble: boolean;
   };
 }
 const SAVE_KEY = "raiden_save";
@@ -416,12 +387,12 @@ function loadSave(): SaveData {
       const parsed = JSON.parse(raw);
       // ensure upgrades field exists (old save data might not have it)
       if (!parsed.upgrades) {
-        parsed.upgrades = { extraBomb: 0, weaponBoost: false, startShield: false, startWingman: false, permaDouble: false };
+        parsed.upgrades = { extraBomb: 0, weaponBoost: false, startShield: false, startWingman: false };
       }
       return parsed;
     }
   } catch {}
-  return { totalCoins: 0, highScore: 0, totalGames: 0, upgrades: { extraBomb: 0, weaponBoost: false, startShield: false, startWingman: false, permaDouble: false } };
+  return { highScore: 0, totalGames: 0, upgrades: { extraBomb: 0, weaponBoost: false, startShield: false, startWingman: false } };
 }
 function writeSave(data: SaveData) {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch {}
@@ -499,11 +470,9 @@ export default function RaidenGame() {
   const [invincible, setInvincible] = useState(false);
   const [bossHp, setBossHp] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [coins, setCoins] = useState(0);
   const [showGacha, setShowGacha] = useState(false);
   const [gachaClosing, setGachaClosing] = useState(false);
   const [gachaCards, setGachaCards] = useState<CardDef[]>([]);
-  const [doubleCoinTimer, setDoubleCoinTimer] = useState(0);
   const [hasHoming, setHasHoming] = useState(false);
   const [gachaCost, setGachaCost] = useState(10);
   const [overdriveTimer, setOverdriveTimer] = useState(0);
@@ -511,8 +480,6 @@ export default function RaidenGame() {
   const [bossWarning, setBossWarning] = useState(false);
   const [highScore, setHighScore] = useState(0);
   const [wingmanLevel, setWingmanLevel] = useState(0);
-  const [showShop, setShowShop] = useState(false);
-  const [shopRefreshKey, setShopRefreshKey] = useState(0);
   const [readyCountdown, setReadyCountdown] = useState(0); // 0=no countdown, >0=counting
   const [respawnTimer, setRespawnTimer] = useState(0); // death respawn invincibility + blink
 
@@ -522,7 +489,7 @@ export default function RaidenGame() {
     bombCount: 3, lives: 3, isPaused: false,
     isGameOver: false, gameStarted: false,
     hasHoming: false, wingmanLevel: 0, shipType: "nova" as ShipType,
-    showGacha: false, showShop: false,
+    showGacha: false,
   });
   // sync from React state
   gameRef.current.weaponLevel = weaponLevel;
@@ -536,15 +503,11 @@ export default function RaidenGame() {
   gameRef.current.wingmanLevel = wingmanLevel;
   gameRef.current.shipType = shipType;
   gameRef.current.showGacha = showGacha;
-  gameRef.current.showShop = showShop;
 
   // ── timeout refs for cleanup ──
   const gachaTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const waveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeGachaTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const gachaToShopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const returningFromShopRef = useRef(false);
-  const savedGachaCardsRef = useRef<CardDef[]>([]);
   const touchAnchorRef = useRef<{ x: number; y: number; shipX: number; shipY: number } | null>(null);
 
   // ── 5-layer parallax star field (deep depth) ──
@@ -580,7 +543,7 @@ export default function RaidenGame() {
 
   // ── state ref ──
   const stateRef = useRef({
-    player: { x: 180, y: 460, speed: 5 },
+    player: { x: 180, y: 460, vx: 0, vy: 0, speed: 5 },
     bullets: new Pool<Bullet>(() => ({
       x: 0, y: 0, vx: 0, vy: 0,
       type: "player", wtype: "spread", wingman: false, lightning: false, alive: false,
@@ -597,7 +560,6 @@ export default function RaidenGame() {
     })),
     boss: null as Boss | null,
     miniboss: null as Miniboss | null,
-    coins: new Pool<CoinItem>(() => ({ x: 0, y: 0, value: 1, alive: false })),
     particles: new Pool<Particle>(() => ({
       x: 0, y: 0, vx: 0, vy: 0,
       alpha: 1, color: "#fff", size: 2,
@@ -625,8 +587,8 @@ export default function RaidenGame() {
     frameCount: 0,
     invincible: false, invincibleTimer: 0,
     respawnTimer: 0,
-    score: 0, wallet: 0,
-    doubleCoinTimer: 0, hasHoming: false,
+    score: 0,
+    hasHoming: false,
     formationTimer: 0, gachaLocked: false, gachaCost: 10,
     formationGroupCounter: 0, overdriveTimer: 0,
     lastWaveSpawned: -1,
@@ -650,14 +612,12 @@ export default function RaidenGame() {
     isPaused: false,
     isGameOver: false,
     showGacha: false,
-    showShop: false,
   });
   // sync stateRef from React state (game loop reads stateRef)
   // NOTE: isGameOver/gameStarted are set imperatively in the game loop,
   // do NOT sync them from React state here — they'd overwrite immediate updates.
   stateRef.current.isPaused = isPaused;
   stateRef.current.showGacha = showGacha;
-  stateRef.current.showShop = showShop;
 
   // init high score from save
   useEffect(() => {
@@ -687,10 +647,6 @@ export default function RaidenGame() {
     m.formation = formation; m.vx = 0; m.vy = 0; m.formationGroup = 0;
     m.flashTimer = 0;
     return m;
-  }
-  function spawnCoin(x: number, y: number, value: number) {
-    const c = stateRef.current.coins.get();
-    c.x = x; c.y = y; c.value = value;
   }
   function spawnParticle(
     x: number, y: number, vx: number, vy: number,
@@ -788,8 +744,6 @@ export default function RaidenGame() {
         emitExplosion(CW / 2, CH / 2, 60, ["#fef08a", "#f97316", "#fff"], 10);
         state.shakeX = 12; state.shakeY = 12; break;
       }
-      case "coin_burst": state.wallet += 15; setCoins((prev) => prev + 15); break;
-      case "double_coin": state.doubleCoinTimer = 1800; setDoubleCoinTimer(1800); break;
       case "wingman": case "wingmanUp":
         if (state.wingmanLevel < 4) {
           state.wingmanLevel++;
@@ -895,7 +849,7 @@ export default function RaidenGame() {
   };
 
   const togglePause = () => {
-    if (!gameRef.current.isGameOver && !showGacha && !showShop) {
+    if (!gameRef.current.isGameOver && !showGacha) {
       audio.buttonClick();
       setIsPaused((p) => { gameRef.current.isPaused = !p; return !p; });
     }
@@ -919,37 +873,14 @@ export default function RaidenGame() {
     state.bossWarningTimer = 180; // 3 seconds warning phase
     setBossWarning(true);
     setWaveAnnounce("⚠ WARNING ⚠");
-    if (waveTimeoutRef.current) clearTimeout(waveTimeoutRef.current);
-    waveTimeoutRef.current = setTimeout(() => { waveTimeoutRef.current = null; setWaveAnnounce(""); }, 1500);
     audio.bossWarning();
+    // No early clear — WARNING stays until boss name replaces it below
   };
-
-  // ─── SHOP BUY ───
-
-  const handleShopBuy = useCallback((itemId: keyof SaveData["upgrades"]) => {
-    const save = saveRef.current;
-    const upgrades = save.upgrades;
-    const shopItem = SHOP_ITEMS.find((si) => si.id === itemId);
-    if (!shopItem) return;
-    if (shopItem.owned(upgrades)) return;
-    if (save.totalCoins < shopItem.price) return;
-
-    save.totalCoins -= shopItem.price;
-    if (itemId === "extraBomb") {
-      upgrades.extraBomb += 1;
-    } else {
-      (upgrades as unknown as Record<string, boolean>)[itemId] = true;
-    }
-    writeSave(save);
-    setShopRefreshKey((k) => k + 1);
-    audio.buttonClick();
-  }, [audio]);
 
   // ─── START GAME ───
 
   const handleStart = useCallback(() => {
     if (!gameStarted) {
-      setShowShop(false);
       audio.initAudio();
       // apply ship weapon
       const ship = SHIP_CONFIG[shipType];
@@ -1348,47 +1279,6 @@ export default function RaidenGame() {
     ctx.fillRect(bp, y + 10 * P, barW * (mb.hp / mb.maxHp), 3);
   }
 
-  function drawCoinItem(ctx: CanvasRenderingContext2D, x: number, y: number) {
-    const f = stateRef.current.frameCount;
-    const pulse = Math.sin(f * 0.08) * 0.15 + 0.85;
-    const cx = x + 6, cy = y + 6;
-    // outer glow ring (cyan/purple to distinguish from power-up's blue)
-    ctx.globalAlpha = 0.2 + Math.sin(f * 0.07) * 0.1;
-    ctx.shadowColor = "#06b6d4";
-    ctx.shadowBlur = 18;
-    ctx.strokeStyle = "#22d3ee";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(cx, cy, 14 + Math.sin(f * 0.05) * 2, 0, Math.PI * 2); ctx.stroke();
-    // secondary ring
-    ctx.globalAlpha = 0.15 + Math.sin(f * 0.09) * 0.1;
-    ctx.strokeStyle = "#06b6d4";
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(cx, cy, 10 + Math.cos(f * 0.06) * 1.5, 0, Math.PI * 2); ctx.stroke();
-    // main gem body — gold/amber gradient sphere
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 0.95 * pulse;
-    const gg = ctx.createRadialGradient(cx - 3, cy - 3, 0, cx, cy, 8);
-    gg.addColorStop(0, "#fffbeb");
-    gg.addColorStop(0.2, "#fef08a");
-    gg.addColorStop(0.5, "#eab308");
-    gg.addColorStop(0.8, "#ca8a04");
-    gg.addColorStop(1, "#854d0e");
-    ctx.fillStyle = gg;
-    ctx.shadowColor = "#eab308";
-    ctx.shadowBlur = 8;
-    ctx.beginPath(); ctx.arc(cx, cy, 6 + Math.sin(f * 0.1) * 0.5, 0, Math.PI * 2); ctx.fill();
-    // specular highlight (offset white dot)
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 0.6 + Math.sin(f * 0.12) * 0.2;
-    ctx.fillStyle = "#fff";
-    ctx.beginPath(); ctx.arc(cx - 2, cy - 2.5, 2.2, 0, Math.PI * 2); ctx.fill();
-    // tiny sparkle
-    ctx.globalAlpha = 0.7 * pulse;
-    ctx.fillStyle = "#fff";
-    ctx.beginPath(); ctx.arc(cx + 3, cy - 1, 1, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
-  }
-
   function drawShield(ctx: CanvasRenderingContext2D, x: number, y: number) {
     const f = stateRef.current.frameCount;
     const cx = x + 14, cy = y + 12;
@@ -1583,7 +1473,7 @@ export default function RaidenGame() {
     const handleTouchStart = (e: TouchEvent) => {
       if (!stateRef.current.gameStarted) return;
       audio.initAudio();
-      if (stateRef.current.isGameOver || stateRef.current.isPaused || stateRef.current.showGacha || stateRef.current.showShop) return;
+       if (stateRef.current.isGameOver || stateRef.current.isPaused || stateRef.current.showGacha) return;
       const rect = canvas.getBoundingClientRect();
       const touch = e.touches[0];
       const touchGameX = ((touch.clientX - rect.left) / rect.width) * CW;
@@ -1598,7 +1488,7 @@ export default function RaidenGame() {
     const handleTouchMove = (e: TouchEvent) => {
       if (!stateRef.current.gameStarted) return;
       audio.initAudio();
-      if (stateRef.current.isGameOver || stateRef.current.isPaused || stateRef.current.showGacha || stateRef.current.showShop) return;
+       if (stateRef.current.isGameOver || stateRef.current.isPaused || stateRef.current.showGacha) return;
       const anchor = touchAnchorRef.current;
       if (!anchor) return;
       const rect = canvas.getBoundingClientRect();
@@ -1611,6 +1501,9 @@ export default function RaidenGame() {
       const newY = anchor.shipY + dy;
       stateRef.current.player.x = Math.max(0, Math.min(CW - 24, newX));
       stateRef.current.player.y = Math.max(0, Math.min(CH - 32, newY));
+      // reset velocity on touch so acceleration doesn't fight drag
+      stateRef.current.player.vx = 0;
+      stateRef.current.player.vy = 0;
     };
     const handleTouchEnd = (_e: TouchEvent) => {
       touchAnchorRef.current = null;
@@ -1663,10 +1556,6 @@ export default function RaidenGame() {
         state.respawnTimer--;
         if (state.respawnTimer <= 0) setRespawnTimer(0);
       }
-      if (state.doubleCoinTimer > 0) {
-        state.doubleCoinTimer--;
-        if (state.doubleCoinTimer % 60 === 0) setDoubleCoinTimer(state.doubleCoinTimer);
-      }
       if (state.overdriveTimer > 0) {
         state.overdriveTimer--;
         if (state.overdriveTimer % 30 === 0) setOverdriveTimer(state.overdriveTimer);
@@ -1690,8 +1579,12 @@ export default function RaidenGame() {
           };
           setBossHp(wave.bossHp);
           setWaveAnnounce(wave.name);
+          // auto-clear boss name after 2.5s — keeps it readable but not stuck
           if (waveTimeoutRef.current) clearTimeout(waveTimeoutRef.current);
-          waveTimeoutRef.current = setTimeout(() => { waveTimeoutRef.current = null; setWaveAnnounce(""); }, 2000);
+          waveTimeoutRef.current = setTimeout(() => {
+            waveTimeoutRef.current = null;
+            setWaveAnnounce("");
+          }, 2500);
         }
       }
       // ── boss/miniboss cooldown (also runs during gacha to prevent stale state) ──
@@ -1711,7 +1604,7 @@ export default function RaidenGame() {
       });
 
       // ── engine exhaust particles (pooled) ──
-      if (stateRef.current.gameStarted && !stateRef.current.isPaused && !stateRef.current.isGameOver && !stateRef.current.showGacha && !stateRef.current.showShop) {
+       if (stateRef.current.gameStarted && !stateRef.current.isPaused && !stateRef.current.isGameOver && !stateRef.current.showGacha) {
         const pp = state.player;
         for (let i = 0; i < 2; i++) {
           const e = exhaustPool.current.get();
@@ -1739,15 +1632,27 @@ export default function RaidenGame() {
         }
       }
 
-      if (stateRef.current.gameStarted && !stateRef.current.isPaused && !stateRef.current.isGameOver && !stateRef.current.showGacha && !stateRef.current.showShop) {
+      if (stateRef.current.gameStarted && !stateRef.current.isPaused && !stateRef.current.isGameOver && !stateRef.current.showGacha) {
         // ── level up visual timer ──
         if (state.levelUpFreezeTimer > 0) state.levelUpFreezeTimer--;
 
         const p = state.player;
-        if (state.keys.ArrowLeft || state.keys.a) p.x -= p.speed;
-        if (state.keys.ArrowRight || state.keys.d) p.x += p.speed;
-        if (state.keys.ArrowUp || state.keys.w) p.y -= p.speed;
-        if (state.keys.ArrowDown || state.keys.s) p.y += p.speed;
+        // ── player movement with acceleration & deceleration ──
+        const accel = 0.45;
+        const friction = 0.88;
+        const maxSpeed = p.speed;
+        if (state.keys.ArrowLeft || state.keys.a) p.vx -= accel;
+        if (state.keys.ArrowRight || state.keys.d) p.vx += accel;
+        if (state.keys.ArrowUp || state.keys.w) p.vy -= accel;
+        if (state.keys.ArrowDown || state.keys.s) p.vy += accel;
+        // apply friction when no input
+        if (!(state.keys.ArrowLeft || state.keys.a) && !(state.keys.ArrowRight || state.keys.d)) p.vx *= friction;
+        if (!(state.keys.ArrowUp || state.keys.w) && !(state.keys.ArrowDown || state.keys.s)) p.vy *= friction;
+        // clamp speed
+        p.vx = Math.max(-maxSpeed, Math.min(maxSpeed, p.vx));
+        p.vy = Math.max(-maxSpeed, Math.min(maxSpeed, p.vy));
+        p.x += p.vx;
+        p.y += p.vy;
         p.x = Math.max(0, Math.min(CW - 24, p.x));
         p.y = Math.max(0, Math.min(CH - 32, p.y));
 
@@ -1793,6 +1698,11 @@ export default function RaidenGame() {
           const lvl = state.weaponLevel;
           const wt = state.weaponType;
           const od = state.overdriveTimer > 0;
+
+          // play shoot sound based on weapon type
+          if (wt === "laser") audio.shootLaser();
+          else if (wt === "wave") audio.shootWave();
+          else audio.shoot();
 
           if (wt === "spread") {
             if (lvl >= 1) spawnBullet(p.x + 10, p.y, 0, od ? -12 : -9, "spread");
@@ -1844,42 +1754,42 @@ export default function RaidenGame() {
 
         // ── wingman auto-fire (4-level system) ──
         const wmLvl = state.wingmanLevel;
-        if (wmLvl > 0 && f % 10 === 0) {
+        if (wmLvl > 0 && f % 14 === 0) {
           const wt = state.weaponType;
-          const wmBoost = wmLvl >= 4;
           // L1: flank left of ship, with gap
           const lx = p.x - 22, ly = p.y + 18;
           const bL = state.bullets.get();
-          bL.x = lx + 4; bL.y = ly; bL.vx = 0; bL.vy = wmBoost ? -9 : -7;
+          bL.x = lx + 4; bL.y = ly; bL.vx = 0; bL.vy = -6;
           bL.type = "player"; bL.wtype = wt; bL.wingman = true; bL.lightning = false;
           // L2: flank right of ship, with gap
           if (wmLvl >= 2) {
             const rx = p.x + 42, ry = p.y + 18;
             const bR = state.bullets.get();
-            bR.x = rx + 4; bR.y = ry; bR.vx = 0; bR.vy = wmBoost ? -9 : -7;
+            bR.x = rx + 4; bR.y = ry; bR.vx = 0; bR.vy = -6;
             bR.type = "player"; bR.wtype = wt; bR.wingman = true; bR.lightning = false;
           }
           // L3: orbiting wingman fires lightning bullet (wide orbit)
-          if (wmLvl >= 3) {
+          if (wmLvl >= 3 && f % 28 === 0) {
             const angle = state.wingmanOrbitAngle;
             const orbR = 40;
             const orbX = p.x + 12 + Math.cos(angle) * orbR;
             const orbY = p.y + 12 + Math.sin(angle) * orbR;
             const bO = state.bullets.get();
-            const dx = -Math.cos(angle) * 4;
-            const dy = -Math.sin(angle) * 4 - (wmBoost ? 5 : 3);
+            const dx = -Math.cos(angle) * 3;
+            const dy = -Math.sin(angle) * 3 - 2;
             bO.x = orbX; bO.y = orbY; bO.vx = dx; bO.vy = dy;
             bO.type = "player"; bO.wtype = wt; bO.wingman = true; bO.lightning = true;
-            // L4: extra lightning bolt from orbit
-            if (wmBoost) {
-              const angle2 = angle + Math.PI * 0.6;
-              const orbX2 = p.x + 12 + Math.cos(angle2) * orbR;
-              const orbY2 = p.y + 12 + Math.sin(angle2) * orbR;
-              const bO2 = state.bullets.get();
-              bO2.x = orbX2; bO2.y = orbY2; bO2.vx = -Math.cos(angle2) * 4; bO2.vy = -Math.sin(angle2) * 4 - 5;
-              bO2.type = "player"; bO2.wtype = wt; bO2.wingman = true; bO2.lightning = true;
-            }
           }
+        }
+        // L4: orbiting wingman fires extra lightning bolt (slower, chance-based)
+        if (state.wingmanLevel >= 4 && f % 40 === 0 && Math.random() < 0.5) {
+          const angle = state.wingmanOrbitAngle + Math.PI * 0.6;
+          const orbR = 40;
+          const orbX = p.x + 12 + Math.cos(angle) * orbR;
+          const orbY = p.y + 12 + Math.sin(angle) * orbR;
+          const bO = state.bullets.get();
+          bO.x = orbX; bO.y = orbY; bO.vx = -Math.cos(angle) * 3; bO.vy = -Math.sin(angle) * 3 - 2;
+          bO.type = "player"; bO.wtype = state.weaponType; bO.wingman = true; bO.lightning = true;
         }
 
         // ── wingman orbit angle ──
@@ -1891,18 +1801,18 @@ export default function RaidenGame() {
         const optForm = state.optionForm;
         if (optForm === "greenLaser") {
           // Form A: green penetrating laser from each option
-          if (f % 10 === 0) {
+          if (f % 14 === 0) {
             for (const opt of state.options) {
               if (opt.transformProgress > 0.3) continue;
               const b = state.bullets.get();
               b.x = opt.x + 7; b.y = opt.y - 2;
-              b.vx = 0; b.vy = -12;
+              b.vx = 0; b.vy = -10;
               b.type = "player"; b.wtype = undefined; b.wingman = false; b.lightning = true;
             }
           }
         } else {
           // Form B: white crescent spread from each option
-          if (f % 12 === 0) {
+          if (f % 18 === 0) {
             for (const opt of state.options) {
               if (opt.transformProgress < 0.7) continue;
               const cx = opt.x + 7;
@@ -1910,8 +1820,8 @@ export default function RaidenGame() {
               for (let ang = -0.5; ang <= 0.5; ang += 0.25) {
                 const b = state.bullets.get();
                 b.x = cx; b.y = cy;
-                b.vx = Math.sin(ang) * 2.5;
-                b.vy = -8 - Math.abs(ang) * 2;
+                b.vx = Math.sin(ang) * 2;
+                b.vy = -7 - Math.abs(ang) * 2;
                 b.type = "player"; b.wtype = "wave"; b.wingman = false; b.lightning = false;
               }
             }
@@ -2008,13 +1918,11 @@ export default function RaidenGame() {
             const mbTypes: BossType[] = ["fortress", "carrier"];
             const mbType = mbTypes[Math.floor(Math.random() * mbTypes.length)];
             const mbHp = 15 + Math.floor(state.score / 200);
-            const dropCoins = Math.min(12, 4 + Math.floor(state.score / 300));
             state.miniboss = {
               x: Math.random() * (CW - 80) + 20, y: -40,
               hp: mbHp, maxHp: mbHp, speed: 1,
               alive: true, type: mbType,
               attackTimer: 0, enterAnim: 60,
-              dropCoins,
             };
             audio.bossWarning();
           }
@@ -2161,9 +2069,6 @@ export default function RaidenGame() {
         // ── move bullets ──
         state.bullets.forEachActive((b) => { b.x += b.vx; b.y += b.vy; });
         state.enemyBullets.forEachActive((b) => { b.x += b.vx; b.y += b.vy; });
-        state.coins.forEachActive((c) => { c.y += 1.2; });
-
-        // particles
         state.particles.forEachActive((pt) => {
           pt.x += pt.vx; pt.y += pt.vy; pt.vy += pt.gravity;
           pt.vx *= 0.97; pt.vy *= 0.97;
@@ -2194,9 +2099,6 @@ export default function RaidenGame() {
         state.monsters.forEachActive((m) => {
           if (m.y > CH + 20) state.monsters.release(m);
         });
-        state.coins.forEachActive((c) => {
-          if (c.y > CH + 10) state.coins.release(c);
-        });
         state.missiles.forEachActive((ms) => {
           if (ms.y < -20 || ms.y > CH + 20) state.missiles.release(ms);
         });
@@ -2222,9 +2124,6 @@ export default function RaidenGame() {
               state.bullets.release(b);
               emitExplosion(b.x, b.y, 3, ["#fbbf24"], 3);
               if (m.hp <= 0) {
-                const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
-                const base = m.type === "elite" ? 10 : m.type === "interceptor" ? 3 : m.type === "bomber" ? 2 : 1;
-                spawnCoin(m.x + 8, m.y + 4, isDouble ? base * 2 : base);
                 // energy fragments on death
                 const energyVal = m.type === "elite" ? 15 : m.type === "bomber" ? 8 : 5;
                 for (let ef = 0; ef < (m.type === "elite" ? 3 : 1); ef++) {
@@ -2258,9 +2157,6 @@ export default function RaidenGame() {
               state.missiles.release(ms);
               emitExplosion(ms.x, ms.y, 8, ["#f97316", "#fef08a", "#ef4444"], 5);
               if (m.hp <= 0) {
-                const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
-                const base = m.type === "elite" ? 10 : m.type === "interceptor" ? 3 : m.type === "bomber" ? 2 : 1;
-                spawnCoin(m.x + 8, m.y + 4, isDouble ? base * 2 : base);
                 // energy fragments on death
                 const energyVal = m.type === "elite" ? 15 : m.type === "bomber" ? 8 : 5;
                 for (let ef = 0; ef < (m.type === "elite" ? 3 : 1); ef++) {
@@ -2334,8 +2230,6 @@ export default function RaidenGame() {
               emitExplosion(bullet.x, bullet.y, 3, ["#fbbf24"], 3);
               if (b.hp <= 0) {
                 emitExplosion(b.x + 22, b.y + 16, 50, ["#f97316", "#ef4444", "#fef08a", "#fff"], 8);
-                const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
-                spawnCoin(b.x + 18, b.y + 10, isDouble ? 20 : 10);
                 setScore((prev) => { const n = prev + 1000; state.score = n; return n; });
                 setBossHp(0);
                 b.alive = false;
@@ -2367,8 +2261,6 @@ export default function RaidenGame() {
                 emitExplosion(ms.x, ms.y, 8, ["#f97316", "#fef08a", "#ef4444"], 5);
                 if (b2.hp <= 0) {
                   emitExplosion(b2.x + 22, b2.y + 16, 50, ["#f97316", "#ef4444", "#fef08a", "#fff"], 8);
-                  const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
-                  spawnCoin(b2.x + 18, b2.y + 10, isDouble ? 20 : 10);
                   setScore((prev) => { const n = prev + 1000; state.score = n; return n; });
                   setBossHp(0); b2.alive = false; state.boss = null;
                   state.bossCooldown = 180;
@@ -2400,13 +2292,6 @@ export default function RaidenGame() {
                 emitExplosion(bullet.x, bullet.y, 3, ["#fbbf24"], 3);
                 if (mb.hp <= 0) {
                   emitExplosion(mb.x + 26, mb.y + 20, 40, ["#f97316", "#ef4444", "#fef08a"], 7);
-                  const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
-                  const dropCount = mb.dropCoins;
-                  for (let dc = 0; dc < dropCount; dc++) {
-                    const angle = (Math.PI * 2 * dc) / dropCount + Math.random() * 0.3;
-                    const dist = 20 + Math.random() * 30;
-                    spawnCoin(mb.x + 26 + Math.cos(angle) * dist, mb.y + 20 + Math.sin(angle) * dist, isDouble ? 2 : 1);
-                  }
                   setScore((prev) => { const n = prev + 500; state.score = n; return n; });
                   mb.alive = false; state.miniboss = null;
                   state.minibossCooldown = 200;
@@ -2426,13 +2311,6 @@ export default function RaidenGame() {
                   emitExplosion(ms.x, ms.y, 6, ["#f97316", "#fef08a", "#ef4444"], 5);
                   if (mb2.hp <= 0) {
                     emitExplosion(mb2.x + 26, mb2.y + 20, 40, ["#f97316", "#ef4444", "#fef08a"], 7);
-                    const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
-                    const dropCount = mb2.dropCoins;
-                    for (let dc = 0; dc < dropCount; dc++) {
-                      const angle = (Math.PI * 2 * dc) / dropCount + Math.random() * 0.3;
-                      const dist = 20 + Math.random() * 30;
-                      spawnCoin(mb2.x + 26 + Math.cos(angle) * dist, mb2.y + 20 + Math.sin(angle) * dist, isDouble ? 2 : 1);
-                    }
                     setScore((prev) => { const n = prev + 500; state.score = n; return n; });
                     mb2.alive = false; state.miniboss = null;
                     state.minibossCooldown = 200;
@@ -2445,37 +2323,11 @@ export default function RaidenGame() {
           }
         }
 
-        // ── collect coins (auto-magnet, stronger) ──
-        const MAGNET_RANGE = 120;
-        state.coins.forEachActive((c) => {
-          const px = state.player.x;
-          const py = state.player.y;
-          const dx = (px + 14) - c.x;
-          const dy = (py + 12) - c.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < MAGNET_RANGE && dist > 1) {
-            // magnetic pull — stronger, more generous
-            const pull = (1 - dist / MAGNET_RANGE) * 3 + 0.5;
-            c.x += (dx / dist) * pull;
-            c.y += (dy / dist) * pull;
-          }
-          if (c.x > px - 4 && c.x < px + 32 && c.y > py - 4 && c.y < py + 32) {
-            const coinMult = saveRef.current.upgrades.permaDouble ? 2 : 1;
-            state.wallet += c.value * coinMult;
-            state.coins.release(c);
-            emitExplosion(c.x, c.y, 6, ["#06b6d4", "#22d3ee", "#fff"], 4);
-            audio.coinCollect();
-            setCoins(state.wallet);
-          }
-        });
-
-        // ── energy fragments: movement + magnet + collection ──
         const ENERGY_MAGNET = state.magnetModeTimer > 0 ? 200 : 100;
         state.energyFrags.forEachActive((ef) => {
-          // basic movement (float up and slow down)
+          // drift and slow down
           ef.x += ef.vx; ef.y += ef.vy;
           ef.vx *= 0.97; ef.vy *= 0.97;
-          if (ef.vy > -0.2) ef.vy = -0.2 + Math.sin(f * 0.05 + ef.x) * 0.3;
           // magnet pull toward player
           const edx = (p.x + 14) - ef.x;
           const edy = (p.y + 12) - ef.y;
@@ -2555,26 +2407,7 @@ export default function RaidenGame() {
           if (hitMonster || hitBullet || hitBoss || hitMiniboss) {
             emitExplosion(p.x + 12, p.y + 14, 20, ["#60a5fa", "#93c5fd", "#fff"], 10);
             audio.playerHit();
-            // Weapon downgrade: lose 2 levels (min Lv1)
-            const oldWpnLvl = state.weaponLevel;
-            state.weaponEnergy = 0;
-            state.energyNeeded = 100;
-            if (state.overdriveTimer > 0) {
-              state.overdriveTimer = 0;
-              setOverdriveTimer(0);
-              state.weaponLevel = Math.max(1, state.weaponLevel - 2);
-            } else {
-              state.weaponLevel = Math.max(1, state.weaponLevel - 2);
-            }
-            if (state.weaponLevel !== oldWpnLvl) {
-              setWeaponLevel(state.weaponLevel);
-              state.levelUpFreezeTimer = 0; // clear any pending level-up
-              // spawn red particles for power-down
-              for (let i = 0; i < 10; i++) {
-                const ang = Math.random() * Math.PI * 2;
-                spawnParticle(p.x + 12, p.y + 12, Math.cos(ang) * 4, Math.sin(ang) * 4 - 1, COLORS.warning, 4, 30, 0.02);
-              }
-            }
+            // No weapon downgrade on hit — keep player power intact
             setLives((prev) => {
               if (prev <= 1) { stateRef.current.isGameOver = true; setIsGameOver(true); return 0; }
               state.invincible = true; state.invincibleTimer = 120;
@@ -2614,7 +2447,7 @@ export default function RaidenGame() {
               });
             }
             if (shouldSlash) {
-              opt.slashCooldown = 90;
+              opt.slashCooldown = 120;
               const toRelease: Bullet[] = [];
               state.enemyBullets.forEachActive((eb) => {
                 const dx = eb.x - opt.x;
@@ -2630,7 +2463,7 @@ export default function RaidenGame() {
                 const dx = mcx - opt.x;
                 const dy = mcy - opt.y;
                 if (dy < 0 && dx * dx + dy * dy < SLASH_RANGE * SLASH_RANGE) {
-                  m.hp -= 5;
+                  m.hp -= 3;
                   m.flashTimer = 3;
                   emitExplosion(mcx, mcy, 4, ["#fff", "#e0f2fe"], 4, 15, 0.02, 3);
                 }
@@ -2665,9 +2498,6 @@ export default function RaidenGame() {
           }
         });
         for (const m of slashKilled) {
-          const isDouble = state.doubleCoinTimer > 0 || saveRef.current.upgrades.permaDouble;
-          const base = m.type === "elite" ? 10 : m.type === "interceptor" ? 3 : m.type === "bomber" ? 2 : 1;
-          spawnCoin(m.x + 8, m.y + 4, isDouble ? base * 2 : base);
           const eVal = m.type === "elite" ? 15 : m.type === "bomber" ? 8 : 5;
           for (let ef = 0; ef < (m.type === "elite" ? 3 : 1); ef++) {
             spawnEnergyFragment(m.x + 4 + Math.random() * 12, m.y + 4 + Math.random() * 8, eVal);
@@ -2861,17 +2691,30 @@ export default function RaidenGame() {
             ctx.beginPath(); ctx.arc(lx, ly - 6, 2.5, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
           } else {
-            // wingman normal bullet — small blue-white oval (matching main gun)
+            // wingman normal bullet — amber diamond (distinct from main gun blue)
             ctx.save();
-            ctx.shadowColor = COLORS.playerBullet;
-            ctx.shadowBlur = 10;
-            ctx.globalAlpha = 0.4;
-            ctx.fillStyle = COLORS.playerBullet;
-            ctx.beginPath(); ctx.ellipse(b.x, b.y, 4, 3, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowColor = "#fbbf24";
+            ctx.shadowBlur = 12;
+            ctx.globalAlpha = 0.5;
+            ctx.fillStyle = "#f59e0b";
+            ctx.beginPath();
+            ctx.moveTo(b.x, b.y - 5);
+            ctx.lineTo(b.x + 4, b.y);
+            ctx.lineTo(b.x, b.y + 5);
+            ctx.lineTo(b.x - 4, b.y);
+            ctx.closePath();
+            ctx.fill();
+            // inner bright core
             ctx.shadowBlur = 0;
-            ctx.globalAlpha = 0.9;
-            ctx.fillStyle = "#FFFFFF";
-            ctx.beginPath(); ctx.ellipse(b.x, b.y, 2.5, 2, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 0.95;
+            ctx.fillStyle = "#fef3c7";
+            ctx.beginPath();
+            ctx.moveTo(b.x, b.y - 2.5);
+            ctx.lineTo(b.x + 2, b.y);
+            ctx.lineTo(b.x, b.y + 2.5);
+            ctx.lineTo(b.x - 2, b.y);
+            ctx.closePath();
+            ctx.fill();
             ctx.restore();
           }
         } else if (b.wtype === "laser") {
@@ -3121,15 +2964,7 @@ export default function RaidenGame() {
         drawMinibossShip(ctx, state.miniboss, state.miniboss.x, state.miniboss.y);
       }
 
-      // coins — each self-contained with glow + 3D gradient
-      state.coins.forEachActive((c) => {
-        const floatY = Math.sin(f * 0.06 + c.x) * 2;
-        ctx.save();
-        drawCoinItem(ctx, c.x, c.y + floatY);
-        ctx.restore();
-      });
 
-      // power-ups (enhanced effect — blue for weapon, purple for wingman, gold for S)
       state.powerUps.forEachActive((pu) => {
         const pcx = pu.x + 6, pcy = pu.y + 6;
         const pulse = Math.sin(f * 0.1) * 0.3 + 0.7;
@@ -3287,7 +3122,7 @@ export default function RaidenGame() {
       if (gachaTimeoutRef.current) { clearTimeout(gachaTimeoutRef.current); gachaTimeoutRef.current = null; }
       if (waveTimeoutRef.current) { clearTimeout(waveTimeoutRef.current); waveTimeoutRef.current = null; }
       if (closeGachaTimeoutRef.current) { clearTimeout(closeGachaTimeoutRef.current); closeGachaTimeoutRef.current = null; }
-      if (gachaToShopTimeoutRef.current) { clearTimeout(gachaToShopTimeoutRef.current); gachaToShopTimeoutRef.current = null; }
+
     };
   }, [gameStarted, isGameOver, audio]);
 
@@ -3298,13 +3133,13 @@ export default function RaidenGame() {
 
   // BGM control
   useEffect(() => {
-    if (gameRef.current.gameStarted && !gameRef.current.isPaused && !gameRef.current.isGameOver && !gameRef.current.showGacha && !gameRef.current.showShop) {
+    if (gameRef.current.gameStarted && !gameRef.current.isPaused && !gameRef.current.isGameOver && !gameRef.current.showGacha) {
       audio.startBGM();
     } else {
       audio.stopBGM();
     }
     return () => audio.stopBGM();
-  }, [gameStarted, isPaused, isGameOver, showGacha, showShop, audio]);
+  }, [gameStarted, isPaused, isGameOver, showGacha, audio]);
 
   // save on game over
   useEffect(() => {
@@ -3313,29 +3148,23 @@ export default function RaidenGame() {
       const finalScore = scoreRef.current;
       save.totalGames++;
       if (finalScore > save.highScore) save.highScore = finalScore;
-      const currentCoins = coinsRef.current;
-      save.totalCoins += currentCoins;
       writeSave(save);
       setHighScore(save.highScore);
     }
   }, [isGameOver]);
 
   const scoreRef = useRef(0);
-  const coinsRef = useRef(0);
   scoreRef.current = score;
-  coinsRef.current = coins;
 
   const restartGame = () => {
     audio.buttonClick();
     if (gachaTimeoutRef.current) { clearTimeout(gachaTimeoutRef.current); gachaTimeoutRef.current = null; }
     if (waveTimeoutRef.current) { clearTimeout(waveTimeoutRef.current); waveTimeoutRef.current = null; }
     if (closeGachaTimeoutRef.current) { clearTimeout(closeGachaTimeoutRef.current); closeGachaTimeoutRef.current = null; }
-    if (gachaToShopTimeoutRef.current) { clearTimeout(gachaToShopTimeoutRef.current); gachaToShopTimeoutRef.current = null; }
     const state = stateRef.current;
     state.monsters.releaseAll();
     state.bullets.releaseAll();
     state.enemyBullets.releaseAll();
-    state.coins.releaseAll();
     state.particles.releaseAll();
     state.missiles.releaseAll();
     state.powerUps.releaseAll();
@@ -3347,12 +3176,12 @@ export default function RaidenGame() {
     state.levelUpFreezeTimer = 0;
     state.boss = null;
     state.miniboss = null;
-    state.player = { x: 180, y: 460, speed: 5 };
+    state.player = { x: 180, y: 460, vx: 0, vy: 0, speed: 5 };
     state.invincible = false; state.invincibleTimer = 0;
     state.respawnTimer = 0;
     state.shakeX = 0; state.shakeY = 0;
-    state.score = 0; state.wallet = 0;
-    state.doubleCoinTimer = 0; state.hasHoming = false;
+    state.score = 0;
+    state.hasHoming = false;
     state.formationTimer = 0; state.gachaLocked = false;
     state.gachaCost = 10; state.formationGroupCounter = 0;
     state.overdriveTimer = 0; state.lastWaveSpawned = -1;
@@ -3365,11 +3194,11 @@ export default function RaidenGame() {
     state.slashEffects.releaseAll();
     bgOffsetRef.current = 0;
     exhaustPool.current.releaseAll();
-    setIsPaused(false); setShowGacha(false); setShowShop(false);
+    setIsPaused(false); setShowGacha(false);
     setScore(0); setWeaponLevel(1);
     setBombCount(3); setLives(3); setIsGameOver(false);
-    setInvincible(false); setBossHp(0); setCoins(0);
-    setDoubleCoinTimer(0); setHasHoming(false);
+    setInvincible(false); setBossHp(0);
+    setHasHoming(false);
     setGachaCost(10); setOverdriveTimer(0); setWaveAnnounce("");
     setWingmanLevel(0); setBossWarning(false); setGameStarted(false); setStartFadeOut(false);
     setReadyCountdown(0); setRespawnTimer(0);
@@ -3625,21 +3454,21 @@ export default function RaidenGame() {
                 })()}
 
                 {/* ─── Bullet Preview ─── */}
-                <div className="flex justify-center gap-3 mt-3 flex-shrink-0">
+                <div className="flex justify-center gap-4 mt-3 flex-shrink-0">
                   <div className="flex flex-col items-center gap-1">
                     <p className="pixel-font text-[6px] tracking-[2px]" style={{ color: "rgba(148,163,184,0.5)" }}>
-                      {WEAPON_NAMES[SHIP_CONFIG[shipType].weapon]}子弹
+                      主机
                     </p>
                     <div
                       className="relative overflow-hidden"
                       style={{
-                        width: "200px",
+                        width: "120px",
                         height: "60px",
                         border: "1px solid rgba(56,189,248,0.15)",
                         background: "rgba(0,0,0,0.5)",
                       }}
                     >
-                      {/* Bullet animation based on weapon type */}
+                      {/* Bullet animation based on weapon type — colors match in-game */}
                       {SHIP_CONFIG[shipType].weapon === "spread" && (
                         <div className="absolute inset-0 flex items-center justify-center gap-3">
                           {[0, 1, 2].map((i) => (
@@ -3649,8 +3478,8 @@ export default function RaidenGame() {
                               style={{
                                 width: "10px",
                                 height: "10px",
-                                background: "radial-gradient(circle at 40% 40%, #fff, #fbbf24, #d97706)",
-                                boxShadow: "0 0 8px rgba(251,191,36,0.7), 0 0 16px rgba(251,191,36,0.3)",
+                                background: "radial-gradient(circle at 40% 40%, #fff, #5AD9FF, #0e7490)",
+                                boxShadow: "0 0 8px rgba(90,217,255,0.7), 0 0 16px rgba(90,217,255,0.3)",
                                 animation: `bullet-spread-up ${1.2 + i * 0.15}s ease-in infinite`,
                                 animationDelay: `${i * 0.2}s`,
                               }}
@@ -3666,8 +3495,8 @@ export default function RaidenGame() {
                               style={{
                                 width: "5px",
                                 height: "26px",
-                                background: "linear-gradient(to top, transparent, #22d3ee, #e0f2fe, #fff, #e0f2fe)",
-                                boxShadow: "0 0 10px rgba(34,211,238,0.6), 0 0 20px rgba(34,211,238,0.2)",
+                                background: "linear-gradient(to top, transparent, #5AD9FF, #fff, #5AD9FF)",
+                                boxShadow: "0 0 10px rgba(90,217,255,0.6), 0 0 20px rgba(90,217,255,0.2)",
                                 animation: `bullet-laser-up ${1.5}s ease-in infinite`,
                                 animationDelay: `${i * 0.3}s`,
                               }}
@@ -3684,8 +3513,8 @@ export default function RaidenGame() {
                               style={{
                                 width: "16px",
                                 height: "16px",
-                                border: "2px solid rgba(74,222,128,0.7)",
-                                boxShadow: "0 0 8px rgba(74,222,128,0.4), 0 0 16px rgba(74,222,128,0.2), inset 0 0 4px rgba(255,255,255,0.2)",
+                                border: "2px solid rgba(90,217,255,0.7)",
+                                boxShadow: "0 0 8px rgba(90,217,255,0.4), 0 0 16px rgba(90,217,255,0.2), inset 0 0 4px rgba(255,255,255,0.2)",
                                 animation: `bullet-wave-up ${1.8}s ease-in infinite`,
                                 animationDelay: `${i * 0.4}s`,
                               }}
@@ -3696,13 +3525,43 @@ export default function RaidenGame() {
                                   width: "4px",
                                   height: "4px",
                                   background: "#fff",
-                                  boxShadow: "0 0 4px rgba(74,222,128,0.6)",
+                                  boxShadow: "0 0 4px rgba(90,217,255,0.6)",
                                 }}
                               />
                             </div>
                           ))}
                         </div>
                       )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="pixel-font text-[6px] tracking-[2px]" style={{ color: "rgba(148,163,184,0.5)" }}>
+                      僚机
+                    </p>
+                    <div
+                      className="relative overflow-hidden"
+                      style={{
+                        width: "60px",
+                        height: "60px",
+                        border: "1px solid rgba(251,191,36,0.15)",
+                        background: "rgba(0,0,0,0.5)",
+                      }}
+                    >
+                      {/* Wingman bullet — amber diamond */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div
+                          style={{
+                            width: 0,
+                            height: 0,
+                            borderLeft: "5px solid transparent",
+                            borderRight: "5px solid transparent",
+                            borderBottom: "9px solid #f59e0b",
+                            filter: "drop-shadow(0 0 4px rgba(251,191,36,0.7))",
+                            animation: "bullet-spread-up 1.2s ease-in infinite",
+                            transform: "rotate(180deg)",
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3716,14 +3575,6 @@ export default function RaidenGame() {
                       <p className="pixel-font text-[7px] tracking-[2px]" style={{ color: COLORS.textDim }}>HIGH SCORE</p>
                       <p className="pixel-font text-[11px]" style={{ color: COLORS.powerUp, textShadow: `0 0 8px ${COLORS.powerUp}60` }}>{formatScore(highScore)}</p>
                     </div>
-                    <div style={{ width: 1, height: 20, background: "rgba(56,189,248,0.2)" }} />
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setShowShop(true); }}
-                      className="flex flex-col items-center transition-all active:scale-90"
-                    >
-                      <Coins className="w-3 h-3 text-yellow-400" style={{ filter: "drop-shadow(0 0 4px rgba(250,204,21,0.4))" }} />
-                      <span className="pixel-font text-[7px] tracking-[1px]" style={{ color: "rgba(250,204,21,0.8)", textShadow: "0 0 4px rgba(250,204,21,0.3)" }}>商店</span>
-                    </button>
                   </div>
 
                   <button
@@ -3806,9 +3657,8 @@ export default function RaidenGame() {
                   <span className="pixel-font text-[7px]" style={{ color: COLORS.textDim }}>II</span>
                 </button>
 
-                {/* Coins display */}
+                {/* Invincible indicator */}
                 <div className="absolute top-[38px] left-1.5 flex items-center gap-1" style={{ zIndex: 1 }}>
-                  <p className="pixel-font text-[7px] leading-tight" style={{ color: COLORS.powerUp, textShadow: `0 0 4px ${COLORS.powerUp}40` }}>${coins}</p>
                   {invincible && <p className="pixel-font text-[6px] leading-tight animate-blink" style={{ color: COLORS.player }}>S</p>}
                 </div>
 
@@ -4026,140 +3876,21 @@ export default function RaidenGame() {
                     </button>
                   ))}
                 </div>
-                {/* Reroll with coins */}
+                {/* Reroll */}
                 <button
                   onClick={() => {
-                    if (coins >= 5) {
-                      setCoins((p) => p - 5);
-                      stateRef.current.wallet -= 5;
-                      const cards = generateGachaOptions();
-                      setGachaCards(cards);
-                    }
+                    const cards = generateGachaOptions();
+                    setGachaCards(cards);
                   }}
-                  className={`pixel-hud px-3 py-1.5 transition-all active:scale-90 flex items-center gap-1 ${
-                    coins >= 5 ? "hover:bg-[rgba(56,189,248,0.15)]" : "opacity-40"
-                  }`}
+                  className="pixel-hud px-3 py-1.5 transition-all active:scale-90 flex items-center gap-1 hover:bg-[rgba(56,189,248,0.15)]"
                   style={{ animation: "gacha-slide-down 0.35s ease-out 0.35s both" }}
                 >
-                  <span className="pixel-font text-[6px] text-[#38bdf8] tracking-[1px]">
-                    {coins >= 5 ? "刷新 (5金币)" : "金币不足"}
-                  </span>
-                </button>
-                {/* Shop button in gacha */}
-                <button
-                  onClick={() => {
-                    if (gachaTimeoutRef.current) { clearTimeout(gachaTimeoutRef.current); gachaTimeoutRef.current = null; }
-                    if (gachaToShopTimeoutRef.current) clearTimeout(gachaToShopTimeoutRef.current);
-                    savedGachaCardsRef.current = gachaCards;
-                    returningFromShopRef.current = true;
-                    setGachaClosing(true);
-                    gachaToShopTimeoutRef.current = setTimeout(() => {
-                      gachaToShopTimeoutRef.current = null;
-                      setShowGacha(false);
-                      setGachaClosing(false);
-                      setShowShop(true);
-                    }, 180);
-                  }}
-                  className="pixel-hud px-3 py-1.5 mt-2 hover:bg-[rgba(56,189,248,0.15)] active:scale-90 transition-all"
-                  style={{ animation: "gacha-slide-down 0.35s ease-out 0.4s both" }}
-                >
-                  <span className="pixel-font text-[6px] text-[#facc15] tracking-[1px]">商店 (金币)</span>
+                  <span className="pixel-font text-[6px] text-[#38bdf8] tracking-[1px]">刷新</span>
                 </button>
               </div>
             )}
 
-            {/* ═══ SHOP OVERLAY ═══ */}
-            {showShop && (
-              <div
-                className="absolute inset-0 flex flex-col items-center p-4 z-30 overflow-y-auto"
-                style={{
-                  background: "rgba(0,0,0,0.85)",
-                  animation: "gacha-fade-in 0.25s ease-out",
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="pixel-hud px-4 py-2 mb-3">
-                  <p className="pixel-font text-[10px] text-[#facc15] tracking-[4px]">商 店</p>
-                </div>
-                {/* Coins display */}
-                <div className="flex items-center gap-1 mb-4">
-                  <Coins className="w-3 h-3 text-yellow-400" />
-                  <span className="pixel-font text-[8px] text-yellow-300" key={shopRefreshKey}>
-                    {saveRef.current.totalCoins}
-                  </span>
-                </div>
-                {/* Shop items grid (dynamic: always life_give + random others) */}
-                <div className="grid grid-cols-2 gap-3 w-full max-w-[280px] mb-4">
-                  {(() => {
-                  const s = saveRef.current;
-                  const items: { id: string; icon: string; name: string; desc: string; price: number; owned: boolean; onBuy: () => void }[] = [];
-                  items.push({
-                    id: "life_give_shop", icon: "❤️", name: "生命+1", desc: "增加一条生命",
-                    price: 3, owned: false,
-                    onBuy: () => {
-                      if (s.totalCoins < 3) return;
-                      s.totalCoins -= 3; writeSave(s);
-                      setLives((p) => p + 1); setShopRefreshKey((k) => k + 1);
-                      audio.buttonClick();
-                    },
-                  });
-                  const shuffled = [...SHOP_ITEMS].sort(() => Math.random() - 0.5);
-                  for (let i = 0; i < Math.min(4, shuffled.length); i++) {
-                    const si = shuffled[i];
-                    items.push({
-                      id: si.id, icon: si.icon, name: si.name, desc: si.desc, price: si.price,
-                      owned: si.owned(s.upgrades),
-                      onBuy: () => handleShopBuy(si.id),
-                    });
-                  }
-                  return items.map((item) => {
-                    const owned = item.owned;
-                    const canBuy = s.totalCoins >= item.price;
-                    return (
-                      <div key={item.id} className="flex flex-col items-center p-2" style={{
-                        background: "rgba(0,0,0,0.75)",
-                        border: "1px solid rgba(56,189,248,0.2)",
-                        borderRadius: 0,
-                        backgroundImage: [
-                          "linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px)",
-                          "linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)",
-                        ].join(","),
-                        backgroundSize: "8px 8px",
-                      }}>
-                        <span className="text-2xl mb-1">{item.icon}</span>
-                        <span className="pixel-font text-[7px] text-white text-center leading-tight mb-0.5">{item.name}</span>
-                        <span className="pixel-font text-[5px] text-[#475569] text-center leading-[7px] mb-2">{item.desc}</span>
-                        {owned ? (
-                          <span className="pixel-font text-[6px] text-green-400 px-2 py-0.5" style={{ border: "1px solid rgba(74,222,128,0.3)", borderRadius: 0 }}>已拥有</span>
-                        ) : (
-                          <button onClick={(e) => { e.stopPropagation(); item.onBuy(); }} disabled={!canBuy}
-                            className={`pixel-font text-[6px] px-2 py-0.5 transition-all active:scale-90 tracking-[1px] ${canBuy ? "text-[#38bdf8] hover:bg-[rgba(56,189,248,0.15)]" : "text-[#475569] opacity-40 cursor-not-allowed"}`}
-                            style={{ border: canBuy ? "1px solid rgba(56,189,248,0.3)" : "1px solid rgba(71,85,105,0.3)", background: canBuy ? "rgba(56,189,248,0.05)" : "transparent", borderRadius: 0 }}>
-                            购买 ({item.price})
-                          </button>
-                        )}
-                      </div>
-                    );});})()}
-                </div>
-                {/* Close button */}
-                <button
-                  onClick={() => {
-                    setShowShop(false);
-                    if (returningFromShopRef.current) {
-                      returningFromShopRef.current = false;
-                      if (savedGachaCardsRef.current.length > 0) {
-                        setGachaCards(savedGachaCardsRef.current);
-                        savedGachaCardsRef.current = [];
-                        setShowGacha(true);
-                      }
-                    }
-                  }}
-                  className="pixel-hud px-4 py-2 hover:bg-[rgba(56,189,248,0.15)] active:scale-95 transition-all"
-                >
-                  <span className="pixel-font text-[8px] text-[#38bdf8] tracking-[2px]">关 闭</span>
-                </button>
-              </div>
-            )}
+
 
           </div>
 

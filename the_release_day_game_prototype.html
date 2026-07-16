@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>下班发售日 - 交互手绘叙事原型</title>
+    <!-- 引入 Vue 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- 引入 Tailwind CSS 提供基础排版 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Playfair Display & Inter 字体，营造温暖手写质感 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=ZCOOL+KuaiLe&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        /* 1. 核心手绘滤镜：利用 SVG 乱数置换滤镜，让所有直线和文字都呈现出天然的铅笔手绘起伏感 */
+        .hand-drawn {
+            filter: url(#rough-paper);
+        }
+
+        /* 2. 温暖的复古纸张网格背景 */
+        body {
+            background-color: #FAF6ED;
+            background-image: 
+                radial-gradient(#E8DCC4 1px, transparent 1px),
+                linear-gradient(#F5EAD2 1px, transparent 1px);
+            background-size: 20px 20px;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .pixel-title {
+            font-family: 'ZCOOL KuaiLe', sans-serif;
+        }
+
+        /* 3. 摇晃动效：模拟手绘逐帧动画的抖动感 */
+        @keyframes hand-shiver {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            20% { transform: translate(-1px, 1px) rotate(-0.5deg); }
+            40% { transform: translate(1px, -1px) rotate(0.5deg); }
+            60% { transform: translate(-1px, -1px) rotate(-0.2deg); }
+            80% { transform: translate(1px, 1px) rotate(0.2deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+
+        .shivering {
+            animation: hand-shiver 0.25s infinite;
+        }
+
+        /* 按钮与卡片的手绘边框样式 */
+        .sketch-border {
+            border: 3px solid #2C3E50;
+            border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+        }
+
+        /* 进度条的粗糙填充动画 */
+        .sketch-fill {
+            background: repeating-linear-gradient(
+                45deg,
+                #FF6B6B,
+                #FF6B6B 10px,
+                #FF8E8E 10px,
+                #FF8E8E 20px
+            );
+        }
+    </style>
+</head>
+<body class="min-height-screen flex items-center justify-center p-4 select-none">
+
+    <!-- 0. SVG 魔法滤镜定义（隐藏在后台） -->
+    <svg style="display: none;">
+        <defs>
+            <filter id="rough-paper" x="-10%" y="-10%" width="120%" height="120%">
+                <!-- 产生伪随机噪声 -->
+                <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" result="noise" />
+                <!-- 将画面上的像素根据噪声进行微小的置换偏折 -->
+                <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+        </defs>
+    </svg>
+
+    <!-- 主游戏挂载点 -->
+    <div id="app" class="w-full max-w-4xl bg-[#FFFDF9] sketch-border hand-drawn p-8 shadow-xl relative overflow-hidden flex flex-col justify-between" style="min-height: 600px;">
+        
+        <!-- 背景粒子 Canvas，专门用来在通关时爆发震撼能量 -->
+        <canvas id="burstCanvas" class="absolute inset-0 pointer-events-none z-10"></canvas>
+
+        <!-- 顶部导航与状态 -->
+        <div class="flex justify-between items-center border-b-2 border-[#2C3E50] pb-4 mb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-[#2C3E50] pixel-title">下班发售日 <span class="text-sm font-normal text-gray-500">v0.1.0 抽象验证舱</span></h1>
+                <p class="text-xs text-gray-400 mt-1">给内心那个晕3D的网瘾少年</p>
+            </div>
+            <!-- 认知电量（多巴胺进度条） -->
+            <div class="w-48">
+                <div class="flex justify-between text-xs font-semibold text-[#2C3E50] mb-1">
+                    <span>认知电量 (Dopamine)</span>
+                    <span>{{ Math.round(dopamine) }}%</span>
+                </div>
+                <div class="h-5 w-full bg-transparent border-2 border-[#2C3E50] rounded p-0.5 overflow-hidden">
+                    <div class="h-full sketch-fill rounded-sm transition-all duration-300" :style="{ width: dopamine + '%' }"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 场景分流器 -->
+        <div class="flex-grow flex flex-col justify-center items-center py-6 min-h-[350px]">
+            
+            <!-- 【第一幕：日常耗能 - 搬砖人的疲惫下班路】 -->
+            <div v-if="stage === 1" class="w-full flex flex-col items-center">
+                <p class="text-lg text-[#5D6D7E] italic mb-6 text-center">
+                    “天黑了，刚写完一堆狗屁架构代码。脑子嗡嗡响，感觉世界在天旋地转...”
+                </p>
+                
+                <!-- 动态 SVG 关节小人：他的骨骼位置完全由 Vue 的 walkCycle 响应式计算得到 -->
+                <div class="w-64 h-48 bg-[#FDFBF7] sketch-border border-dashed p-4 flex items-center justify-center relative">
+                    <svg width="200" height="150" viewBox="0 0 200 150" class="overflow-visible">
+                        <!-- 地平线 -->
+                        <line x1="10" y1="130" x2="190" y2="130" stroke="#2C3E50" stroke-width="3" stroke-dasharray="5,5" />
+                        
+                        <!-- 身体关节系统 -->
+                        <g :transform="`translate(${70 + walkDistance * 0.8}, 0)`" class="transition-all duration-300">
+                            <!-- 躯干 (从屁股到脖子) -->
+                            <line :x1="bodyPos.hip.x" :y1="bodyPos.hip.y" :x2="bodyPos.neck.x" :y2="bodyPos.neck.y" stroke="#2C3E50" stroke-width="4" stroke-linecap="round" />
+                            
+                            <!-- 疲惫耷拉着的脑袋 -->
+                            <circle :cx="bodyPos.head.x" :cy="bodyPos.head.y" r="14" fill="none" stroke="#2C3E50" stroke-width="4" />
+                            <!-- 颓废的死鱼眼 (两点一横) -->
+                            <line :x1="bodyPos.head.x - 5" :y1="bodyPos.head.y - 2" :x2="bodyPos.head.x - 3" :y2="bodyPos.head.y + 2" stroke="#2C3E50" stroke-width="2" />
+                            <line :x1="bodyPos.head.x + 1" :y1="bodyPos.head.y + 2" :x2="bodyPos.head.x + 3" :y2="bodyPos.head.y - 2" stroke="#2C3E50" stroke-width="2" />
+                            <line :x1="bodyPos.head.x - 4" :y1="bodyPos.head.y + 6" :x2="bodyPos.head.x + 4" :y2="bodyPos.head.y + 6" stroke="#2C3E50" stroke-width="2" />
+
+                            <!-- 前腿 (左腿) -->
+                            <line :x1="bodyPos.hip.x" :y1="bodyPos.hip.y" :x2="leftLeg.knee.x" :y2="leftLeg.knee.y" stroke="#2C3E50" stroke-width="4" stroke-linecap="round" />
+                            <line :x1="leftLeg.knee.x" :y1="leftLeg.knee.y" :x2="leftLeg.foot.x" :y2="leftLeg.foot.y" stroke="#2C3E50" stroke-width="4" stroke-linecap="round" />
+                            
+                            <!-- 后腿 (右腿) -->
+                            <line :x1="bodyPos.hip.x" :y1="bodyPos.hip.y" :x2="rightLeg.knee.x" :y2="rightLeg.knee.y" stroke="#2C3E50" stroke-width="4" stroke-linecap="round" />
+                            <line :x1="rightLeg.knee.x" :y1="rightLeg.knee.y" :x2="rightLeg.foot.x" :y2="rightLeg.foot.y" stroke="#2C3E50" stroke-width="4" stroke-linecap="round" />
+
+                            <!-- 无力垂下的手臂 -->
+                            <line :x1="bodyPos.neck.x" :y1="bodyPos.neck.y" :x2="bodyPos.neck.x - 5" :y2="bodyPos.neck.y + 25" stroke="#2C3E50" stroke-width="3.5" stroke-linecap="round" />
+                        </g>
+                    </svg>
+                    <!-- 疲惫气泡 -->
+                    <span v-if="walkCycle % 2 === 0" class="absolute top-4 right-12 text-xs bg-white border border-[#2C3E50] rounded-full px-2 py-1 shivering">唉... (叹气)</span>
+                </div>
+
+                <div class="mt-8 flex flex-col items-center">
+                    <button @click="heavySigh" class="px-8 py-3 bg-[#FFF] text-[#2C3E50] font-bold text-lg sketch-border hover:bg-[#F5EAD2] active:scale-95 transition-all shivering">
+                        💨 叹一口沉重的粗气 (迈步)
+                    </button>
+                    <p class="text-xs text-gray-400 mt-3">多叹几次气，离家就更近一步</p>
+                </div>
+            </div>
+
+            <!-- 【第二幕：喜悦降临 - 掏出手机的惊鸿一瞥】 -->
+            <div v-if="stage === 2" class="w-full flex flex-col items-center">
+                <p class="text-lg text-[#5D6D7E] italic mb-6 text-center">
+                    “突然！口袋里的手机发出了暴雨般的震动，亮起的屏幕上写着...”
+                </p>
+
+                <!-- 震动的魔性手绘手机 -->
+                <div class="w-72 bg-white sketch-border p-6 shadow-md relative shivering" style="animation-duration: 0.15s;">
+                    <!-- 手机屏幕 -->
+                    <div class="bg-[#2C3E50] text-[#FAF6ED] rounded p-4 text-center min-h-[160px] flex flex-col justify-between">
+                        <div class="flex justify-between items-center text-[10px] opacity-70">
+                            <span>🕒 下班时间</span>
+                            <span>📶 信号满格</span>
+                        </div>
+                        <div class="my-4">
+                            <p class="text-xs text-[#FF6B6B] font-bold tracking-widest animate-pulse">🔥 重磅通知 🔥</p>
+                            <h3 class="text-lg font-bold mt-1 text-white">您预购的游戏现已解锁发售！</h3>
+                        </div>
+                        <div class="text-[10px] bg-red-500/20 text-[#FF8E8E] py-1 rounded">
+                            请速回家连线，拯救今日不开心
+                        </div>
+                    </div>
+                    <!-- 物理Home键 -->
+                    <div class="w-8 h-8 rounded-full border-2 border-[#2C3E50] mx-auto mt-4 flex items-center justify-center">
+                        <div class="w-3 h-3 rounded-sm border border-[#2C3E50]"></div>
+                    </div>
+                </div>
+
+                <button @click="unlockJoy" class="mt-8 px-10 py-4 bg-[#FF6B6B] text-white font-bold text-xl sketch-border hover:bg-[#FF4F4F] active:scale-95 transition-all shadow-lg">
+                    ⚡ 拔腿狂奔回家！
+                </button>
+            </div>
+
+            <!-- 【第三幕：圣地连线 - 拖拽手柄，开机爽玩】 -->
+            <div v-if="stage === 3" class="w-full flex flex-col items-center relative">
+                <p class="text-lg text-[#5D6D7E] italic mb-6 text-center" v-if="!gameBooted">
+                    “推开家门，温馨的灯光洒下来。把手柄插进主机，按下电源键——”
+                </p>
+                <p class="text-lg text-[#FF6B6B] font-bold mb-6 text-center animate-bounce" v-else>
+                    ✨ 绚烂的多巴胺爆炸！正在链接终极快乐！
+                </p>
+
+                <div class="w-full flex flex-col md:flex-row justify-around items-center gap-8 px-4">
+                    
+                    <!-- 主机插槽 (目标区域) -->
+                    <div id="console-target" class="w-56 h-40 bg-[#FDFBF7] sketch-border border-dashed p-4 flex flex-col justify-between items-center relative">
+                        <span class="text-xs text-gray-400">🔌 快乐接收终端</span>
+                        
+                        <!-- 插孔 -->
+                        <div class="w-20 h-8 bg-[#2C3E50] rounded-md flex items-center justify-around px-2" :class="{ 'bg-green-500': controllerConnected }">
+                            <div class="w-2 h-2 rounded-full bg-black"></div>
+                            <div class="w-2 h-2 rounded-full bg-black"></div>
+                            <div class="w-2 h-2 rounded-full bg-black"></div>
+                        </div>
+
+                        <!-- 实体电源按钮 -->
+                        <button 
+                            @click="bootSystem" 
+                            :disabled="!controllerConnected || gameBooted"
+                            class="px-4 py-1.5 text-xs font-bold rounded-full border-2 transition-all"
+                            :class="[
+                                controllerConnected && !gameBooted ? 'bg-[#FF8E8E] border-[#2C3E50] text-[#2C3E50] hover:scale-105 cursor-pointer shivering' : 'bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed'
+                            ]"
+                        >
+                            🔴 POWER 电源
+                        </button>
+                    </div>
+
+                    <!-- 动态拖拽手柄 -->
+                    <div 
+                        v-if="!gameBooted"
+                        class="w-40 h-24 bg-white sketch-border p-3 flex flex-col justify-between items-center cursor-grab active:cursor-grabbing relative select-none"
+                        :style="controllerStyle"
+                        @mousedown="startDrag"
+                        @touchstart="startDrag"
+                    >
+                        <div class="text-[10px] font-bold text-gray-400">🎮 拖拽它对准插孔</div>
+                        <div class="flex justify-between w-full px-2">
+                            <div class="w-4 h-4 rounded-full bg-[#2C3E50] flex items-center justify-center text-white text-[8px]">+</div>
+                            <div class="flex gap-1">
+                                <div class="w-2 h-2 rounded-full bg-[#FF6B6B]"></div>
+                                <div class="w-2 h-2 rounded-full bg-[#2C3E50]"></div>
+                            </div>
+                        </div>
+                        <!-- 连接线接口 -->
+                        <div class="w-6 h-3 bg-gray-600 rounded-t-sm -mb-6"></div>
+                    </div>
+
+                    <!-- 游戏运行中的快乐小人 -->
+                    <div v-if="gameBooted" class="w-48 h-40 flex items-center justify-center bg-white sketch-border p-2 animate-pulse">
+                        <svg width="150" height="120" viewBox="0 0 150 120" class="overflow-visible">
+                            <!-- 电视屏幕 -->
+                            <rect x="10" y="10" width="130" height="80" rx="10" fill="none" stroke="#2C3E50" stroke-width="3" />
+                            <!-- 挥舞双手的小人 -->
+                            <circle cx="75" cy="40" r="10" fill="none" stroke="#2C3E50" stroke-width="3" />
+                            <line x1="75" y1="50" x2="75" y2="75" stroke="#2C3E50" stroke-width="3" />
+                            <!-- 快乐挥舞的手臂 -->
+                            <line x1="75" y1="55" x2="55" y2="35" stroke="#FF6B6B" stroke-width="3" stroke-linecap="round" />
+                            <line x1="75" y1="55" x2="95" y2="35" stroke="#FF6B6B" stroke-width="3" stroke-linecap="round" />
+                            <!-- 盘腿坐的姿态 -->
+                            <path d="M 55 85 Q 75 95 95 85" fill="none" stroke="#2C3E50" stroke-width="3" />
+                        </svg>
+                    </div>
+
+                </div>
+
+                <div v-if="controllerConnected && !gameBooted" class="absolute -bottom-8 text-xs text-[#FF6B6B] font-bold animate-pulse">
+                    🔌 手柄连接成功！快戳主机上的【POWER】开机键！
+                </div>
+            </div>
+
+            <!-- 【第四幕：通关特赏 - 享受短暂快乐的自愈碑】 -->
+            <div v-if="stage === 4" class="w-full flex flex-col items-center py-4">
+                <div class="max-w-md bg-white sketch-border p-8 text-center relative shadow-lg shivering">
+                    
+                    <!-- 这里就是纯 SVG 手绘出来的自大、嘴碎、正在挨揍的“天马行空”AI大脸 Icon！-->
+                    <div class="w-32 h-32 mx-auto mb-6 relative">
+                        <svg viewBox="0 0 100 100" class="w-full h-full overflow-visible">
+                            <!-- 基础圆形背景切片 -->
+                            <circle cx="50" cy="50" r="48" fill="#FFFDF9" stroke="#2C3E50" stroke-width="3" />
+                            
+                            <!-- 挨揍的倾斜大脸 -->
+                            <g transform="translate(10, 5) rotate(-10)">
+                                <!-- 脸部轮廓 -->
+                                <path d="M 20 40 Q 15 70 45 75 Q 75 70 70 40 Q 65 15 45 15 Q 25 15 20 40 Z" fill="#FAF6ED" stroke="#2C3E50" stroke-width="3" />
+                                <!-- 飞出去的汗滴 -->
+                                <path d="M 12 25 Q 8 22 10 18 Q 14 18 12 25" fill="#FF8E8E" stroke="#2C3E50" stroke-width="1.5" />
+                                <path d="M 15 50 Q 8 52 11 58 Q 15 55 15 50" fill="#FF8E8E" stroke="#2C3E50" stroke-width="1.5" />
+                                
+                                <!-- 自大且嘴碎的眼睛（螺旋晕眩） -->
+                                <path d="M 28 35 Q 33 30 38 35 Q 33 40 28 35 Z" fill="none" stroke="#2C3E50" stroke-width="2.5" />
+                                <path d="M 52 35 Q 57 30 62 35 Q 57 40 52 35 Z" fill="none" stroke="#2C3E50" stroke-width="2.5" />
+                                <circle cx="33" cy="35" r="1.5" fill="#2C3E50" />
+                                <circle cx="57" cy="35" r="1.5" fill="#2C3E50" />
+                                
+                                <!-- 震惊扭曲的嘴巴（嘴碎本色） -->
+                                <path d="M 35 55 Q 45 42 55 55 Q 45 60 35 55 Z" fill="#FF6B6B" stroke="#2C3E50" stroke-width="2.5" />
+                                <!-- 肿起来的红脸蛋 -->
+                                <circle cx="28" cy="46" r="6" fill="#FF6B6B" opacity="0.6" />
+                            </g>
+                            
+                            <!-- 暴击拳头 -->
+                            <g transform="translate(48, 42)">
+                                <!-- 拳头主体 -->
+                                <path d="M 10 10 C 25 -5, 35 15, 20 25 C 10 32, -5 20, 10 10 Z" fill="#FF6B6B" stroke="#2C3E50" stroke-width="3" />
+                                <!-- 拳头关节线条 -->
+                                <path d="M 12 5 Q 18 10 15 15" fill="none" stroke="#2C3E50" stroke-width="2" />
+                                <path d="M 8 10 Q 14 15 11 20" fill="none" stroke="#2C3E50" stroke-width="2" />
+                            </g>
+                            
+                            <!-- 击打星光与冲击波线条 -->
+                            <path d="M 40 25 L 30 15 M 65 35 L 75 30 M 55 65 L 62 75" stroke="#2C3E50" stroke-width="2" stroke-linecap="round" />
+                            <path d="M 45 35 Q 52 25 60 38" fill="none" stroke="#FF6B6B" stroke-width="3" stroke-linecap="round" />
+                        </svg>
+                        <span class="absolute -bottom-2 right-0 bg-[#FF6B6B] text-white text-[10px] px-2 py-0.5 rounded-full rotate-12 font-bold">天马行空</span>
+                    </div>
+
+                    <h3 class="text-2xl font-bold text-[#2C3E50] mb-4 pixel-title">“短暂地享受通关的喜悦吧，你值得！”</h3>
+                    
+                    <p class="text-[#5D6D7E] text-sm leading-relaxed mb-6">
+                        恭喜你，勇敢的父亲兼开发者。你成功击碎了今日份的“自大嘴碎内耗魔王”。现实的重力或许依然沉重，但这几分钟的单纯，是你无可夺走的浪漫。
+                    </p>
+
+                    <button @click="restartGame" class="w-full py-3 bg-[#2C3E50] text-[#FAF6ED] font-bold rounded-lg hover:bg-black active:scale-95 transition-all">
+                        🔄 再次给生活注入多巴胺 (重来)
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 底部控制栏 -->
+        <div class="border-t-2 border-[#2C3E50] pt-4 flex justify-between items-center text-xs text-[#5D6D7E]">
+            <div class="flex gap-4">
+                <span>📍 状态：<strong class="text-[#FF6B6B]">{{ getStageName }}</strong></span>
+                <span v-if="stage < 4">🔋 蓄能阶段</span>
+            </div>
+            <div class="italic">
+                "对方是最后的甜，代码是掌中的光。"
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 4. Vue 3 核心逻辑控制 -->
+    <script>
+        const { createApp, ref, computed, onMounted, watch } = Vue;
+
+        createApp({
+            setup() {
+                const stage = ref(1); // 1:下班走路, 2:通知降临, 3:连线爽玩, 4:通关喜悦
+                const walkCycle = ref(0);
+                const walkDistance = ref(0);
+                const dopamine = ref(10);
+                
+                // 拖拽手柄相关状态
+                const controllerConnected = ref(false);
+                const gameBooted = ref(false);
+                const dragOffset = ref({ x: 0, y: 0 });
+                const controllerPos = ref({ x: 180, y: 150 });
+                const isDragging = ref(false);
+
+                // 根据关卡步骤，响应式计算出小人骨骼坐标
+                const bodyPos = computed(() => {
+                    const cycle = walkCycle.value;
+                    const isLeftForward = cycle % 2 === 0;
+                    
+                    // 疲惫姿态：头向前耷拉，身体向前微倾
+                    return {
+                        head: { x: 135, y: 40 },
+                        neck: { x: 125, y: 55 },
+                        hip: { x: 115, y: 95 }
+                    };
+                });
+
+                // 动态计算左腿关节 (Hip -> Knee -> Foot)
+                const leftLeg = computed(() => {
+                    const angle = Math.sin(walkCycle.value * 1.2) * 20; // 摆动弧度
+                    const hipX = bodyPos.value.hip.x;
+                    const hipY = bodyPos.value.hip.y;
+                    
+                    // 基于极坐标公式推导膝盖与足部动态投影
+                    const kneeX = hipX + Math.sin((angle - 10) * Math.PI / 180) * 18;
+                    const kneeY = hipY + Math.cos((angle - 10) * Math.PI / 180) * 18;
+                    const footX = kneeX + Math.sin((angle + 10) * Math.PI / 180) * 18;
+                    const footY = 130; // 贴地锁定
+
+                    return { knee: { x: kneeX, y: kneeY }, foot: { x: footX, y: footY } };
+                });
+
+                // 动态计算右腿关节
+                const rightLeg = computed(() => {
+                    const angle = Math.sin((walkCycle.value + Math.PI) * 1.2) * 20; // 相差半个周期
+                    const hipX = bodyPos.value.hip.x;
+                    const hipY = bodyPos.value.hip.y;
+                    
+                    const kneeX = hipX + Math.sin((angle - 10) * Math.PI / 180) * 18;
+                    const kneeY = hipY + Math.cos((angle - 10) * Math.PI / 180) * 18;
+                    const footX = kneeX + Math.sin((angle + 10) * Math.PI / 180) * 18;
+                    const footY = 130; // 贴地锁定
+
+                    return { knee: { x: kneeX, y: kneeY }, foot: { x: footX, y: footY } };
+                });
+
+                const getStageName = computed(() => {
+                    switch (stage.value) {
+                        case 1: return "搬砖打工人下班中";
+                        case 2: return "神圣预告降临";
+                        case 3: return "秘密基地的连线";
+                        case 4: return "多巴胺自我救赎完成";
+                        default: return "未知状态";
+                    }
+                });
+
+                // 迈步事件：累积多巴胺，改变走路姿态
+                const heavySigh = () => {
+                    walkCycle.value++;
+                    walkDistance.value += 12;
+                    dopamine.value = Math.min(dopamine.value + 6, 40);
+
+                    // 走到屏幕边缘，自动触发第一幕完结
+                    if (walkDistance.value >= 90) {
+                        setTimeout(() => {
+                            stage.value = 2;
+                            dopamine.value = 45; // 动力见涨
+                        }, 400);
+                    }
+                };
+
+                const unlockJoy = () => {
+                    stage.value = 3;
+                    dopamine.value = 60; // 期待感拉满
+                };
+
+                // 原生鼠标事件处理拖拽（规避复杂的第三方依赖）
+                const startDrag = (e) => {
+                    if (gameBooted.value) return;
+                    isDragging.value = true;
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    
+                    dragOffset.value = {
+                        x: clientX - controllerPos.value.x,
+                        y: clientY - controllerPos.value.y
+                    };
+
+                    document.addEventListener('mousemove', onDrag);
+                    document.addEventListener('mouseup', stopDrag);
+                    document.addEventListener('touchmove', onDrag);
+                    document.addEventListener('touchend', stopDrag);
+                };
+
+                const onDrag = (e) => {
+                    if (!isDragging.value) return;
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                    let newX = clientX - dragOffset.value.x;
+                    let newY = clientY - dragOffset.value.y;
+
+                    // 限制手柄不拖出游戏视窗
+                    controllerPos.value = { x: newX, y: newY };
+
+                    // 实时碰撞检测：判断手柄是否对准了主机的插口
+                    checkCollision();
+                };
+
+                const stopDrag = () => {
+                    isDragging.value = false;
+                    document.removeEventListener('mousemove', onDrag);
+                    document.removeEventListener('mouseup', stopDrag);
+                    document.removeEventListener('touchmove', onDrag);
+                    document.removeEventListener('touchend', stopDrag);
+                };
+
+                const checkCollision = () => {
+                    // 获取目标和手柄的 DOM 位置
+                    const targetEl = document.getElementById('console-target');
+                    if (!targetEl) return;
+
+                    const rect = targetEl.getBoundingClientRect();
+                    const appEl = document.getElementById('app').getBoundingClientRect();
+                    
+                    // 计算插孔相对 app 容器的中心位置
+                    const targetCenterX = (rect.left - appEl.left) + rect.width / 2;
+                    const targetCenterY = (rect.top - appEl.top) + rect.height / 2;
+
+                    // 计算当前拖拽手柄与插孔中心的距离
+                    const dx = controllerPos.value.x - targetCenterX;
+                    const dy = controllerPos.value.y - targetCenterY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    // 距离小于 50px 触发自动磁吸对齐
+                    if (distance < 50) {
+                        controllerConnected.value = true;
+                        controllerPos.value = { x: targetCenterX + 10, y: targetCenterY - 10 };
+                        stopDrag();
+                    }
+                };
+
+                const controllerStyle = computed(() => {
+                    return {
+                        position: 'absolute',
+                        left: `${controllerPos.value.x}px`,
+                        top: `${controllerPos.value.y}px`,
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 20
+                    };
+                });
+
+                // 系统开机：触发绚烂粒子特效
+                const bootSystem = () => {
+                    gameBooted.value = true;
+                    dopamine.value = 100;
+                    
+                    // 激发 Canvas 大爆炸！
+                    triggerParticleBurst();
+
+                    // 留出时间享受震撼特效，再进入通关卡片
+                    setTimeout(() => {
+                        stage.value = 4;
+                    }, 2500);
+                };
+
+                // Canvas 粒子喷射动画
+                const triggerParticleBurst = () => {
+                    const canvas = document.getElementById('burstCanvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = canvas.parentElement.clientWidth;
+                    canvas.height = canvas.parentElement.clientHeight;
+
+                    const particles = [];
+                    const colors = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#F999B7'];
+
+                    // 从插槽中心喷发
+                    const startX = canvas.width / 3;
+                    const startY = canvas.height / 2;
+
+                    for (let i = 0; i < 150; i++) {
+                        particles.push({
+                            x: startX,
+                            y: startY,
+                            radius: Math.random() * 6 + 2,
+                            color: colors[Math.floor(Math.random() * colors.length)],
+                            vx: (Math.random() - 0.2) * 10,
+                            vy: (Math.random() - 0.7) * 12,
+                            alpha: 1,
+                            decay: Math.random() * 0.015 + 0.005
+                        });
+                    }
+
+                    function animate() {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        let alive = false;
+
+                        particles.forEach(p => {
+                            if (p.alpha > 0) {
+                                alive = true;
+                                p.x += p.vx;
+                                p.y += p.vy;
+                                p.vy += 0.2; // 附加微重力
+                                p.alpha -= p.decay;
+
+                                ctx.save();
+                                ctx.globalAlpha = p.alpha;
+                                ctx.fillStyle = p.color;
+                                ctx.beginPath();
+                                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                                ctx.fill();
+                                ctx.restore();
+                            }
+                        });
+
+                        if (alive) {
+                            requestAnimationFrame(animate);
+                        }
+                    }
+
+                    animate();
+                };
+
+                const restartGame = () => {
+                    stage.value = 1;
+                    walkCycle.value = 0;
+                    walkDistance.value = 0;
+                    dopamine.value = 10;
+                    controllerConnected.value = false;
+                    gameBooted.value = false;
+                    controllerPos.value = { x: 450, y: 150 };
+                };
+
+                return {
+                    stage,
+                    walkCycle,
+                    walkDistance,
+                    dopamine,
+                    bodyPos,
+                    leftLeg,
+                    rightLeg,
+                    getStageName,
+                    heavySigh,
+                    unlockJoy,
+                    startDrag,
+                    controllerConnected,
+                    gameBooted,
+                    controllerStyle,
+                    bootSystem,
+                    restartGame
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

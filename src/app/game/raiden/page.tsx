@@ -288,6 +288,7 @@ interface Bullet {
   wtype?: WeaponType;
   wingman?: boolean;
   lightning?: boolean;
+  damage: number;
   alive: boolean;
 }
 interface Monster {
@@ -632,6 +633,7 @@ export default function RaidenGame() {
     const b = stateRef.current.bullets.get();
     b.x = x; b.y = y; b.vx = vx; b.vy = vy;
     b.type = "player"; b.wtype = wtype; b.wingman = false; b.lightning = false;
+    b.damage = wtype === "laser" ? 3 : wtype === "wave" ? 2 : 1;
   }
   function spawnEnemyBullet(x: number, y: number, vx: number, vy: number) {
     const b = stateRef.current.enemyBullets.get();
@@ -1321,6 +1323,41 @@ export default function RaidenGame() {
     ctx.restore();
   }
 
+  // ── Wingman Satellite Drawing ──
+  function drawWingmanSatellite(ctx: CanvasRenderingContext2D, x: number, y: number, f: number, color: string, isLightning: boolean) {
+    ctx.save();
+    const pulse = 0.85 + Math.sin(f * 0.15 + x) * 0.15;
+    // outer glow
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 14;
+    ctx.globalAlpha = 0.3 * pulse;
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(x + 6, y + 6, 9, 0, Math.PI * 2); ctx.fill();
+    // main body — small diamond drone
+    ctx.shadowBlur = 8;
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x + 6, y);
+    ctx.lineTo(x + 12, y + 6);
+    ctx.lineTo(x + 6, y + 12);
+    ctx.lineTo(x, y + 6);
+    ctx.closePath();
+    ctx.fill();
+    // inner core
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(x + 6, y + 6, 2.5, 0, Math.PI * 2); ctx.fill();
+    // engine trail for lightning variants
+    if (isLightning) {
+      ctx.globalAlpha = 0.4 + Math.sin(f * 0.3 + x) * 0.2;
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(x + 6, y + 10, 2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // ── Option / Slash Drawing ──
 
   function drawGreenOption(ctx: CanvasRenderingContext2D, x: number, y: number) {
@@ -1752,49 +1789,70 @@ export default function RaidenGame() {
           }
         }
 
-        // ── wingman auto-fire (4-level system) ──
+        // ── wingman satellites (4-level system update.md) ──
         const wmLvl = state.wingmanLevel;
-        if (wmLvl > 0 && f % 14 === 0) {
-          const wt = state.weaponType;
-          // L1: flank left of ship, with gap
-          const lx = p.x - 22, ly = p.y + 18;
-          const bL = state.bullets.get();
-          bL.x = lx + 4; bL.y = ly; bL.vx = 0; bL.vy = -6;
-          bL.type = "player"; bL.wtype = wt; bL.wingman = true; bL.lightning = false;
-          // L2: flank right of ship, with gap
-          if (wmLvl >= 2) {
-            const rx = p.x + 42, ry = p.y + 18;
-            const bR = state.bullets.get();
-            bR.x = rx + 4; bR.y = ry; bR.vx = 0; bR.vy = -6;
-            bR.type = "player"; bR.wtype = wt; bR.wingman = true; bR.lightning = false;
-          }
-          // L3: orbiting wingman fires lightning bullet (wide orbit)
-          if (wmLvl >= 3 && f % 28 === 0) {
-            const angle = state.wingmanOrbitAngle;
-            const orbR = 40;
-            const orbX = p.x + 12 + Math.cos(angle) * orbR;
-            const orbY = p.y + 12 + Math.sin(angle) * orbR;
-            const bO = state.bullets.get();
-            const dx = -Math.cos(angle) * 3;
-            const dy = -Math.sin(angle) * 3 - 2;
-            bO.x = orbX; bO.y = orbY; bO.vx = dx; bO.vy = dy;
-            bO.type = "player"; bO.wtype = wt; bO.wingman = true; bO.lightning = true;
-          }
-        }
-        // L4: orbiting wingman fires extra lightning bolt (slower, chance-based)
-        if (state.wingmanLevel >= 4 && f % 40 === 0 && Math.random() < 0.5) {
-          const angle = state.wingmanOrbitAngle + Math.PI * 0.6;
-          const orbR = 40;
-          const orbX = p.x + 12 + Math.cos(angle) * orbR;
-          const orbY = p.y + 12 + Math.sin(angle) * orbR;
-          const bO = state.bullets.get();
-          bO.x = orbX; bO.y = orbY; bO.vx = -Math.cos(angle) * 3; bO.vy = -Math.sin(angle) * 3 - 2;
-          bO.type = "player"; bO.wtype = state.weaponType; bO.wingman = true; bO.lightning = true;
-        }
+        if (wmLvl > 0) {
+          // Update orbit angle
+          state.wingmanOrbitAngle += wmLvl >= 3 ? 0.035 : 0.02;
+          const baseAngle = state.wingmanOrbitAngle;
+          const orbR = 38;
+          const cx = p.x + 12, cy = p.y + 12;
 
-        // ── wingman orbit angle ──
-        if (state.wingmanLevel >= 3) {
-          state.wingmanOrbitAngle += 0.04;
+          // L1: single satellite flank-left
+          if (wmLvl === 1) {
+            const sx = p.x - 22, sy = p.y + 18;
+            if (f % 14 === 0) {
+              const b = state.bullets.get();
+              b.x = sx + 4; b.y = sy; b.vx = 0; b.vy = -6;
+              b.type = "player"; b.wtype = state.weaponType; b.wingman = true; b.lightning = false;
+              b.damage = 1;
+            }
+          }
+          // L2: dual satellites flank left+right
+          if (wmLvl === 2) {
+            if (f % 14 === 0) {
+              const bL = state.bullets.get();
+              bL.x = p.x - 18; bL.y = p.y + 18; bL.vx = 0; bL.vy = -6;
+              bL.type = "player"; bL.wtype = state.weaponType; bL.wingman = true; bL.lightning = false; bL.damage = 1;
+              const bR = state.bullets.get();
+              bR.x = p.x + 34; bR.y = p.y + 18; bR.vx = 0; bR.vy = -6;
+              bR.type = "player"; bR.wtype = state.weaponType; bR.wingman = true; bR.lightning = false; bR.damage = 1;
+            }
+          }
+          // L3: 4 satellites in circular orbit, each fires lightning
+          if (wmLvl === 3) {
+            for (let i = 0; i < 4; i++) {
+              const ang = baseAngle + (Math.PI / 2) * i;
+              const sx = cx + Math.cos(ang) * orbR;
+              const sy = cy + Math.sin(ang) * orbR;
+              // Stagger fire: each satellite fires every 20 frames, offset by 5
+              if (f % 20 === i * 5) {
+                const b = state.bullets.get();
+                b.x = sx; b.y = sy;
+                b.vx = Math.cos(ang) * 1.5; b.vy = Math.sin(ang) * 1.5 - 3;
+                b.type = "player"; b.wtype = state.weaponType; b.wingman = true; b.lightning = true;
+                b.damage = 3;
+              }
+            }
+          }
+          // L4: awakening — satellites detach, sweep across screen, fire rapid lightning
+          if (wmLvl >= 4) {
+            for (let i = 0; i < 4; i++) {
+              const ang = baseAngle + (Math.PI / 2) * i;
+              // L4: satellites sweep outward then back (radius oscillates)
+              const sweepR = orbR + Math.sin(f * 0.06 + i * 1.57) * 20;
+              const sx = cx + Math.cos(ang) * sweepR;
+              const sy = cy + Math.sin(ang) * sweepR;
+              // Rapid fire every 12 frames, staggered
+              if (f % 12 === i * 3) {
+                const b = state.bullets.get();
+                b.x = sx; b.y = sy;
+                b.vx = Math.cos(ang) * 2; b.vy = Math.sin(ang) * 2 - 4;
+                b.type = "player"; b.wtype = state.weaponType; b.wingman = true; b.lightning = true;
+                b.damage = 4;
+              }
+            }
+          }
         }
 
         // ── Option (僚机) auto-fire ──
@@ -1808,6 +1866,7 @@ export default function RaidenGame() {
               b.x = opt.x + 7; b.y = opt.y - 2;
               b.vx = 0; b.vy = -10;
               b.type = "player"; b.wtype = undefined; b.wingman = false; b.lightning = true;
+              b.damage = 3;
             }
           }
         } else {
@@ -1823,6 +1882,7 @@ export default function RaidenGame() {
                 b.vx = Math.sin(ang) * 2;
                 b.vy = -7 - Math.abs(ang) * 2;
                 b.type = "player"; b.wtype = "wave"; b.wingman = false; b.lightning = false;
+                b.damage = 2;
               }
             }
           }
@@ -2119,7 +2179,7 @@ export default function RaidenGame() {
             const mw = m.type === "bomber" ? 28 : m.type === "elite" ? 44 : 24;
             const mh = m.type === "interceptor" ? 24 : m.type === "elite" ? 36 : 20;
             if (b.x > m.x && b.x < m.x + mw && b.y > m.y && b.y < m.y + mh) {
-              m.hp--;
+              m.hp -= b.damage;
               m.flashTimer = 3;
               state.bullets.release(b);
               emitExplosion(b.x, b.y, 3, ["#fbbf24"], 3);
@@ -2828,59 +2888,7 @@ export default function RaidenGame() {
           if (state.invincible) drawShield(ctx, sp.x, sp.y);
           drawPlayerShip(ctx, sp.x, sp.y, playerTiltRef.current);
 
-          // wingman (4-level pixel sprite rendering)
-          const wmLvl = state.wingmanLevel;
-          if (wmLvl > 0) {
-            const wmColors = { b: "#0d9488", h: "#5eead4", s: "#0f766e" };
-            const flicker = 0.7 + Math.sin(f * 0.15) * 0.3;
-            // L1: one sprite left-flank, with clear gap
-            ctx.globalAlpha = flicker;
-            drawSprite(ctx, WINGMAN_CRAFT, wmColors, sp.x - 24, sp.y + 14, 3);
-            ctx.globalAlpha = 1;
-            // L2: one sprite right-flank (amber), with clear gap
-            if (wmLvl >= 2) {
-              const flicker2 = 0.7 + Math.sin(f * 0.15 + 1) * 0.3;
-              ctx.globalAlpha = flicker2;
-              drawSprite(ctx, WINGMAN_CRAFT, { b: "#d97706", h: "#fbbf24", s: "#92400e" }, sp.x + 40, sp.y + 14, 3);
-              ctx.globalAlpha = 1;
-            }
-            // L3: orbiting wingman around ship (wide orbit)
-            if (wmLvl >= 3) {
-              const orbR = 40;
-              const angle = state.wingmanOrbitAngle;
-              const orbX = sp.x + 12 + Math.cos(angle) * orbR - 6;
-              const orbY = sp.y + 12 + Math.sin(angle) * orbR - 6;
-              ctx.save();
-              ctx.shadowColor = "#c084fc";
-              ctx.shadowBlur = 12;
-              drawSprite(ctx, WINGMAN_CRAFT, { b: "#7c3aed", h: "#c084fc", s: "#581c87" }, orbX, orbY, 3);
-              ctx.shadowBlur = 0;
-              ctx.restore();
-              // connection tether (purple glow line)
-              ctx.save();
-              ctx.shadowColor = "#a855f7";
-              ctx.shadowBlur = 6;
-              ctx.strokeStyle = "rgba(168,85,247,0.4)";
-              ctx.lineWidth = 1;
-              ctx.setLineDash([2, 4]);
-              ctx.beginPath();
-              ctx.moveTo(sp.x + 12, sp.y + 12);
-              ctx.lineTo(orbX + 6, orbY + 6);
-              ctx.stroke();
-              ctx.setLineDash([]);
-              ctx.restore();
-            }
-            // L4 overdrive glow on all wingmen
-            if (wmLvl >= 4) {
-              ctx.globalAlpha = 0.3 + Math.sin(f * 0.12) * 0.2;
-              const wg = ctx.createRadialGradient(sp.x + 12, sp.y + 14, 0, sp.x + 12, sp.y + 14, 36);
-              wg.addColorStop(0, "rgba(168,85,247,0.25)");
-              wg.addColorStop(1, "rgba(168,85,247,0)");
-              ctx.fillStyle = wg;
-              ctx.beginPath(); ctx.arc(sp.x + 12, sp.y + 14, 36, 0, Math.PI * 2); ctx.fill();
-              ctx.globalAlpha = 1;
-            }
-          }
+
 
           if (state.overdriveTimer > 0) {
             // engine overcharge glow
@@ -2933,6 +2941,42 @@ export default function RaidenGame() {
           const textY = sp.y - 18 - (1 - lpT) * 30;
           drawText(ctx, "LEVEL UP!", sp.x + 12, textY, COLORS.powerUp, 14, "center", 3);
           ctx.restore();
+        }
+      }
+
+      // ── Wingman satellites rendering (L1-L4) ──
+      if (stateRef.current.gameStarted && !stateRef.current.isGameOver) {
+        const wmLvl = stateRef.current.wingmanLevel;
+        if (wmLvl > 0) {
+          const f = stateRef.current.frameCount;
+          const p = stateRef.current.player;
+          const baseAngle = stateRef.current.wingmanOrbitAngle;
+          const orbR = 38;
+          const cx = p.x + 12, cy = p.y + 12;
+
+          if (wmLvl === 1) {
+            const sx = p.x - 22, sy = p.y + 18;
+            drawWingmanSatellite(ctx, sx, sy, f, "#c084fc", false);
+          } else if (wmLvl === 2) {
+            drawWingmanSatellite(ctx, p.x - 18, p.y + 18, f, "#c084fc", false);
+            drawWingmanSatellite(ctx, p.x + 34, p.y + 18, f, "#c084fc", false);
+          } else if (wmLvl === 3) {
+            for (let i = 0; i < 4; i++) {
+              const ang = baseAngle + (Math.PI / 2) * i;
+              const sx = cx + Math.cos(ang) * orbR;
+              const sy = cy + Math.sin(ang) * orbR;
+              drawWingmanSatellite(ctx, sx, sy, f, "#22d3ee", true);
+            }
+          } else if (wmLvl >= 4) {
+            const sweepBase = 38;
+            for (let i = 0; i < 4; i++) {
+              const ang = baseAngle + (Math.PI / 2) * i;
+              const sweepR = sweepBase + Math.sin(f * 0.06 + i * 1.57) * 20;
+              const sx = cx + Math.cos(ang) * sweepR;
+              const sy = cy + Math.sin(ang) * sweepR;
+              drawWingmanSatellite(ctx, sx, sy, f, "#facc15", true);
+            }
+          }
         }
       }
 
@@ -3642,8 +3686,8 @@ export default function RaidenGame() {
                   </div>
                   <div className="flex flex-col items-end">
                     <p className="pixel-font text-[5px] tracking-[2px]" style={{ color: COLORS.textDim }}>WING</p>
-                    <p className="pixel-font text-[9px] leading-tight" style={{ color: wingmanLevel > 0 ? "#c084fc" : COLORS.textDim, textShadow: `0 0 4px #c084fc40` }}>
-                      {wingmanLevel > 0 ? "Lv" + wingmanLevel : "-"}
+                    <p className="pixel-font text-[9px] leading-tight" style={{ color: wingmanLevel > 0 ? (wingmanLevel >= 4 ? "#facc15" : wingmanLevel >= 3 ? "#22d3ee" : "#c084fc") : COLORS.textDim, textShadow: `0 0 4px ${wingmanLevel >= 4 ? "#facc15" : wingmanLevel >= 3 ? "#22d3ee" : "#c084fc"}40` }}>
+                      {wingmanLevel > 0 ? (wingmanLevel === 1 ? "●" : wingmanLevel === 2 ? "●●" : wingmanLevel === 3 ? "●●●●" : "觉醒") : "-"}
                     </p>
                   </div>
                 </div>

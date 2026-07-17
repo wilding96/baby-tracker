@@ -358,8 +358,8 @@ export default function GamePage() {
   const getCellTransform = (r: number, c: number) => {
     if (!swapPair) return {};
     const { r1, c1, r2, c2 } = swapPair;
-    if (r === r1 && c === c1) return { transform: `translate(${(c2 - c1) * cellSize}px, ${(r2 - r1) * cellSize}px)` };
-    if (r === r2 && c === c2) return { transform: `translate(${(c1 - c2) * cellSize}px, ${(r1 - r2) * cellSize}px)` };
+    if (r === r1 && c === c1) return { transform: `translate3d(${(c2 - c1) * cellSize}px, ${(r2 - r1) * cellSize}px, 10px)` };
+    if (r === r2 && c === c2) return { transform: `translate3d(${(c1 - c2) * cellSize}px, ${(r1 - r2) * cellSize}px, 10px)` };
     return {};
   };
 
@@ -396,10 +396,13 @@ export default function GamePage() {
           <button onClick={resetGame} className="rounded-xl bg-[#ffd43b] px-3 py-1.5 text-sm font-bold text-[#725d42] shadow-[0_2px_#fab005] active:shadow-none active:translate-y-0.5 transition-all">🔄 新一局</button>
         </div>
 
-        <div className="flex justify-center">
+        <div className="flex justify-center candy-board-stage relative">
+          {/* 棋盘底部投影 */}
+          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3/4 h-3 rounded-full bg-black/10 blur-md pointer-events-none" />
+          <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-1/2 h-2 rounded-full bg-black/5 blur-sm pointer-events-none" />
           <div
             onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
-            className={`relative grid gap-0.5 rounded-2xl border-2 border-[#c4b89e] bg-[#f7f3df] p-2 shadow-[inset_0_2px_8px_rgba(0,0,0,0.1),0_8px_20px_rgba(61,52,40,0.15)] select-none touch-none ${processingRef.current ? "opacity-60 cursor-wait" : "cursor-default"}`}
+            className={`relative grid gap-1 rounded-2xl border-2 border-[#d4bc8a] bg-[#3a2e20] p-2 shadow-[inset_0_4px_16px_rgba(0,0,0,0.4),0_12px_32px_rgba(0,0,0,0.35)] select-none touch-none candy-board-3d ${processingRef.current ? "opacity-60 cursor-wait" : "cursor-default"}`}
             style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)`, width: `min(calc(100vw - 2.5rem), 400px)` }}
           >
             {!board
@@ -416,36 +419,36 @@ export default function GamePage() {
                   const disabled = processingRef.current || swapPair !== null;
                   const sd = isMt ? r * 40 + c * 20 : 0;
 
-                  let anim = "none";
-                  if (isSh) anim = "shake 0.4s ease-in-out";
-                  else if (isSel) anim = "pulse-glow 1.5s ease-in-out infinite";
-                  else if (hint) anim = "hint-pulse 1.5s ease-in-out infinite";
-                  else if (hasFall) anim = `bounce-drop 450ms ${fallDist! * 40}ms ease-out forwards`;
-
-                  const boxShadow = isSel
-                    ? "0 0 14px 4px rgba(255,146,43,0.5), 0 0 0 2px #ffd43b, 0 2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.3)"
-                    : hint
-                      ? "0 0 14px 5px rgba(255,215,0,0.55)"
-                      : "0 2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.3)";
-
                   return (
                     <button key={cell.id} data-r={r} data-c={c} onClick={() => onClick(r, c)} disabled={disabled}
-                      className="aspect-square flex items-center justify-center rounded-xl text-xl sm:text-2xl select-none relative border-2 transition-all duration-150"
+                      className={`aspect-square flex items-center justify-center rounded-xl text-xl sm:text-2xl select-none relative border-2 candy-cell ${isSel ? "pressed" : ""}`}
                       style={{
                         backgroundColor: candy?.color ?? "#eee",
-                        borderColor: isSel ? "#ffd43b" : "transparent",
-                        boxShadow,
+                        borderColor: isSel ? "#ffd43b" : "rgba(0,0,0,0.15)",
+                        boxShadow: isSel
+                          ? "0 0 14px 4px rgba(255,146,43,0.5), 0 0 0 2px #ffd43b, 0 4px 8px rgba(0,0,0,0.25), inset 0 2px 0 rgba(255,255,255,0.3)"
+                          : hint
+                            ? "0 0 14px 5px rgba(255,215,0,0.55), 0 4px 8px rgba(0,0,0,0.2)"
+                            : "0 4px 8px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15), inset 0 2px 0 rgba(255,255,255,0.3)",
                         transform: isMt ? "scale(0)" : (!hasFall ? (swapStyle.transform ?? undefined) : undefined),
                         opacity: isMt ? 0 : 1,
                         transitionDelay: isMt ? `${sd}ms` : "0ms",
-                        animation: anim,
+                        animation: isSh ? "shake 0.4s ease-in-out" : isSel ? "pulse-glow 1.5s ease-in-out infinite" : hint ? "hint-pulse 1.5s ease-in-out infinite" : hasFall ? `bounce-drop-3d 450ms ${fallDist! * 40}ms ease-out forwards` : "none",
                         "--fall-offset": hasFall ? `${-cellSize * fallDist!}px` : "0px",
+                        zIndex: hint ? 5 : 1,
                       } as React.CSSProperties}
                       aria-label={`${candy?.name ?? ""}糖果`}
                     >
+                      {/* 高光 */}
                       <span className="absolute inset-0 rounded-xl pointer-events-none"
-                        style={{ background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.35), transparent 70%)" }} />
-                      <span className="drop-shadow-sm pointer-events-none relative z-10"
+                        style={{ background: "radial-gradient(circle at 30% 25%, rgba(255,255,255,0.4) 0%, transparent 60%)" }} />
+                      {/* 底部阴影 */}
+                      <span className="absolute inset-x-1 -bottom-1 h-2 rounded-full pointer-events-none"
+                        style={{ background: "rgba(0,0,0,0.15)", filter: "blur(3px)" }} />
+                      {/* 左侧高光边缘 */}
+                      <span className="absolute left-0.5 top-2 bottom-2 w-0.5 rounded-full pointer-events-none"
+                        style={{ background: "rgba(255,255,255,0.2)" }} />
+                      <span className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)] pointer-events-none relative z-10"
                         style={{ transition: swapPair ? "transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1)" : "none" }}>
                         {candy?.emoji ?? "?"}
                       </span>
@@ -468,13 +471,14 @@ export default function GamePage() {
                 <span className="text-4xl font-black" style={{ color: comboColor, textShadow: "0 2px 8px rgba(0,0,0,0.3)", animation: "combo-pop 1.2s ease-out forwards" }}>{comboText}</span>
               </div>
             )}
+            {/* 棋盘光晕 overlay */}
+            <div className="absolute inset-0 rounded-2xl candy-board-gloss z-30" />
           </div>
         </div>
 
         <div className="flex items-center gap-2 pt-2">
           <Button asChild variant="outline" className="flex-1"><Link href="/game/leaderboard">🏆 排行榜</Link></Button>
-          <Button asChild variant="outline" className="flex-1"><Link href="/game/release-day">🎮 下班发售日</Link></Button>
-          <Button asChild variant="outline" className="flex-1"><Link href="/">🏠 回首页</Link></Button>
+          <Button asChild variant="outline" className="flex-1"><Link href="/discover">🏠 返回</Link></Button>
         </div>
       </div>
 

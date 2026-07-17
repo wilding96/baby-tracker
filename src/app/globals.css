@@ -273,6 +273,44 @@
   50% { transform: scale(1.1); box-shadow: 0 0 16px 6px rgba(255, 215, 0, 0.6); }
 }
 
+/* ─── 三消 3D ─── */
+.candy-board-stage {
+  perspective: 800px;
+  perspective-origin: 50% 30%;
+}
+
+.candy-board-3d {
+  transform: rotateX(15deg);
+  transform-style: preserve-3d;
+}
+
+.candy-cell {
+  transform-style: preserve-3d;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1);
+  transition: transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 200ms ease;
+}
+.candy-cell:hover {
+  transform: translateZ(8px) scale(1.05);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.12);
+}
+.candy-cell.pressed {
+  transform: translateZ(2px) scale(0.95);
+}
+
+@keyframes bounce-drop-3d {
+  0% { transform: translateY(var(--fall-offset)) translateZ(15px); }
+  40% { transform: translateY(0) translateZ(5px); }
+  70% { transform: translateY(calc(var(--fall-offset) * -0.12)) translateZ(0); }
+  85% { transform: translateY(calc(var(--fall-offset) * 0.04)) translateZ(0); }
+  100% { transform: translateY(0) translateZ(0); }
+}
+
+/* 3D 棋盘光晕 */
+.candy-board-gloss {
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+}
+
 .control-panel {
   position: fixed;
   bottom: max(50px, env(safe-area-inset-bottom));

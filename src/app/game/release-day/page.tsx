@@ -226,11 +226,16 @@ export default function ReleaseDayGame() {
 
           {/* 顶部 */}
           <div className="flex justify-between items-center border-b-2 border-[#2C3E50] pb-3 mb-3">
-            <div>
-              <h1 className="text-xl sm:text-3xl font-bold text-[#2C3E50] pixel-title">
-                下班发售日 <span className="text-xs sm:text-sm font-normal text-gray-500">v0.1.0</span>
-              </h1>
-              <p className="text-xs text-gray-400 mt-0.5">给内心那个晕3D的网瘾少年</p>
+            <div className="flex items-center gap-3">
+              <Link href="/discover" className="text-xs text-[#5D6D7E] hover:text-[#2C3E50] transition-colors flex items-center gap-1 shrink-0">
+                &larr; 返回
+              </Link>
+              <div>
+                <h1 className="text-xl sm:text-3xl font-bold text-[#2C3E50] pixel-title">
+                  下班发售日 <span className="text-xs sm:text-sm font-normal text-gray-500">v0.1.0</span>
+                </h1>
+                <p className="text-xs text-gray-400 mt-0.5">给内心那个晕3D的网瘾少年</p>
+              </div>
             </div>
             <div className="w-36 sm:w-48">
               <div className="flex justify-between text-xs font-semibold text-[#2C3E50] mb-1">
@@ -368,9 +373,20 @@ export default function ReleaseDayGame() {
               {stage === 3 && (
                 <div className="w-full flex flex-col items-center relative">
                   {!gameBooted ? (
-                    <p className="text-sm sm:text-lg text-[#5D6D7E] italic mb-4 text-center leading-relaxed">
-                      &ldquo;推开家门，温馨的灯光洒下来。把手柄插进主机，按下电源键——&rdquo;
-                    </p>
+                    <div>
+                      <p className="text-sm sm:text-lg text-[#5D6D7E] italic mb-2 text-center leading-relaxed">
+                        &ldquo;推开家门，温馨的灯光洒下来。&rdquo;
+                      </p>
+                      {!controllerConnected ? (
+                        <p className="text-xs font-bold text-[#FF6B6B] text-center mb-2 animate-pulse">
+                          👆 拖动手柄，将底部凹口对准主机接口槽
+                        </p>
+                      ) : (
+                        <p className="text-xs font-bold text-green-500 text-center mb-2">
+                          ✅ 手柄已对接，按下 START GAME 启动！
+                        </p>
+                      )}
+                    </div>
                   ) : (
                     <p className="text-base sm:text-lg text-[#FF6B6B] font-bold mb-4 text-center animate-bounce">
                       ✨ 绚烂的多巴胺爆炸！正在链接终极快乐！
@@ -390,7 +406,7 @@ export default function ReleaseDayGame() {
                         </div>
                         {/* 接口凹口 —— 主机正面底部边中间有一个凹进的长方形槽 */}
                         <div ref={portRef} className="mt-2 relative">
-                          <div className={`w-14 h-4 rounded-sm border-2 transition-colors duration-500 flex items-center justify-center ${controllerConnected ? "border-green-500 bg-green-100" : "border-[#2C3E50] bg-[#1a1a2e]"}`}>
+                          <div className={`w-14 h-4 rounded-sm border-2 transition-colors duration-300 flex items-center justify-center ${isDragging ? "border-yellow-400 bg-yellow-100 animate-pulse" : controllerConnected ? "border-green-500 bg-green-100" : "border-[#2C3E50] bg-[#1a1a2e]"}`}>
                             <div className="flex gap-1">
                               <div className="w-1 h-1 rounded-full bg-[#888]" />
                               <div className="w-1 h-1 rounded-full bg-[#888]" />
@@ -409,9 +425,8 @@ export default function ReleaseDayGame() {
                     </div>
 
                     {/* ── 手柄（带底部凹口）── */}
-                    {!gameBooted && (
+                    {!controllerConnected && !gameBooted && (
                       <div className="flex flex-col items-center gap-1 select-none">
-                        {controllerConnected && <span className="text-[10px] font-bold text-green-500">✓ 已对接</span>}
                         <div
                           id="game-controller"
                           className="w-32 sm:w-36 bg-white sketch-border p-2 flex flex-col items-center select-none z-10 relative"
@@ -455,7 +470,9 @@ export default function ReleaseDayGame() {
                           </div>
                         </div>
                         {!controllerConnected && (
-                          <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">🎮 手柄凹口对准主机接口</span>
+                          <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">
+                            🎮 按住手柄拖到主机接口上
+                          </span>
                         )}
                       </div>
                     )}
@@ -526,7 +543,7 @@ export default function ReleaseDayGame() {
               <span>📍 状态：<strong className="text-[#FF6B6B]">{STAGE_NAMES[stage] ?? "未知"}</strong></span>
               <span>{stage < 4 ? "🔋 蓄能阶段" : "✨ 已通关"}</span>
             </div>
-            <Link href="/" className="italic hover:text-[#2C3E50] transition-colors">&ldquo;对方是最后的甜，代码是掌中的光。&rdquo;</Link>
+            <Link href="/discover" className="italic hover:text-[#2C3E50] transition-colors">&ldquo;对方是最后的甜，代码是掌中的光。&rdquo;</Link>
           </div>
         </div>
       </main>

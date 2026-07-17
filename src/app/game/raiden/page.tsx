@@ -3355,7 +3355,7 @@ export default function RaidenGame() {
           {/* Minimal back button — pixel style */}
           <div className="flex items-center justify-between mb-3">
             <Link
-              href="/game"
+              href="/discover"
               className="pixel-font text-[10px] hover:text-[#7dd3fc] transition-colors tracking-wider"
               style={{ color: COLORS.player }}
             >

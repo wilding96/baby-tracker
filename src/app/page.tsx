@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   format,
   parseISO,
@@ -11,19 +11,20 @@ import {
 } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { supabase } from "@/lib/supabase";
-import { Divider, Modal, Time } from "animal-island-ui";
+import { Divider, Modal } from "animal-island-ui";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   CalendarClock,
-  BarChart3,
-  HeartPulse,
   Syringe,
   Stethoscope,
   Sparkles,
   Trash2,
+  Plus,
+  Droplets,
+  BarChart3,
 } from "lucide-react";
 
 type GrowthEventType = "checkup" | "vaccine" | "milestone" | "custom";
@@ -495,40 +496,19 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        <section className="pt-1 space-y-2">
-          <p className="text-xs text-[#9f927d]">快捷入口</p>
-
-          <Card color="app-blue" className="island-card p-3 text-white">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-white drop-shadow-sm">
-                  继续记录喂养数据
-                </p>
-                <p className="text-xs text-white/85 mt-0.5">
-                  进入原有喂养记录流程
-                </p>
-              </div>
-              <Button
-                asChild
-                className="h-10 border-white/70 bg-white/90 px-4 text-[#5c6fca] shadow-[0_5px_rgba(80,96,180,0.45)] hover:border-white hover:bg-white hover:text-[#4f63c6]"
-              >
-                <Link href="/record">去记录</Link>
-              </Button>
-            </div>
-          </Card>
-
-          <Card color="app-teal" className="island-card p-3 text-white">
+        <section className="space-y-2.5">
+          <Card color="app-green" className="island-card p-3 text-white">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl bg-white/25 p-2 text-white shadow-sm ring-1 ring-white/35">
-                  <BarChart3 size={18} />
+                  <Droplets size={18} />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white drop-shadow-sm">
-                    喂养情况总览
+                    喂养记录
                   </p>
                   <p className="text-xs text-white/85 mt-0.5">
-                    查看奶量和睡眠趋势
+                    记录喂奶、睡眠、排便
                   </p>
                 </div>
               </div>
@@ -537,116 +517,46 @@ export default function Home() {
                 variant="outline"
                 className="h-10 border-white/70 bg-white/90 px-4 text-[#2f8f78] shadow-[0_5px_rgba(57,145,123,0.45)] hover:border-white hover:bg-white hover:text-[#247b67]"
               >
-                <Link href="/stats">看总览</Link>
+                <Link href="/record">去记录</Link>
               </Button>
             </div>
           </Card>
 
-          <Card color="warm-peach-pink" className="island-card p-3 text-white">
+          <Card color="app-blue" className="island-card p-3 text-white">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl bg-white/25 p-2 text-white shadow-sm ring-1 ring-white/35">
-                  <HeartPulse size={18} />
+                  <BarChart3 size={18} />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white drop-shadow-sm">
-                    心情记录
+                    喂养统计
                   </p>
                   <p className="text-xs text-white/85 mt-0.5">
-                    进入独立页面，记录当下动态情绪
+                    查看喂养、睡眠趋势图表
                   </p>
                 </div>
               </div>
               <Button
                 asChild
                 variant="outline"
-                className="h-10 border-white/70 bg-white/90 px-4 text-[#8b2d5e] shadow-[0_5px_rgba(139,45,94,0.45)] hover:border-white hover:bg-white hover:text-[#76264f]"
+                className="h-10 border-white/70 bg-white/90 px-4 text-[#4f63c6] shadow-[0_5px_rgba(80,96,180,0.45)] hover:border-white hover:bg-white hover:text-[#4f63c6]"
               >
-                <Link href="/mood">写心情</Link>
-              </Button>
-            </div>
-          </Card>
-
-          <Card color="warm-peach-pink" className="island-card p-3 text-white">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-white drop-shadow-sm">
-                  留言板
-                </p>
-                <p className="text-xs text-white/85 mt-0.5">
-                  给家人留句话，记录当下心情
-                </p>
-              </div>
-              <Button
-                asChild
-                variant="outline"
-                className="h-10 border-white/70 bg-white/90 px-4 text-[#b75f45] shadow-[0_5px_rgba(171,88,62,0.45)] hover:border-white hover:bg-white hover:text-[#9f4d35]"
-              >
-                <Link href="/board">去留言</Link>
-              </Button>
-            </div>
-          </Card>
-
-          <Card color="warm-peach-pink" className="island-card p-3 text-white">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-white drop-shadow-sm">
-                  快乐消消乐
-                </p>
-                <p className="text-xs text-white/85 mt-0.5">
-                  简单三消小游戏，放松一下
-                </p>
-              </div>
-              <Button
-                asChild
-                variant="outline"
-                className="h-10 border-white/70 bg-white/90 px-4 text-[#b75f45] shadow-[0_5px_rgba(171,88,62,0.45)] hover:border-white hover:bg-white hover:text-[#9f4d35]"
-              >
-                <Link href="/game">去玩</Link>
-              </Button>
-            </div>
-          </Card>
-
-          <Card color="warm-peach-pink" className="island-card p-3 text-white">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-white drop-shadow-sm">
-                  雷电战机
-                </p>
-                <p className="text-xs text-white/85 mt-0.5">
-                  经典射击小游戏，不登录也能玩
-                </p>
-              </div>
-              <Button
-                asChild
-                variant="outline"
-                className="h-10 border-white/70 bg-white/90 px-4 text-[#b75f45] shadow-[0_5px_rgba(171,88,62,0.45)] hover:border-white hover:bg-white hover:text-[#9f4d35]"
-              >
-                <Link href="/game/raiden">去玩</Link>
-              </Button>
-            </div>
-          </Card>
-
-          <Card color="warm-peach-pink" className="island-card p-3 text-white">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-white drop-shadow-sm">
-                  下班发售日
-                </p>
-                <p className="text-xs text-white/85 mt-0.5">
-                  叙事交互小游戏，体验下班后的快乐
-                </p>
-              </div>
-              <Button
-                asChild
-                variant="outline"
-                className="h-10 border-white/70 bg-white/90 px-4 text-[#b75f45] shadow-[0_5px_rgba(171,88,62,0.45)] hover:border-white hover:bg-white hover:text-[#9f4d35]"
-              >
-                <Link href="/game/release-day">去玩</Link>
+                <Link href="/stats">查看</Link>
               </Button>
             </div>
           </Card>
         </section>
+
+        {/* 浮动新增按钮 */}
+        <button
+          type="button"
+          onClick={() => setDialogOpen(true)}
+          className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#725d42] text-white shadow-xl active:scale-95 transition-transform"
+          aria-label="新增成长事件"
+        >
+          <Plus size={28} strokeWidth={3} />
+        </button>
 
         <Modal
           open={dialogOpen}

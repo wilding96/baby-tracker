@@ -22,7 +22,20 @@ const COLS = 8;
 const uid = () => Math.random().toString(36).slice(2, 8);
 const rand = (n: number) => Math.floor(Math.random() * n);
 
-type Cell = { id: string; type: number };
+// ─── 天气 & 特殊水果 ───
+type Weather = "sunny" | "rain" | "storm" | "night";
+type SpecialType = "bomb" | "flame" | "lightning";
+
+const WEATHERS: Weather[] = ["sunny", "rain", "storm", "night"];
+const SPECIAL_CHANCE = 0.08;
+const RAIN_INTERVAL = 3;
+const STORM_INTERVAL = 4;
+const LOCK_DURATION = 3;
+const LOCK_COUNT = 4;
+const HIDDEN_RATIO = 0.18;
+const NIGHT_BONUS = 500;
+
+type Cell = { id: string; type: number; special?: SpecialType; lockedTurns?: number };
 type Particle = { id: string; x: number; y: number; tx: number; ty: number; color: string; size: number };
 type ScorePopup = { id: string; score: number; x: number; y: number };
 
@@ -35,7 +48,13 @@ function isAdjacent(r1: number, c1: number, r2: number, c2: number) {
 }
 
 function createCell(type?: number): Cell {
-  return { id: uid(), type: type ?? rand(CANDY_TYPES.length) };
+  const cell: Cell = { id: uid(), type: type ?? rand(CANDY_TYPES.length) };
+  // 重力填充生成的新格子有概率带特殊水果
+  if (type === undefined && Math.random() < SPECIAL_CHANCE) {
+    const specials: SpecialType[] = ["bomb", "flame", "lightning"];
+    cell.special = specials[rand(specials.length)];
+  }
+  return cell;
 }
 
 function createBoard(): Cell[][] {
@@ -117,6 +136,122 @@ function matchCenter(board: Cell[][], ids: Set<string>, cellSize: number): { x: 
   return { x: sc / cnt * cellSize + cellSize / 2, y: sr / cnt * cellSize + cellSize / 2 };
 }
 
+// ─── 天气 & 特殊水果 工具函数 ───
+function pickWeather(): Weather {
+  return WEATHERS[rand(WEATHERS.length)];
+}
+
+function getEffectCells(r: number, c: number, special: SpecialType): [number, number][] {
+  const cells: [number, number][] = [];
+  switch (special) {
+    case "bomb":
+      for (let dr = -1; dr <= 1; dr++)
+        for (let dc = -1; dc <= 1; dc++)
+          if (r + dr >= 0 && r + dr < ROWS && c + dc >= 0 && c + dc < COLS)
+            cells.push([r + dr, c + dc]);
+      break;
+    case "flame":
+      for (let cc = 0; cc < COLS; cc++) cells.push([r, cc]);
+      break;
+    case "lightning":
+      for (const [dr, dc] of [[0,0],[-1,0],[1,0],[0,-1],[0,1]])
+        if (r + dr >= 0 && r + dr < ROWS && c + dc >= 0 && c + dc < COLS)
+          cells.push([r + dr, c + dc]);
+      break;
+  }
+  return cells;
+}
+
+function revealAdjacentHidden(
+  board: Cell[][], matchedIds: Set<string>, hiddenIds: Set<string>
+): { revealed: Set<string>; allRevealed: boolean } {
+  const revealed = new Set<string>();
+  const totalLeft = new Set(hiddenIds);
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (!hiddenIds.has(board[r][c].id)) continue;
+      for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && matchedIds.has(board[nr][nc].id)) {
+          revealed.add(board[r][c].id);
+          break;
+        }
+      }
+    }
+  }
+  for (const id of revealed) totalLeft.delete(id);
+  return { revealed, allRevealed: totalLeft.size === 0 };
+}
+
+function selectHiddenCells(board: Cell[][]): Set<string> {
+  const total = ROWS * COLS;
+  const target = Math.max(1, Math.floor(total * HIDDEN_RATIO));
+  const all: [number, number][] = [];
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) all.push([r, c]);
+  for (let i = all.length - 1; i > 0; i--) {
+    const j = rand(i + 1);
+    [all[i], all[j]] = [all[j], all[i]];
+  }
+  const hidden = new Set<string>();
+  for (let i = 0; i < target && i < all.length; i++) hidden.add(board[all[i][0]][all[i][1]].id);
+  return hidden;
+}
+
+function decrementLockTurns(board: Cell[][]): void {
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (board[r][c].lockedTurns !== undefined) {
+        board[r][c].lockedTurns!--;
+        if (board[r][c].lockedTurns! <= 0) board[r][c].lockedTurns = undefined;
+      }
+}
+
+function lockRandomCells(board: Cell[][], count: number): void {
+  const unlocked: [number, number][] = [];
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (board[r][c].lockedTurns === undefined) unlocked.push([r, c]);
+  for (let i = unlocked.length - 1; i > 0; i--) {
+    const j = rand(i + 1);
+    [unlocked[i], unlocked[j]] = [unlocked[j], unlocked[i]];
+  }
+  const n = Math.min(count, unlocked.length);
+  for (let i = 0; i < n; i++) {
+    const [r, c] = unlocked[i];
+    board[r][c].lockedTurns = LOCK_DURATION;
+  }
+}
+
+function shiftBoard(board: Cell[][]): void {
+  const dirs: [number, number][] = [[-1,0],[1,0],[0,-1],[0,1]];
+  const [dr, dc] = dirs[rand(4)];
+  const newBoard: Cell[][] = [];
+  for (let r = 0; r < ROWS; r++) {
+    newBoard[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      const nr = r - dr, nc = c - dc;
+      if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+        newBoard[r][c] = { ...board[nr][nc] };
+      } else {
+        newBoard[r][c] = createCell();
+      }
+    }
+  }
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) board[r][c] = newBoard[r][c];
+}
+
+function getSpecialIcon(special?: SpecialType): string {
+  if (!special) return "";
+  const icons: Record<SpecialType, string> = { bomb: "💣", flame: "🔥", lightning: "⚡" };
+  return icons[special];
+}
+
+function getSpecialColor(special?: SpecialType): string {
+  if (!special) return "";
+  const colors: Record<SpecialType, string> = { bomb: "#ff4444", flame: "#ff8800", lightning: "#44aaff" };
+  return colors[special];
+}
+
 export default function GamePage() {
   const [board, setBoard] = useState<Cell[][] | null>(null);
   const [selected, setSelected] = useState<[number, number] | null>(null);
@@ -130,6 +265,17 @@ export default function GamePage() {
   const [comboDisplay, setComboDisplay] = useState<{ combo: number; key: string } | null>(null);
   const [hintCells, setHintCells] = useState<{ r1: number; c1: number; r2: number; c2: number } | null>(null);
   const [shakeCells, setShakeCells] = useState<Set<string>>(new Set());
+
+  // ─── 天气 & 特殊水果 状态 ───
+  const [weather, setWeather] = useState<Weather>("sunny");
+  const [turnCount, setTurnCount] = useState(0);
+  const [hiddenCells, setHiddenCells] = useState<Set<string>>(new Set());
+  const [weatherOverlay, setWeatherOverlay] = useState<Weather | null>(null);
+  const [nightBonusShown, setNightBonusShown] = useState(false);
+
+  // ─── 道具状态 ───
+  const [collectedPowerups, setCollectedPowerups] = useState<SpecialType[]>([]);
+  const [activePowerup, setActivePowerup] = useState<SpecialType | null>(null);
 
   const processingRef = useRef(false);
   const boardRef = useRef<Cell[][] | null>(null);
@@ -148,6 +294,14 @@ export default function GamePage() {
   useEffect(() => {
     const b = createBoard();
     setBoard(b); boardRef.current = b;
+    const w = pickWeather();
+    setWeather(w);
+    setWeatherOverlay(w);
+    setTimeout(() => setWeatherOverlay(null), 2200);
+    if (w === "night") {
+      const h = selectHiddenCells(b);
+      setHiddenCells(h);
+    }
   }, []);
   boardRef.current = board;
 
@@ -206,8 +360,64 @@ export default function GamePage() {
   // 核心：连锁消除循环（逐轮）
   const cascade = useCallback((boardData: Cell[][], round: number, scoreSoFar: number) => {
     const m = findMatches(boardData);
+
+    // ─── 收集匹配中的特殊水果 ───
+    if (m.size > 0) {
+      const collected: SpecialType[] = [];
+      for (const id of m) {
+        for (let r = 0; r < ROWS; r++)
+          for (let c = 0; c < COLS; c++)
+            if (boardData[r][c].id === id && boardData[r][c].special) {
+              collected.push(boardData[r][c].special!);
+            }
+      }
+      if (collected.length > 0) {
+        setCollectedPowerups((prev) => [...prev, ...collected]);
+      }
+
+      // Night 模式：揭示相邻隐藏格子
+      if (weather === "night" && hiddenCells.size > 0) {
+        const { revealed, allRevealed } = revealAdjacentHidden(boardData, m, hiddenCells);
+        if (revealed.size > 0) {
+          setHiddenCells((prev) => {
+            const next = new Set(prev);
+            for (const id of revealed) next.delete(id);
+            return next;
+          });
+          if (allRevealed && !nightBonusShown) {
+            setNightBonusShown(true);
+            scoreSoFar += NIGHT_BONUS;
+            setScorePopups((prev) => [...prev, {
+              id: uid(), score: NIGHT_BONUS,
+              x: cellSize * COLS / 2, y: cellSize * ROWS / 2
+            }]);
+          }
+        }
+      }
+    }
+
     if (m.size === 0) {
       addScore(scoreSoFar);
+      // ─── 天气效果在 cascade 结束时触发 ───
+      const snapshot = boardRef.current;
+      if (snapshot && weather !== "sunny") {
+        const wb = cloneBoard(snapshot);
+        if (weather === "rain" && turnCount > 0 && turnCount % RAIN_INTERVAL === 0) {
+          lockRandomCells(wb, LOCK_COUNT);
+          setBoard(wb);
+          boardRef.current = wb;
+        }
+        if (weather === "storm" && turnCount > 0 && turnCount % STORM_INTERVAL === 0) {
+          shiftBoard(wb);
+          setBoard(wb);
+          boardRef.current = wb;
+          const postShift = findMatches(wb);
+          if (postShift.size > 0) {
+            setTimeout(() => cascade(wb, 1, 0), 400);
+            return;
+          }
+        }
+      }
       processingRef.current = false;
       return;
     }
@@ -232,11 +442,26 @@ export default function GamePage() {
       boardRef.current = next;
       setTimeout(() => { setFallMap(null); cascade(next, round + 1, scoreSoFar + roundScore); }, 400);
     }, 350);
-  }, [addScore, cellSize, spawnParticles]);
+  }, [addScore, cellSize, spawnParticles, weather, hiddenCells, nightBonusShown, turnCount]);
 
   // 执行交换
   const trySwap = useCallback((r1: number, c1: number, r2: number, c2: number) => {
     if (processingRef.current || !boardRef.current) return;
+    if (activePowerup) return; // 道具模式下不允许交换
+    const bd = boardRef.current;
+
+    // ─── 锁定检查 ───
+    const c1Locked = bd[r1][c1].lockedTurns !== undefined && bd[r1][c1].lockedTurns! > 0;
+    const c2Locked = bd[r2][c2].lockedTurns !== undefined && bd[r2][c2].lockedTurns! > 0;
+    if (c1Locked || c2Locked) {
+      const lockShake = new Set<string>();
+      if (c1Locked) lockShake.add(bd[r1][c1].id);
+      if (c2Locked) lockShake.add(bd[r2][c2].id);
+      setShakeCells(lockShake);
+      setTimeout(() => setShakeCells(new Set()), 400);
+      return;
+    }
+
     processingRef.current = true;
     lastActionRef.current = Date.now();
     setHintCells(null);
@@ -284,11 +509,14 @@ export default function GamePage() {
         setFallMap(falls);
         setBoard(current);
         boardRef.current = current;
+        // ─── 回合计数 & 锁定递减 ───
+        decrementLockTurns(current);
         setMoves((m) => m + 1);
+        setTurnCount((t) => t + 1);
         setTimeout(() => { setFallMap(null); cascade(current, 2, firstScore); }, 400);
       }, 350);
     }, 200);
-  }, [cellSize, spawnParticles, cascade]);
+  }, [cellSize, spawnParticles, cascade, activePowerup]);
 
   // ─── 拖拽 ───
   const dragRef = useRef<{ sx: number; sy: number; r: number; c: number } | null>(null);
@@ -332,14 +560,61 @@ export default function GamePage() {
     }
   }, [selected, trySwap]);
 
+  // ─── 道具使用 ───
+  const usePowerup = useCallback((r: number, c: number, powerup: SpecialType) => {
+    if (processingRef.current || !boardRef.current) return;
+    processingRef.current = true;
+    lastActionRef.current = Date.now();
+    setActivePowerup(null);
+    setCollectedPowerups((prev) => {
+      const idx = prev.indexOf(powerup);
+      if (idx < 0) return prev;
+      const next = [...prev];
+      next.splice(idx, 1);
+      return next;
+    });
+
+    const b = cloneBoard(boardRef.current);
+    const affected = getEffectCells(r, c, powerup);
+    const toRemove = new Map<string, { r: number; c: number }>();
+    for (const [ar, ac] of affected) {
+      toRemove.set(b[ar][ac].id, { r: ar, c: ac });
+    }
+
+    // 显示特效
+    const pos = { x: c * cellSize + cellSize / 2, y: r * cellSize + cellSize / 2 };
+    const firstScore = toRemove.size * 10;
+    setScorePopups((prev) => [...prev, { id: uid(), score: firstScore, x: pos.x, y: pos.y }]);
+    spawnParticles(b, new Set(toRemove.keys()));
+    setMatchedIds(new Set(toRemove.keys()));
+
+    setTimeout(() => {
+      setMatchedIds(new Set());
+      const next = cloneBoard(b);
+      for (const [ar, ac] of affected) next[ar][ac] = { ...next[ar][ac], type: -1 };
+      const oldClone = cloneBoard(next);
+      gravityFill(next);
+      const falls = computeFallDist(oldClone, next);
+      setFallMap(falls);
+      setBoard(next);
+      boardRef.current = next;
+      setMoves((m) => m + 1);
+      decrementLockTurns(next);
+      setTurnCount((t) => t + 1);
+      setTimeout(() => { setFallMap(null); cascade(next, 2, firstScore); }, 400);
+    }, 350);
+  }, [cellSize, spawnParticles, cascade]);
+
   const onClick = useCallback((r: number, c: number) => {
     if (processingRef.current) return;
+    // 道具模式：点击使用道具
+    if (activePowerup) { usePowerup(r, c, activePowerup); return; }
     if (!selected) { setSelected([r, c]); return; }
     const [sr, sc] = selected;
     if (sr === r && sc === c) { setSelected(null); return; }
     if (!isAdjacent(sr, sc, r, c)) { setSelected([r, c]); return; }
     setSelected(null); trySwap(sr, sc, r, c);
-  }, [selected, trySwap]);
+  }, [selected, trySwap, activePowerup, usePowerup]);
 
   const resetGame = useCallback(() => {
     if (processingRef.current) return;
@@ -350,6 +625,21 @@ export default function GamePage() {
     setParticles([]); setScorePopups([]); setComboDisplay(null);
     setHintCells(null); setShakeCells(new Set());
     submittedMilestones.current = new Set(); lastActionRef.current = Date.now();
+    // ─── 天气 & 道具重置 ───
+    setCollectedPowerups([]);
+    setActivePowerup(null);
+    const w = pickWeather();
+    setWeather(w);
+    setTurnCount(0);
+    setNightBonusShown(false);
+    setWeatherOverlay(w);
+    setTimeout(() => setWeatherOverlay(null), 2200);
+    if (w === "night") {
+      const h = selectHiddenCells(b);
+      setHiddenCells(h);
+    } else {
+      setHiddenCells(new Set());
+    }
   }, []);
 
   const isHint = (r: number, c: number) =>
@@ -375,17 +665,82 @@ export default function GamePage() {
   const comboColor = comboColors[(comboDisplay?.combo ?? 1) % comboColors.length];
 
   return (
-    <main className="island-page min-h-screen pb-24">
+    <main className="island-page min-h-screen pb-24" style={{ position: "relative", zIndex: 1 }}>
+      {/* ─── 天气视觉效果层 ─── */}
+      <div className={`weather-layer ${weather === "rain" ? "weather-rain" : weather === "storm" ? "weather-storm" : weather === "night" ? "weather-night" : "weather-sunny"}`}>
+        {/* 晴天阳光射线 */}
+        {weather === "sunny" && Array.from({ length: 8 }).map((_, i) => (
+          <div key={`ray-${i}`} className="sun-ray"
+            style={{
+              left: `${10 + i * 10}%`,
+              animationName: "sun-ray",
+              animationDuration: "3s",
+              animationDelay: `${i * 0.3}s`,
+              animationTimingFunction: "ease-in-out",
+              animationIterationCount: "infinite",
+              "--ray-angle": `${-15 + i * 4}deg`,
+            } as React.CSSProperties} />
+        ))}
+        {/* 雨天雨滴 */}
+        {weather === "rain" && Array.from({ length: 35 }).map((_, i) => (
+          <div key={`d-${i}`} className="raindrop"
+            style={{
+              left: `${Math.random() * 100}%`,
+              height: `${10 + Math.random() * 15}px`,
+              animationName: "raindrop",
+              animationDuration: `${0.6 + Math.random() * 1.2}s`,
+              animationDelay: `${Math.random() * 2}s`,
+              animationTimingFunction: "linear",
+              animationIterationCount: "infinite",
+            }} />
+        ))}
+        {/* 风暴风线 */}
+        {weather === "storm" && Array.from({ length: 10 }).map((_, i) => (
+          <div key={`w-${i}`} className="wind-line"
+            style={{
+              top: `${5 + i * 10}%`,
+              width: `${60 + Math.random() * 40}%`,
+              animationName: "wind-gust",
+              animationDuration: `${2 + Math.random() * 3}s`,
+              animationDelay: `${Math.random() * 4}s`,
+              animationTimingFunction: "linear",
+              animationIterationCount: "infinite",
+            }} />
+        ))}
+        {/* 夜晚星星 */}
+        {weather === "night" && Array.from({ length: 25 }).map((_, i) => (
+          <div key={`s-${i}`} className="star"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 80}%`,
+              animationName: "star-twinkle",
+              animationDuration: `${1.5 + Math.random() * 2}s`,
+              animationDelay: `${Math.random() * 3}s`,
+              animationTimingFunction: "ease-in-out",
+              animationIterationCount: "infinite",
+            }} />
+        ))}
+      </div>
+
       <div className="island-shell space-y-4">
         <header className="space-y-1">
           <p className="text-xs font-bold text-[#6fba2c]">Mini Game</p>
           <h1 className="text-2xl font-black text-[#725d42]">快乐消消乐</h1>
           <p className="text-sm text-[#9f927d]">滑动或点击相邻糖果交换，三个以上相同即可消除！</p>
+          <p className="text-xs font-bold text-[#6fba2c]">
+            {weather === "sunny" ? "☀️ 天气晴朗，没有特殊效果"
+            : weather === "rain" ? "🌧 下雨中：每 3 回合随机锁定格子"
+            : weather === "storm" ? "🌪 风暴来袭：每 4 回合水果向一个方向移动"
+            : "🌙 夜幕降临：部分格子隐藏，相邻消除可揭示"}
+          </p>
         </header>
         <Divider type="wave-yellow" />
 
         <div className="flex items-center justify-between rounded-2xl bg-[#fffdf5] border-2 border-[#e8ddd0] px-4 py-2.5">
           <div className="flex items-center gap-4">
+            <span className="text-sm font-bold text-[#725d42]">
+              {weather === "rain" ? "🌧 " : weather === "storm" ? "🌪 " : weather === "night" ? "🌙 " : "☀️ "}
+            </span>
             <span className="text-sm font-bold text-[#725d42]">
               🏆 分数 <span className="text-lg text-[#ff922b]">{score}</span>
             </span>
@@ -400,10 +755,19 @@ export default function GamePage() {
           {/* 棋盘底部投影 */}
           <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3/4 h-3 rounded-full bg-black/10 blur-md pointer-events-none" />
           <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-1/2 h-2 rounded-full bg-black/5 blur-sm pointer-events-none" />
+
+          {/* 天气公告 Overlay */}
+          {weatherOverlay && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
+              <span className="text-6xl drop-shadow-lg" style={{ animation: "weather-announce 2s ease-out forwards" }}>
+                {weatherOverlay === "rain" ? "🌧️" : weatherOverlay === "storm" ? "🌪️" : "🌙"}
+              </span>
+            </div>
+          )}
           <div
             onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
-            className={`relative grid gap-1 rounded-2xl border-2 border-[#d4bc8a] bg-[#3a2e20] p-2 shadow-[inset_0_4px_16px_rgba(0,0,0,0.4),0_12px_32px_rgba(0,0,0,0.35)] select-none touch-none candy-board-3d ${processingRef.current ? "opacity-60 cursor-wait" : "cursor-default"}`}
-            style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)`, width: `min(calc(100vw - 2.5rem), 400px)` }}
+            className={`relative grid gap-1 rounded-2xl border-2 border-[#d4bc8a] bg-[#3a2e20] p-2 shadow-[inset_0_4px_16px_rgba(0,0,0,0.4),0_12px_32px_rgba(0,0,0,0.35)] select-none touch-none candy-board-3d ${processingRef.current ? "opacity-60 cursor-wait" : activePowerup ? "cursor-crosshair" : "cursor-default"}`}
+            style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)`, width: `min(calc(100vw - 2.5rem), 400px)`, animation: weather === "storm" ? "storm-shake 3s ease-in-out infinite" : undefined }}
           >
             {!board
               ? Array.from({ length: ROWS * COLS }).map((_, i) => <div key={i} className="aspect-square rounded-xl bg-[#e8ddd0]/50" />)
@@ -418,40 +782,88 @@ export default function GamePage() {
                   const swapStyle = getCellTransform(r, c);
                   const disabled = processingRef.current || swapPair !== null;
                   const sd = isMt ? r * 40 + c * 20 : 0;
+                  const isLocked = cell.lockedTurns !== undefined && cell.lockedTurns > 0;
+                  const isHidden = weather === "night" && hiddenCells.has(cell.id);
+                  const hasSpecial = cell.special !== undefined;
+
+                  // 动画逻辑: 锁定抖动 > 抖动 > 选中脉冲 > 提示脉冲 > 掉落
+                  const anim = isLocked && isSh ? "lock-rattle 0.4s ease-in-out"
+                    : isSh ? "shake 0.4s ease-in-out"
+                    : isSel ? "pulse-glow 1.5s ease-in-out infinite"
+                    : hint ? "hint-pulse 1.5s ease-in-out infinite"
+                    : hasFall ? `bounce-drop-3d 450ms ${fallDist! * 40}ms ease-out forwards`
+                    : "none";
 
                   return (
-                    <button key={cell.id} data-r={r} data-c={c} onClick={() => onClick(r, c)} disabled={disabled}
-                      className={`aspect-square flex items-center justify-center rounded-xl text-xl sm:text-2xl select-none relative border-2 candy-cell ${isSel ? "pressed" : ""}`}
+                    <button key={cell.id} data-r={r} data-c={c} onClick={() => onClick(r, c)}
+                      disabled={disabled || isLocked}
+                      className={`aspect-square flex items-center justify-center rounded-xl text-xl sm:text-2xl select-none relative border-2 candy-cell ${isSel && !isLocked ? "pressed" : ""} ${isLocked ? "locked" : ""} ${isHidden ? "hidden" : ""}`}
                       style={{
-                        backgroundColor: candy?.color ?? "#eee",
-                        borderColor: isSel ? "#ffd43b" : "rgba(0,0,0,0.15)",
-                        boxShadow: isSel
-                          ? "0 0 14px 4px rgba(255,146,43,0.5), 0 0 0 2px #ffd43b, 0 4px 8px rgba(0,0,0,0.25), inset 0 2px 0 rgba(255,255,255,0.3)"
-                          : hint
-                            ? "0 0 14px 5px rgba(255,215,0,0.55), 0 4px 8px rgba(0,0,0,0.2)"
-                            : "0 4px 8px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15), inset 0 2px 0 rgba(255,255,255,0.3)",
+                        backgroundColor: isHidden ? "#2a2a3a" : candy?.color ?? "#eee",
+                        borderColor: isSel ? "#ffd43b" : isLocked ? "#555" : isHidden ? "#3a3a4a" : "rgba(0,0,0,0.15)",
+                        boxShadow: isSel ? "0 0 14px 4px rgba(255,146,43,0.5), 0 0 0 2px #ffd43b, 0 4px 8px rgba(0,0,0,0.25), inset 0 2px 0 rgba(255,255,255,0.3)"
+                          : hint ? "0 0 14px 5px rgba(255,215,0,0.55), 0 4px 8px rgba(0,0,0,0.2)"
+                          : isHidden ? "inset 0 0 12px rgba(0,0,0,0.5)"
+                          : "0 4px 8px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15), inset 0 2px 0 rgba(255,255,255,0.3)",
+                        "--special-clr": hasSpecial ? getSpecialColor(cell.special) : undefined,
                         transform: isMt ? "scale(0)" : (!hasFall ? (swapStyle.transform ?? undefined) : undefined),
                         opacity: isMt ? 0 : 1,
                         transitionDelay: isMt ? `${sd}ms` : "0ms",
-                        animation: isSh ? "shake 0.4s ease-in-out" : isSel ? "pulse-glow 1.5s ease-in-out infinite" : hint ? "hint-pulse 1.5s ease-in-out infinite" : hasFall ? `bounce-drop-3d 450ms ${fallDist! * 40}ms ease-out forwards` : "none",
+                        animation: anim,
                         "--fall-offset": hasFall ? `${-cellSize * fallDist!}px` : "0px",
-                        zIndex: hint ? 5 : 1,
+                        zIndex: hint ? 5 : hasSpecial ? 3 : 1,
                       } as React.CSSProperties}
-                      aria-label={`${candy?.name ?? ""}糖果`}
+                      aria-label={`${isHidden ? "隐藏" : candy?.name ?? ""}糖果${isLocked ? "(已锁定)" : ""}${hasSpecial ? `(${getSpecialIcon(cell.special)})` : ""}`}
                     >
-                      {/* 高光 */}
-                      <span className="absolute inset-0 rounded-xl pointer-events-none"
-                        style={{ background: "radial-gradient(circle at 30% 25%, rgba(255,255,255,0.4) 0%, transparent 60%)" }} />
-                      {/* 底部阴影 */}
-                      <span className="absolute inset-x-1 -bottom-1 h-2 rounded-full pointer-events-none"
-                        style={{ background: "rgba(0,0,0,0.15)", filter: "blur(3px)" }} />
-                      {/* 左侧高光边缘 */}
-                      <span className="absolute left-0.5 top-2 bottom-2 w-0.5 rounded-full pointer-events-none"
-                        style={{ background: "rgba(255,255,255,0.2)" }} />
-                      <span className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)] pointer-events-none relative z-10"
-                        style={{ transition: swapPair ? "transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1)" : "none" }}>
-                        {candy?.emoji ?? "?"}
-                      </span>
+                      {/* 特殊水果发光边框 */}
+                      {hasSpecial && (
+                        <span className="absolute inset-0 rounded-xl pointer-events-none z-10"
+                          style={{
+                            border: `2px solid ${getSpecialColor(cell.special)}`,
+                            boxShadow: `0 0 10px 3px ${getSpecialColor(cell.special)}88`,
+                            animation: "special-glow 1.2s ease-in-out infinite",
+                          }} />
+                      )}
+
+                      {/* 锁定图标 */}
+                      {isLocked && (
+                        <span className="absolute inset-0 rounded-xl flex items-center justify-center pointer-events-none z-20 bg-black/20">
+                          <span className="text-lg drop-shadow-md">🔒</span>
+                        </span>
+                      )}
+
+                      {/* 隐藏遮罩 (Night 模式) */}
+                      {isHidden && (
+                        <span className="absolute inset-0 rounded-xl flex items-center justify-center pointer-events-none z-20">
+                          <span className="text-2xl opacity-30">❓</span>
+                        </span>
+                      )}
+
+                      {/* 非隐藏格子: 显示内容 */}
+                      {!isHidden && (
+                        <>
+                          {/* 高光 */}
+                          <span className="absolute inset-0 rounded-xl pointer-events-none"
+                            style={{ background: "radial-gradient(circle at 30% 25%, rgba(255,255,255,0.4) 0%, transparent 60%)" }} />
+                          {/* 底部阴影 */}
+                          <span className="absolute inset-x-1 -bottom-1 h-2 rounded-full pointer-events-none"
+                            style={{ background: "rgba(0,0,0,0.15)", filter: "blur(3px)" }} />
+                          {/* 左侧高光边缘 */}
+                          <span className="absolute left-0.5 top-2 bottom-2 w-0.5 rounded-full pointer-events-none"
+                            style={{ background: "rgba(255,255,255,0.2)" }} />
+                          <span className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)] pointer-events-none relative z-10"
+                            style={{ transition: swapPair ? "transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1)" : "none" }}>
+                            {candy?.emoji ?? "?"}
+                          </span>
+
+                          {/* 特殊水果角标 */}
+                          {hasSpecial && (
+                            <span className="absolute -top-1 -right-1 text-xs z-20 drop-shadow-lg pointer-events-none">
+                              {getSpecialIcon(cell.special)}
+                            </span>
+                          )}
+                        </>
+                      )}
                     </button>
                   );
                 }))}
@@ -475,6 +887,37 @@ export default function GamePage() {
             <div className="absolute inset-0 rounded-2xl candy-board-gloss z-30" />
           </div>
         </div>
+
+        {/* ─── 道具栏 ─── */}
+        {collectedPowerups.length > 0 && (
+          <div className="space-y-1 pt-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-[#725d42] mr-1">🎒</span>
+              {collectedPowerups.map((p, i) => {
+                const isActive = activePowerup === p && i === collectedPowerups.lastIndexOf(p);
+                return (
+                  <button key={`${p}-${i}`} onClick={() => setActivePowerup(isActive ? null : p)}
+                    className={`rounded-xl px-3 py-1.5 text-sm font-bold transition-all powerup-btn ${isActive ? "ring-2 ring-[#ffd43b] ring-offset-2 scale-110" : ""}`}
+                    style={{
+                      background: p === "bomb" ? "#ff4444" : p === "flame" ? "#ff8800" : "#44aaff",
+                      color: "#fff",
+                      boxShadow: isActive ? "0 0 16px 4px rgba(255,212,59,0.5)" : "0 2px 4px rgba(0,0,0,0.2)",
+                    }}>
+                    {p === "bomb" ? "💣" : p === "flame" ? "🔥" : "⚡"}
+                  </button>
+                );
+              })}
+              {activePowerup && (
+                <button onClick={() => setActivePowerup(null)} className="text-xs text-[#9f927d] underline">取消</button>
+              )}
+            </div>
+            {activePowerup && (
+              <p className="text-xs text-[#ff922b] font-bold animate-pulse">
+                ✨ 点击棋盘任意位置放置道具！
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center gap-2 pt-2">
           <Button asChild variant="outline" className="flex-1"><Link href="/game/leaderboard">🏆 排行榜</Link></Button>

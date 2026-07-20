@@ -547,11 +547,11 @@ export default function RaidenGame() {
     player: { x: 180, y: 460, vx: 0, vy: 0, speed: 5 },
     bullets: new Pool<Bullet>(() => ({
       x: 0, y: 0, vx: 0, vy: 0,
-      type: "player", wtype: "spread", wingman: false, lightning: false, alive: false,
+      type: "player", wtype: "spread", wingman: false, lightning: false, damage: 0, alive: false,
     })),
     enemyBullets: new Pool<Bullet>(() => ({
       x: 0, y: 0, vx: 0, vy: 0,
-      type: "enemy", alive: false,
+      type: "enemy", damage: 0, alive: false,
     })),
     monsters: new Pool<Monster>(() => ({
       x: 0, y: 0, hp: 2, maxHp: 2,

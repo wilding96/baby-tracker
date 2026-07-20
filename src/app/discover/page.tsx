@@ -9,6 +9,7 @@ import {
   MessageCircle,
   BarChart3,
   ChevronRight,
+  Box,
 } from "lucide-react";
 import { Divider } from "animal-island-ui";
 
@@ -19,6 +20,14 @@ const gameCards = [
     bg: "bg-gradient-to-br from-amber-400 to-orange-500",
     title: "快乐消消乐",
     desc: "经典三消游戏，放松心情",
+    action: "去玩",
+  },
+  {
+    href: "/game/perspective-match",
+    icon: Box,
+    bg: "bg-gradient-to-br from-indigo-500 to-purple-600",
+    title: "视错觉消除",
+    desc: "转动视角，发现隐藏的三消排列",
     action: "去玩",
   },
   {

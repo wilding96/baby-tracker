@@ -1,11 +1,11 @@
-// Mille-crepe cake palette — creamy, layered dessert tones
+// Candy color palette — bright, saturated candy tones
 export const COLOR_PALETTE = [
-  { hex: "#FFB5C2", name: "strawberry crepe" },
-  { hex: "#B8D8B8", name: "matcha crepe" },
-  { hex: "#FFF3E0", name: "vanilla crepe" },
-  { hex: "#D4C5E2", name: "taro crepe" },
-  { hex: "#FFE6B3", name: "mango crepe" },
-  { hex: "#C5C8E8", name: "blueberry crepe" },
+  { hex: "#B69CFF", name: "purple candy" },
+  { hex: "#FF9DB5", name: "pink candy" },
+  { hex: "#8CCEFF", name: "blue candy" },
+  { hex: "#98E6C0", name: "green candy" },
+  { hex: "#FFD98E", name: "yellow candy" },
+  { hex: "#FF9FB2", name: "strawberry candy" },
 ];
 
 // Camera orbit
@@ -18,9 +18,9 @@ export const DAMPING = 0.94;
 export const SWIPE_SENSITIVITY = 0.006;
 export const MAX_VELOCITY = 0.08;
 
-// Block visual
+// Block visual — rounder for candy feel
 export const BLOCK_SIZE = 0.88;
-export const BLOCK_ROUND = 0.12;
+export const BLOCK_ROUND = 0.25;
 export const BLOCK_GAP = 1.0;
 
 // Puzzle

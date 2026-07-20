@@ -3,17 +3,18 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
-import { RoundedBox, SoftShadows } from "@react-three/drei";
+import { RoundedBox } from "@react-three/drei";
 import {
   Spherical,
   Vector2,
   Raycaster,
-  CanvasTexture,
+  Group,
   type PerspectiveCamera,
   type Mesh,
 } from "three";
 import { Button } from "@/components/ui/button";
 import type { PuzzleBlock, TraySlot, GamePhase } from "./types";
+import { playPickup, playMatch, playLevelComplete, playGameOver } from "./useGameSounds";
 import {
   COLOR_PALETTE,
   CAMERA_RADIUS,
@@ -34,6 +35,14 @@ import {
 } from "./constants";
 
 const uid = () => Math.random().toString(36).slice(2, 8);
+
+function lighten(hex: string, percent: number) {
+  const num = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, (num >> 16) + Math.round(255 * percent / 100));
+  const g = Math.min(255, ((num >> 8) & 0x00ff) + Math.round(255 * percent / 100));
+  const b = Math.min(255, (num & 0x0000ff) + Math.round(255 * percent / 100));
+  return `rgb(${r},${g},${b})`;
+}
 
 // ═══════════════════════════════════════════════════════════
 // Puzzle generation
@@ -111,53 +120,6 @@ function checkTrayMatch(tray: TraySlot[]): number | null {
     if (arr.length >= MATCH_COUNT) return slot.color;
   }
   return null;
-}
-
-// ═══════════════════════════════════════════════════════════
-// Crepe cake texture — horizontal layer stripes on a canvas
-// ═══════════════════════════════════════════════════════════
-
-const crepeCache = new Map<string, CanvasTexture>();
-
-function getCrepeTexture(hex: string): CanvasTexture {
-  const cached = crepeCache.get(hex);
-  if (cached) return cached;
-
-  const c = document.createElement("canvas");
-  c.width = 64;
-  c.height = 128;
-  const ctx = c.getContext("2d")!;
-
-  // Parse base color
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-
-  // Draw 10 crepe layers with alternating tones
-  const layerH = 128 / 10;
-  for (let i = 0; i < 10; i++) {
-    const bright = i % 2 === 0 ? 1.0 : 0.9;
-    ctx.fillStyle = `rgb(${Math.floor(r * bright)},${Math.floor(g * bright)},${Math.floor(b * bright)})`;
-    ctx.fillRect(0, i * layerH, 64, layerH);
-
-    // Thin cream line between layers
-    if (i > 0) {
-      ctx.fillStyle = "rgba(255,250,245,0.55)";
-      ctx.fillRect(0, i * layerH - 2, 64, 4);
-    }
-  }
-
-  // Top frosting gradient
-  const grad = ctx.createLinearGradient(0, 0, 0, 20);
-  grad.addColorStop(0, "rgba(255,255,255,0.35)");
-  grad.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 64, 20);
-
-  const tex = new CanvasTexture(c);
-  tex.colorSpace = "srgb";
-  crepeCache.set(hex, tex);
-  return tex;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -246,11 +208,11 @@ function BlockMesh({
   meshRefCallback: (id: string, mesh: Mesh | null) => void;
 }) {
   const meshRef = useRef<Mesh>(null!);
+  const groupRef = useRef<Group>(null!);
   const scaleRef = useRef(1);
   const breatheRef = useRef(0);
 
-  const colorHex = COLOR_PALETTE[block.color]?.hex ?? "#FFB5C2";
-  const crepeTex = useMemo(() => getCrepeTexture(colorHex), [colorHex]);
+  const colorHex = COLOR_PALETTE[block.color]?.hex ?? "#FF9FB2";
 
   useEffect(() => {
     if (meshRef.current) meshRefCallback(block.id, meshRef.current);
@@ -258,10 +220,11 @@ function BlockMesh({
   }, [block.id, meshRefCallback]);
 
   useFrame((_, delta) => {
+    if (!groupRef.current) return;
     if (isRemoving) {
       scaleRef.current += (0 - scaleRef.current) * 0.18;
-      meshRef.current?.scale.setScalar(scaleRef.current);
-      if (scaleRef.current < 0.05 && meshRef.current) meshRef.current.visible = false;
+      groupRef.current.scale.setScalar(scaleRef.current);
+      if (scaleRef.current < 0.05 && groupRef.current) groupRef.current.visible = false;
       return;
     }
     breatheRef.current += delta;
@@ -269,81 +232,36 @@ function BlockMesh({
       ? 1 + Math.sin(breatheRef.current * 2.0) * 0.015
       : 1;
     scaleRef.current += (targetScale - scaleRef.current) * 0.15;
-    meshRef.current?.scale.setScalar(scaleRef.current);
+    groupRef.current.scale.setScalar(scaleRef.current);
   });
 
   if (block.removed && !isRemoving) return null;
 
   return (
-    <group position={block.worldPos}>
-      {/* Cake body — box with crepe texture on sides */}
+    <group ref={groupRef} position={block.worldPos}>
+      {/* Candy glass body */}
       <RoundedBox
         ref={meshRef}
         args={[BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE]}
         radius={BLOCK_ROUND}
-        smoothness={3}
-        castShadow
+        smoothness={4}
       >
-        <meshPhysicalMaterial
-          map={crepeTex}
-          color={block.exposed ? "#ffffff" : "#c8c0b8"}
-          roughness={0.35}
+        <meshStandardMaterial
+          color={block.exposed ? colorHex : "#c8c0b8"}
+          roughness={0.28}
           metalness={0}
-          clearcoat={0.3}
-          clearcoatRoughness={0.2}
         />
       </RoundedBox>
 
-      {/* Top frosting — white creamy layer */}
+      {/* Top highlight — glossy candy sheen */}
       <RoundedBox
-        args={[BLOCK_SIZE * 0.92, BLOCK_SIZE * 0.08, BLOCK_SIZE * 0.92]}
-        radius={0.08}
+        position={[0, BLOCK_SIZE * 0.51, 0]}
+        args={[BLOCK_SIZE * 0.85, BLOCK_SIZE * 0.04, BLOCK_SIZE * 0.85]}
+        radius={0.04}
         smoothness={2}
-        position={[0, BLOCK_SIZE / 2 + 0.02, 0]}
       >
-        <meshPhysicalMaterial
-          color="#fff8f0"
-          roughness={0.5}
-          metalness={0}
-          clearcoat={0.4}
-          clearcoatRoughness={0.15}
-        />
+        <meshBasicMaterial color="white" transparent opacity={0.15} />
       </RoundedBox>
-
-      {/* Cherry/strawberry on top for exposed blocks */}
-      {block.exposed && (
-        <group position={[0, BLOCK_SIZE / 2 + 0.1, 0]}>
-          {/* Fruit body */}
-          <mesh>
-            <sphereGeometry args={[0.09, 8, 8]} />
-            <meshPhysicalMaterial
-              color="#e86070"
-              roughness={0.3}
-              metalness={0}
-              clearcoat={0.5}
-            />
-          </mesh>
-          {/* Highlight */}
-          <mesh position={[0.03, 0.03, 0.03]}>
-            <sphereGeometry args={[0.03, 6, 6]} />
-            <meshBasicMaterial color="#ffffff" transparent opacity={0.35} />
-          </mesh>
-        </group>
-      )}
-
-      {/* Cream drip around the bottom edge (exposed only) */}
-      {block.exposed && (
-        <mesh position={[0, -BLOCK_SIZE / 2 + 0.04, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[BLOCK_SIZE * 0.44, 0.04, 6, 16]} />
-          <meshPhysicalMaterial
-            color="#fff8f0"
-            roughness={0.6}
-            metalness={0}
-            transparent
-            opacity={0.5}
-          />
-        </mesh>
-      )}
     </group>
   );
 }
@@ -377,27 +295,24 @@ function BlockStructure({
 function SceneLights() {
   return (
     <>
-      <SoftShadows size={8} samples={16} />
-      <ambientLight intensity={0.55} color="#e8e4f0" />
+      {/* Warm main sunlight */}
       <directionalLight
-        position={[5, 10, 5]}
-        intensity={0.9}
-        color="#ffeedd"
+        position={[5, 8, 5]}
+        intensity={2}
+        color="#FFF1DD"
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
-        shadow-bias={-0.0005}
+        shadow-bias={-0.0003}
       />
+      {/* Cool fill light */}
       <directionalLight
-        position={[-4, -2, -4]}
-        intensity={0.25}
+        position={[-4, 2, -4]}
+        intensity={0.4}
         color="#ddeeff"
       />
-      <directionalLight
-        position={[0, -6, 0]}
-        intensity={0.15}
-        color="#ccddff"
-      />
+      {/* Ambient */}
+      <ambientLight intensity={0.5} color="#fff8f0" />
     </>
   );
 }
@@ -405,14 +320,14 @@ function SceneLights() {
 function SoftFloor() {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.5, 0]} receiveShadow>
-      <circleGeometry args={[4, 24]} />
-      <meshBasicMaterial color="#c8bfb5" transparent opacity={0.4} />
+      <circleGeometry args={[4.5, 32]} />
+      <meshBasicMaterial color="#e8ddd0" transparent opacity={0.5} />
     </mesh>
   );
 }
 
 // Floating light dust particles
-function FloatingDust({ count = 25 }: { count?: number }) {
+function FloatingDust({ count = 30 }: { count?: number }) {
   const positions = useMemo(() => {
     const pos: Float32Array = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
@@ -547,6 +462,7 @@ export default function CubePuzzlePage() {
     processingRef.current = true;
     const colorIdx = block.color;
 
+    playPickup();
     // Camera shake on click
     triggerShake(0.025, 60);
     comboCountRef.current += 1;
@@ -575,6 +491,7 @@ export default function CubePuzzlePage() {
         const matchColor = checkTrayMatch(newTray);
 
         if (matchColor !== null) {
+          playMatch();
           setMatchFlash(matchColor);
 
           const matchedIdxs: number[] = [];
@@ -640,6 +557,7 @@ export default function CubePuzzlePage() {
             setBlocks((prev) => {
               const remaining = prev.filter((b) => !b.removed);
               if (remaining.length === 0) {
+                playLevelComplete();
                 setTimeout(() => setGamePhase("levelComplete"), 300);
               }
               return prev;
@@ -651,6 +569,7 @@ export default function CubePuzzlePage() {
         }
 
         if (newTray.length >= TRAY_SIZE) {
+          playGameOver();
           // Game over shake
           setGameOverShake(true);
           setTimeout(() => {
@@ -796,7 +715,7 @@ export default function CubePuzzlePage() {
     <main
       className="min-h-screen pb-20"
       style={{
-        background: "linear-gradient(160deg, #f5f0eb 0%, #fff8f2 40%, #f0ebe5 100%)",
+        background: "linear-gradient(160deg, #FFF5EB 0%, #fffaf3 40%, #f5ede0 100%)",
         position: "relative",
         zIndex: 1,
       }}
@@ -825,38 +744,64 @@ export default function CubePuzzlePage() {
           <p className="text-xs font-bold tracking-widest" style={{ color: "#b8a99a" }}>
             MINI GAME
           </p>
-          <h1 className="text-2xl font-black tracking-tight" style={{ color: "#5a4a3a" }}>
-            糖果积木消消乐
+          <h1
+            className="font-black tracking-tight"
+            style={{ fontSize: 28, fontWeight: 700, color: "#5a4a3a" }}
+          >
+            方了个方
           </h1>
-          <p className="text-sm" style={{ color: "#b8a99a" }}>
+          <p
+            className="font-normal"
+            style={{ fontSize: 16, fontWeight: 400, color: "#b8a99a" }}
+          >
             点击外层糖果方块，3个同色消除
           </p>
         </header>
 
-        {/* Score / Level bar */}
+        {/* Score card — glassmorphism */}
         <div
-          className="flex items-center justify-between rounded-2xl px-4 py-2.5"
+          className="flex items-center justify-between rounded-3xl px-5 py-3"
           style={{
-            background: "rgba(255,255,255,0.7)",
-            border: "1px solid rgba(200,190,175,0.4)",
-            backdropFilter: "blur(8px)",
+            background: "rgba(255,255,255,0.55)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: "1px solid rgba(200,190,175,0.35)",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
           }}
         >
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-bold" style={{ color: "#5a4a3a" }}>
-              得分 <span style={{ color: "#c49a6c" }}>{score}</span>
-            </span>
-            <span className="text-sm font-bold" style={{ color: "#5a4a3a" }}>
-              关卡 <span style={{ color: "#8aaa7a" }}>{level}</span>
-            </span>
-            <span className="text-xs" style={{ color: "#b8a99a" }}>
-              消除 {totalRemoved} 块
-            </span>
+          <div className="flex items-center gap-5">
+            <div className="text-center">
+              <span
+                className="block font-black"
+                style={{ fontSize: 28, lineHeight: 1, color: "#c49a6c" }}
+              >
+                {score}
+              </span>
+              <span className="text-xs" style={{ color: "#b8a99a" }}>得分</span>
+            </div>
+            <div className="text-center">
+              <span
+                className="block font-black"
+                style={{ fontSize: 28, lineHeight: 1, color: "#8aaa7a" }}
+              >
+                {level}
+              </span>
+              <span className="text-xs" style={{ color: "#b8a99a" }}>关卡</span>
+            </div>
+            <div className="text-center">
+              <span
+                className="block font-black"
+                style={{ fontSize: 28, lineHeight: 1, color: "#a09080" }}
+              >
+                {totalRemoved}
+              </span>
+              <span className="text-xs" style={{ color: "#b8a99a" }}>消除</span>
+            </div>
           </div>
           {gamePhase === "playing" && (
             <button
               onClick={() => setGamePhase("menu")}
-              className="rounded-xl px-3 py-1.5 text-sm font-bold transition-all active:scale-95"
+              className="rounded-2xl px-4 py-2 text-sm font-bold transition-all active:scale-95"
               style={{
                 background: "rgba(200,190,175,0.3)",
                 color: "#8a7a6a",
@@ -873,8 +818,8 @@ export default function CubePuzzlePage() {
           className="relative w-full rounded-2xl overflow-hidden"
           style={{
             height: "min(62vh, 500px)",
-            background: "radial-gradient(ellipse at 50% 40%, #e8e0d8 0%, #d5cdc5 60%, #c8bfb5 100%)",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5)",
+            background: "radial-gradient(ellipse at 50% 40%, #fff8f0 0%, #f2e8d8 50%, #e8ddd0 100%)",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 0 80px rgba(255,240,220,0.3)",
             touchAction: "none",
             animation: gameOverShake ? "shake 500ms ease-out" : "none",
           }}
@@ -896,7 +841,7 @@ export default function CubePuzzlePage() {
             >
               <SceneLights />
               <SoftFloor />
-              <FloatingDust count={25} />
+              <FloatingDust count={30} />
               <BlockStructure
                 blocks={activeBlocks}
                 removingIds={removingIds}
@@ -933,35 +878,48 @@ export default function CubePuzzlePage() {
           {gamePhase === "menu" && (
             <div
               className="absolute inset-0 flex flex-col items-center justify-center z-20"
-              style={{ background: "rgba(245,240,235,0.85)", backdropFilter: "blur(6px)" }}
+              style={{
+                background: "rgba(255,251,245,0.82)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+              }}
             >
               <div className="text-center space-y-5 px-6">
-                <div className="text-5xl" style={{ filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.1))" }}>
-                  🍬
+                <div
+                  className="mx-auto flex items-center justify-center w-20 h-20 rounded-full"
+                  style={{
+                    background: "linear-gradient(135deg, #FF9DB5, #B69CFF)",
+                    boxShadow: "0 8px 32px rgba(182,156,255,0.35)",
+                  }}
+                >
+                  <span style={{ fontSize: 36, filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.1))" }}>
+                    🍬
+                  </span>
                 </div>
                 <h2
-                  className="text-2xl font-black tracking-tight"
-                  style={{ color: "#5a4a3a" }}
+                  className="font-black tracking-tight"
+                  style={{ fontSize: 28, fontWeight: 700, color: "#5a4a3a" }}
                 >
-                  糖果积木消消乐
+                  方了个方
                 </h2>
                 <p
                   className="text-sm max-w-xs leading-relaxed"
                   style={{ color: "#a09080" }}
                 >
-                  旋转糖果积木雕塑
+                  旋转视角，探索糖果积木雕塑
                   <br />
-                  点击外层彩色积木放入收集槽
+                  点击外层糖果块放入收集槽
                   <br />
-                  3 个同色消除得分！
+                  集齐 3 个同色即可消除得分！
                 </p>
                 <button
                   onClick={startGame}
-                  className="rounded-2xl px-10 py-3 text-lg font-black transition-all active:scale-95"
+                  className="rounded-2xl px-12 py-3.5 font-black transition-all active:scale-95"
                   style={{
-                    background: "linear-gradient(135deg, #d4c4a5, #c4b4a0)",
+                    fontSize: 18,
+                    background: "linear-gradient(135deg, #FF9DB5, #B69CFF)",
                     color: "#fff",
-                    boxShadow: "0 4px 16px rgba(180,160,130,0.4)",
+                    boxShadow: "0 6px 24px rgba(182,156,255,0.45)",
                   }}
                 >
                   开始游戏
@@ -974,26 +932,39 @@ export default function CubePuzzlePage() {
           {gamePhase === "levelComplete" && (
             <div
               className="absolute inset-0 flex flex-col items-center justify-center z-20"
-              style={{ background: "rgba(245,240,235,0.85)", backdropFilter: "blur(6px)" }}
+              style={{
+                background: "rgba(255,251,245,0.82)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+              }}
             >
               <div className="text-center space-y-4 px-6">
-                <div className="text-5xl">🎉</div>
+                <div
+                  className="mx-auto flex items-center justify-center w-20 h-20 rounded-full"
+                  style={{
+                    background: "linear-gradient(135deg, #98E6C0, #8CCEFF)",
+                    boxShadow: "0 8px 32px rgba(140,206,255,0.35)",
+                  }}
+                >
+                  <span style={{ fontSize: 36 }}>🎉</span>
+                </div>
                 <h2
-                  className="text-2xl font-black tracking-tight"
-                  style={{ color: "#5a4a3a" }}
+                  className="font-black tracking-tight"
+                  style={{ fontSize: 28, fontWeight: 700, color: "#5a4a3a" }}
                 >
                   第 {level} 关完成！
                 </h2>
                 <p className="text-sm" style={{ color: "#a09080" }}>
-                  累计得分: {score}
+                  累计得分: <span style={{ color: "#c49a6c", fontWeight: 700, fontSize: 20 }}>{score}</span>
                 </p>
                 <button
                   onClick={nextLevel}
-                  className="rounded-2xl px-10 py-3 text-lg font-black transition-all active:scale-95"
+                  className="rounded-2xl px-12 py-3.5 font-black transition-all active:scale-95"
                   style={{
-                    background: "linear-gradient(135deg, #9FE3C1, #7ac9a0)",
+                    fontSize: 18,
+                    background: "linear-gradient(135deg, #98E6C0, #8CCEFF)",
                     color: "#fff",
-                    boxShadow: "0 4px 16px rgba(140,170,120,0.4)",
+                    boxShadow: "0 6px 24px rgba(140,206,255,0.4)",
                   }}
                 >
                   下一关 →
@@ -1006,26 +977,40 @@ export default function CubePuzzlePage() {
           {gamePhase === "gameOver" && (
             <div
               className="absolute inset-0 flex flex-col items-center justify-center z-20"
-              style={{ background: "rgba(245,240,235,0.85)", backdropFilter: "blur(6px)" }}
+              style={{
+                background: "rgba(255,251,245,0.82)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+              }}
             >
               <div className="text-center space-y-4 px-6">
-                <div className="text-5xl">😅</div>
+                <div
+                  className="mx-auto flex items-center justify-center w-20 h-20 rounded-full"
+                  style={{
+                    background: "linear-gradient(135deg, #FFD98E, #FF9FB2)",
+                    boxShadow: "0 8px 32px rgba(255,159,178,0.35)",
+                  }}
+                >
+                  <span style={{ fontSize: 36 }}>😅</span>
+                </div>
                 <h2
-                  className="text-2xl font-black tracking-tight"
-                  style={{ color: "#5a4a3a" }}
+                  className="font-black tracking-tight"
+                  style={{ fontSize: 28, fontWeight: 700, color: "#5a4a3a" }}
                 >
                   收集槽满了
                 </h2>
-                <p className="text-sm" style={{ color: "#a09080" }}>
-                  得分: {score} | 关卡: {level}
-                </p>
+                <div className="flex items-center gap-4 justify-center text-sm" style={{ color: "#a09080" }}>
+                  <span>得分 <span style={{ color: "#c49a6c", fontWeight: 700, fontSize: 18 }}>{score}</span></span>
+                  <span>关卡 <span style={{ color: "#8aaa7a", fontWeight: 700, fontSize: 18 }}>{level}</span></span>
+                </div>
                 <button
                   onClick={startGame}
-                  className="rounded-2xl px-10 py-3 text-lg font-black transition-all active:scale-95"
+                  className="rounded-2xl px-12 py-3.5 font-black transition-all active:scale-95"
                   style={{
-                    background: "linear-gradient(135deg, #d4c4a5, #c4b4a0)",
+                    fontSize: 18,
+                    background: "linear-gradient(135deg, #FF9DB5, #B69CFF)",
                     color: "#fff",
-                    boxShadow: "0 4px 16px rgba(180,160,130,0.4)",
+                    boxShadow: "0 6px 24px rgba(182,156,255,0.45)",
                   }}
                 >
                   重新开始
@@ -1034,20 +1019,22 @@ export default function CubePuzzlePage() {
             </div>
           )}
 
-          {/* Tray — overlay at bottom of canvas */}
+          {/* Tray — candy glass tray with circular capsules */}
           {gamePhase === "playing" && (
-            <div className="absolute bottom-3 left-0 right-0 flex justify-center z-10 pointer-events-none">
+            <div className="absolute bottom-4 left-0 right-0 flex justify-center z-10 pointer-events-none">
               <div
-                className={`flex gap-1.5 rounded-2xl px-3 py-2.5 pointer-events-auto transition-all duration-200 ${
+                className={`flex gap-2 px-4 py-3 pointer-events-auto transition-all duration-200 ${
                   trayBounce ? "scale-[1.04]" : "scale-100"
-                } ${matchFlash !== null ? "ring-2 ring-white/40" : ""}`}
+                } ${matchFlash !== null ? "ring-2 ring-white/50" : ""}`}
                 style={{
-                  background: "rgba(255,255,255,0.55)",
-                  backdropFilter: "blur(12px)",
-                  border: "1px solid rgba(200,190,175,0.35)",
+                  background: "rgba(255,255,255,0.45)",
+                  backdropFilter: "blur(16px)",
+                  WebkitBackdropFilter: "blur(16px)",
+                  border: "1px solid rgba(200,190,175,0.3)",
+                  borderRadius: 999,
                   boxShadow: matchFlash !== null
-                    ? `0 0 20px ${COLOR_PALETTE[matchFlash]?.hex}66`
-                    : "0 4px 16px rgba(0,0,0,0.06)",
+                    ? `0 0 24px ${COLOR_PALETTE[matchFlash]?.hex}66`
+                    : "0 4px 20px rgba(0,0,0,0.05)",
                 }}
               >
                 {Array.from({ length: TRAY_SIZE }).map((_, i) => {
@@ -1057,24 +1044,24 @@ export default function CubePuzzlePage() {
                       key={i}
                       className={`transition-all duration-300 ${
                         matchFlash !== null && slot?.color === matchFlash
-                          ? "animate-pulse scale-110"
+                          ? "animate-pulse scale-125"
                           : ""
                       }`}
                       style={{
-                        width: 34,
-                        height: 34,
+                        width: 36,
+                        height: 36,
+                        borderRadius: "50%",
                         background: slot
-                          ? COLOR_PALETTE[slot.color].hex
-                          : "rgba(200,190,175,0.12)",
+                          ? `radial-gradient(circle at 35% 30%, ${lighten(COLOR_PALETTE[slot.color].hex, 30)}, ${COLOR_PALETTE[slot.color].hex})`
+                          : "radial-gradient(circle at 35% 30%, rgba(220,210,195,0.2), rgba(200,190,175,0.1))",
                         border: slot
                           ? `2px solid ${COLOR_PALETTE[slot.color].hex}`
-                          : "2px dashed rgba(200,190,175,0.25)",
-                        borderRadius: 10,
-                        transform: slot ? "scale(1)" : "scale(0.9)",
-                        opacity: slot ? 1 : 0.45,
+                          : "2px dashed rgba(200,190,175,0.2)",
                         boxShadow: slot
-                          ? `0 2px 6px ${COLOR_PALETTE[slot.color].hex}44`
-                          : "none",
+                          ? `0 3px 8px ${COLOR_PALETTE[slot.color].hex}44, inset 0 2px 4px rgba(255,255,255,0.4)`
+                          : "inset 0 1px 2px rgba(255,255,255,0.2)",
+                        transform: slot ? "scale(1)" : "scale(0.85)",
+                        opacity: slot ? 1 : 0.3,
                       }}
                     />
                   );

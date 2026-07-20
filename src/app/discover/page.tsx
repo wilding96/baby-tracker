@@ -25,9 +25,9 @@ const gameCards = [
   {
     href: "/game/perspective-match",
     icon: Box,
-    bg: "bg-gradient-to-br from-indigo-500 to-purple-600",
-    title: "视错觉消除",
-    desc: "转动视角，发现隐藏的三消排列",
+    bg: "bg-gradient-to-br from-pink-400 to-purple-500",
+    title: "方了个方",
+    desc: "3D糖果积木消除，转动视角找同色",
     action: "去玩",
   },
   {

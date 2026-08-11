@@ -10,6 +10,7 @@ import {
   BarChart3,
   ChevronRight,
   Box,
+  Ghost,
 } from "lucide-react";
 import { Divider } from "animal-island-ui";
 
@@ -36,6 +37,14 @@ const gameCards = [
     bg: "bg-gradient-to-br from-slate-600 to-slate-800",
     title: "雷电战机",
     desc: "经典射击游戏，不登录也能玩",
+    action: "去玩",
+  },
+  {
+    href: "/game/todo-monsters",
+    icon: Ghost,
+    bg: "bg-gradient-to-br from-red-400 to-rose-500",
+    title: "消灭小怪兽",
+    desc: "把待办变成小怪兽，一只只消灭",
     action: "去玩",
   },
   {

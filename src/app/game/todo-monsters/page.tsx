@@ -371,7 +371,6 @@ function MonsterField({
             {/* monster anchor — lifted along desk-normal then counter-rotated to stand upright */}
             <div
               className="monster-slot"
-              onClick={() => onSelect(m)}
               style={{
                 position: "absolute",
                 left: `${p.x}%`,
@@ -382,22 +381,27 @@ function MonsterField({
                 transform: `rotateZ(${-ROT_Z}deg) rotateX(${-ROT_X}deg) translateZ(20px)`,
                 transformOrigin: "center",
                 transformStyle: "preserve-3d",
-                cursor: "pointer",
-                pointerEvents: "auto",
               }}
             >
               {/* screen-space inner that hangs upward from the anchor */}
               <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(m);
+                }}
                 style={{
                   position: "absolute",
                   left: 0,
-                  top: 0,
+                  bottom: 0,
                   width: 76,
+                  height: 100,
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
+                  justifyContent: "flex-end",
                   transform: "translateY(-100%)",
-                  pointerEvents: "none",
+                  cursor: "pointer",
+                  pointerEvents: "auto",
                 }}
               >
                 <MonsterCard

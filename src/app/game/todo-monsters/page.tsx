@@ -381,6 +381,7 @@ function MonsterField({
                 transform: `rotateZ(${-ROT_Z}deg) rotateX(${-ROT_X}deg) translateZ(20px)`,
                 transformOrigin: "center",
                 transformStyle: "preserve-3d",
+                pointerEvents: "none",
               }}
             >
               {/* screen-space inner that hangs upward from the anchor */}
@@ -392,13 +393,11 @@ function MonsterField({
                 style={{
                   position: "absolute",
                   left: 0,
-                  bottom: 0,
+                  top: 0,
                   width: 76,
-                  height: 100,
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  justifyContent: "flex-end",
                   transform: "translateY(-100%)",
                   cursor: "pointer",
                   pointerEvents: "auto",

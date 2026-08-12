@@ -2,8 +2,9 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, RotateCcw, Sparkles, Sword } from "lucide-react";
+import { ArrowLeft, Gamepad2, Plus, Smartphone, Sparkles, Sword, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { InstallPrompt } from "@/components/InstallPrompt";
 import type { GameData, Monster, MonsterVisual, Poop } from "./types";
 import {
   MONSTER_VISUALS,
@@ -72,7 +73,7 @@ interface Particle {
 }
 
 // ═══════════════════════════════════════════
-// Monster visual (stands upright on the desk)
+// Monster visual
 // ═══════════════════════════════════════════
 
 interface MonsterPose {
@@ -85,12 +86,12 @@ interface MonsterPose {
   lastDropped: number;
 }
 
-const EDGE_X = 14; // % margin (card is ~19% wide, needs room to bounce)
-const EDGE_Y = 33; // % margin (card extends ~31% upward from anchor, keep in bounds)
+const EDGE_X = 14;
+const EDGE_Y = 33;
 
 function randPose(): MonsterPose {
   const dir = Math.random() * Math.PI * 2;
-  const speed = 4 + Math.random() * 9; // %/sec
+  const speed = 4 + Math.random() * 9;
   return {
     x: EDGE_X + Math.random() * (100 - EDGE_X * 2),
     y: EDGE_Y + Math.random() * (100 - EDGE_Y * 2),
@@ -124,29 +125,27 @@ function MonsterCard({ m, index, facing, selected, now, poopsSoFar }: {
         display: "inline-flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 1,
-        animation: `float-idle 2.8s ease-in-out ${index * 0.35}s infinite`,
+        gap: 2,
+        animation: `card-float 2.8s ease-in-out ${index * 0.35}s infinite`,
       }}
     >
-      {/* name tag above head */}
       <span
         style={{
           fontSize: 10.5,
           fontWeight: 800,
-          lineHeight: 1.1,
-          padding: "1px 7px",
+          lineHeight: 1.2,
+          padding: "2px 8px",
           borderRadius: 999,
-          background: m.accent,
+          background: `linear-gradient(135deg, ${m.accent}dd, ${m.accent}99)`,
           color: m.color,
           whiteSpace: "nowrap",
-          boxShadow: "0 2px 4px rgba(0,0,0,0.15)",
-          border: `1px solid ${m.color}33`,
+          boxShadow: `0 2px 6px rgba(0,0,0,0.12), 0 0 0 1px ${m.color}22, inset 0 1px 0 rgba(255,255,255,0.5)`,
+          border: `1px solid ${m.color}28`,
         }}
       >
         {m.text}
       </span>
 
-      {/* countdown to next poop */}
       <span
         style={{
           display: "inline-flex",
@@ -155,25 +154,25 @@ function MonsterCard({ m, index, facing, selected, now, poopsSoFar }: {
           fontSize: 9.5,
           fontWeight: 800,
           lineHeight: 1,
-          color: urgent ? "#c04040" : "#8a7a58",
-          background: "rgba(255,255,255,0.8)",
-          border: urgent ? "1px solid #e0a0a0" : "1px solid rgba(0,0,0,0.08)",
+          color: urgent ? "#c04040" : "#6b5e40",
+          background: "rgba(255,255,255,0.85)",
+          border: urgent ? "1px solid #e0a0a0" : "1px solid rgba(140,120,80,0.15)",
           borderRadius: 999,
-          padding: "1px 6px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+          padding: "2px 7px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.6)",
         }}
       >
         💩 {remainMin}m
       </span>
 
-      {/* mini progress bar */}
       <div
         style={{
           width: 46,
-          height: 4,
+          height: 5,
           borderRadius: 999,
-          background: "#e7dcc0",
+          background: "rgba(200,185,150,0.35)",
           overflow: "hidden",
+          boxShadow: "inset 0 1px 2px rgba(0,0,0,0.1)",
         }}
       >
         <div
@@ -182,8 +181,11 @@ function MonsterCard({ m, index, facing, selected, now, poopsSoFar }: {
             height: "100%",
             borderRadius: 999,
             background: urgent
-              ? "linear-gradient(90deg,#f87171,#dc2626)"
-              : "linear-gradient(90deg,#a3e635,#84cc16)",
+              ? "linear-gradient(90deg, #fbbf24, #f87171, #dc2626)"
+              : "linear-gradient(90deg, #a3e635, #65a30d)",
+            boxShadow: urgent
+              ? "0 0 6px rgba(239,68,68,0.4)"
+              : "0 0 4px rgba(132,204,22,0.3)",
             transition: "width 0.5s linear",
           }}
         />
@@ -194,19 +196,20 @@ function MonsterCard({ m, index, facing, selected, now, poopsSoFar }: {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 0,
-          transition: "transform 0.15s ease, filter 0.15s ease",
-          filter: selected ? "brightness(1.15) saturate(1.2)" : "none",
+          transition: "transform 0.18s cubic-bezier(.34,1.56,.64,1), filter 0.18s ease",
+          filter: selected
+            ? "brightness(1.15) saturate(1.25) drop-shadow(0 0 10px rgba(255,200,100,0.5))"
+            : "none",
         }}
       >
         <span
           className="monster-emoji"
           style={{
-            fontSize: 40,
+            fontSize: 42,
             lineHeight: 1,
             transform: `scaleX(${facing})`,
-            filter: "drop-shadow(0 6px 5px rgba(0,0,0,0.22))",
-            animation: `monster-wiggle 4s ease-in-out ${index * 0.6}s infinite`,
+            filter: "drop-shadow(0 7px 5px rgba(0,0,0,0.25))",
+            animation: `wiggle 4s ease-in-out ${index * 0.6}s infinite`,
           }}
         >
           {m.emoji}
@@ -219,7 +222,7 @@ function MonsterCard({ m, index, facing, selected, now, poopsSoFar }: {
 const POOP_INTERVAL_MS = 3600000;
 
 // ═══════════════════════════════════════════
-// Wandering monster field (drives movement via rAF)
+// Wandering monster field
 // ═══════════════════════════════════════════
 
 function ensurePose(map: Map<string, MonsterPose>, id: string): MonsterPose {
@@ -276,11 +279,10 @@ function MonsterField({
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const map = posesRef.current;
-      bodies: for (const m of monstersRef.current) {
+      for (const m of monstersRef.current) {
         const p = map.get(m.id);
         if (!p) continue;
 
-        // wander
         if (now >= p.nextTurn) {
           p.nextTurn = now + 1200 + Math.random() * 2800;
           const dir = Math.random() * Math.PI * 2;
@@ -291,17 +293,14 @@ function MonsterField({
         p.x += p.vx * dt;
         p.y += p.vy * dt;
 
-        // bounce
         if (p.x < EDGE_X) { p.x = EDGE_X; p.vx = Math.abs(p.vx); }
         if (p.x > 100 - EDGE_X) { p.x = 100 - EDGE_X; p.vx = -Math.abs(p.vx); }
         if (p.y < EDGE_Y) { p.y = EDGE_Y; p.vy = Math.abs(p.vy); }
         if (p.y > 100 - EDGE_Y) { p.y = 100 - EDGE_Y; p.vy = -Math.abs(p.vy); }
 
-        // facing
         if (p.vx > 0.05) p.facing = 1;
         else if (p.vx < -0.05) p.facing = -1;
 
-        // poop check: every hour boundary produces a 💩
         const hrIndex = Math.floor((now - m.createdAt) / POOP_INTERVAL_MS);
         while (p.lastDropped < hrIndex) {
           p.lastDropped++;
@@ -327,10 +326,8 @@ function MonsterField({
 
   const renderNow = Date.now();
 
-  // Slots are *direct* 3D children of the desk — no intermediate wrapper that could flatten
   return (
     <>
-      {/* poop dots (flat on the desk) */}
       {poops.map((poop) => (
         <div
           key={poop.id}
@@ -338,13 +335,14 @@ function MonsterField({
             position: "absolute",
             left: `${poop.x}%`,
             top: `${poop.y}%`,
-            width: 8,
-            height: 8,
+            width: 9,
+            height: 9,
             borderRadius: "50%",
-            background: "radial-gradient(circle at 30% 30%, #c8a060, #6b4c2a)",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+            background: "radial-gradient(circle at 35% 30%, #d4b060, #7a5c2e)",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.3), inset 0 -1px 1px rgba(0,0,0,0.2)",
             pointerEvents: "none",
             transform: "translate(-50%, -50%)",
+            zIndex: 1,
           }}
         />
       ))}
@@ -353,65 +351,50 @@ function MonsterField({
         const p = poses[m.id] ?? ensurePose(posesRef.current, m.id);
         return (
           <Fragment key={m.id}>
-            {/* shadow lies flat on the desk at the anchor point */}
             <div
               style={{
                 position: "absolute",
                 left: `${p.x}%`,
                 top: `${p.y}%`,
-                width: 34,
-                height: 9,
+                width: 38,
+                height: 10,
                 borderRadius: "50%",
-                background: "rgba(80,50,10,0.22)",
-                filter: "blur(2px)",
+                background: "radial-gradient(ellipse, rgba(80,45,10,0.28), transparent 65%)",
+                filter: "blur(3px)",
                 transform: "translate(-50%, -50%)",
                 pointerEvents: "none",
+                zIndex: 2,
               }}
             />
-            {/* monster anchor — lifted along desk-normal then counter-rotated to stand upright */}
             <div
               className="monster-slot"
+              onPointerDown={() => onSelect(m)}
               style={{
                 position: "absolute",
                 left: `${p.x}%`,
                 top: `${p.y}%`,
                 width: 76,
-                height: 0,
+                height: 110,
                 marginLeft: -38,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "flex-end",
+                alignItems: "center",
                 transform: `rotateZ(${-ROT_Z}deg) rotateX(${-ROT_X}deg) translateZ(20px)`,
-                transformOrigin: "center",
+                transformOrigin: "center bottom",
                 transformStyle: "preserve-3d",
-                pointerEvents: "none",
+                cursor: "pointer",
+                zIndex: 10,
               }}
             >
-              {/* screen-space inner that hangs upward from the anchor */}
-              <div
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelect(m);
-                }}
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
-                  width: 76,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  transform: "translateY(-100%)",
-                  cursor: "pointer",
-                  pointerEvents: "auto",
-                }}
-              >
-                <MonsterCard
-                  m={m}
-                  index={i}
-                  facing={p.facing}
-                  selected={m.id === selectedId}
-                  now={renderNow}
-                  poopsSoFar={p.lastDropped}
-                />
-              </div>
+              <MonsterCard
+                m={m}
+                index={i}
+                facing={p.facing}
+                selected={m.id === selectedId}
+                now={renderNow}
+                poopsSoFar={p.lastDropped}
+              />
             </div>
           </Fragment>
         );
@@ -427,12 +410,21 @@ function MonsterField({
 export default function TodoMonstersPage() {
   const [data, setData] = useState<GameData>(() => loadData());
   const [input, setInput] = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<Monster | null>(null);
-  const [burst, setBurst] = useState<{ m: Monster; particles: Particle[] } | null>(
-    null,
-  );
+  const [burst, setBurst] = useState<{ m: Monster; particles: Particle[] } | null>(null);
   const [shaking, setShaking] = useState(false);
+  const [showInstall, setShowInstall] = useState(false);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // ── show install hint banner after a delay ──
+  useEffect(() => {
+    const dismissed = localStorage.getItem("todo-monsters-install-dismissed");
+    if (dismissed) return;
+    const t = setTimeout(() => setShowInstallBanner(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     try {
@@ -442,6 +434,14 @@ export default function TodoMonstersPage() {
     }
   }, [data]);
 
+  // auto-focus input when modal opens
+  useEffect(() => {
+    if (showAddModal) {
+      const t = setTimeout(() => inputRef.current?.focus(), 100);
+      return () => clearTimeout(t);
+    }
+  }, [showAddModal]);
+
   const monsters = data.monsters;
   const todayDone = useMemo(
     () => data.history.filter((h) => h.completedAt && isToday(h.completedAt)).length,
@@ -449,6 +449,11 @@ export default function TodoMonstersPage() {
   );
 
   const deskFull = monsters.length >= MAX_MONSTERS;
+
+  const openAddModal = () => {
+    setInput("");
+    setShowAddModal(true);
+  };
 
   const addMonster = () => {
     const text = input.trim();
@@ -472,12 +477,11 @@ export default function TodoMonstersPage() {
     };
     setData((d) => ({ ...d, monsters: [...d.monsters, m] }));
     setInput("");
+    setShowAddModal(false);
     playSpawn();
-    inputRef.current?.focus();
   };
 
   const defeatMonster = (m: Monster) => {
-    // Generate particles once, frozen across the animation
     const colors = [m.color, m.accent, "#ffd43b", "#ffffff", "#ff6b6b"];
     const particles: Particle[] = Array.from({ length: 16 }, (_, i) => {
       const angle = (i / 16) * Math.PI * 2 + Math.random() * 0.6;
@@ -511,13 +515,25 @@ export default function TodoMonstersPage() {
   };
 
   return (
-    <main className="island-page" style={{ minHeight: "100dvh", overflowX: "hidden" }}>
+    <main
+      style={{
+        height: "100dvh",
+        overflow: "hidden",
+        background: `
+          radial-gradient(ellipse at 50% 0%, rgba(200,220,160,0.18) 0%, transparent 55%),
+          linear-gradient(180deg, #f9f7ec 0%, #f1edda 40%, #e8e2cc 100%)
+        `,
+        display: "flex",
+        flexDirection: "column",
+        position: "relative",
+      }}
+    >
       <style>{`
-        @keyframes float-idle {
+        @keyframes card-float {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-7px); }
         }
-        @keyframes monster-wiggle {
+        @keyframes wiggle {
           0%, 100% { transform: rotate(-4deg); }
           50% { transform: rotate(4deg); }
         }
@@ -530,10 +546,13 @@ export default function TodoMonstersPage() {
           20% { opacity: 1; }
           100% { transform: translate(-50%, -46px) scale(1.25); opacity: 0; }
         }
-        @keyframes spawn-pop {
-          0% { transform: scale(0); }
-          60% { transform: scale(1.25); }
-          100% { transform: scale(1); }
+        @keyframes slide-up {
+          0% { transform: translateY(100%); opacity: 0; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes modal-in {
+          0% { transform: scale(0.9) translateY(20px); opacity: 0; }
+          100% { transform: scale(1) translateY(0); opacity: 1; }
         }
         .monster-slot:hover .monster-body { transform: scale(1.12) translateY(-4px); }
         .monster-slot:active .monster-body { transform: scale(0.94); }
@@ -544,71 +563,190 @@ export default function TodoMonstersPage() {
           50% { transform: translateX(6px); }
           75% { transform: translateX(-3px); }
         }
+        @keyframes mote-drift {
+          0% { transform: translate(0, 0) scale(1); opacity: 0; }
+          20% { opacity: 0.7; }
+          80% { opacity: 0.3; }
+          100% { transform: translate(var(--mx), var(--my)) scale(0.3); opacity: 0; }
+        }
       `}</style>
 
+      {/* ambient dust motes */}
+      <div
+        style={{ position: "fixed", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 0 }}
+        aria-hidden
+      >
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: `${10 + i * 11}%`,
+              top: `${15 + (i * 17) % 60}%`,
+              width: 2 + (i % 3),
+              height: 2 + (i % 3),
+              borderRadius: "50%",
+              background: "rgba(200,180,140,0.5)",
+              animation: `mote-drift ${3 + (i % 4)}s ease-in ${i * 1.7}s infinite`,
+              ["--mx" as string]: `${-10 + i * 3}px`,
+              ["--my" as string]: `${-15 + i * 2}px`,
+            }}
+          />
+        ))}
+      </div>
+
       {/* ── Header ── */}
-      <header className="island-shell flex items-center justify-between pt-5">
+      <header
+        style={{
+          width: "min(100%, 28rem)",
+          margin: "0 auto",
+          padding: "16px 16px 4px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          position: "relative",
+          zIndex: 5,
+          flexShrink: 0,
+        }}
+      >
         <Link
           href="/discover"
-          className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#d4c9b4] bg-[#fffdf5] text-[#7a6a4a] shadow-sm"
+          className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#d4c9b4] bg-[#fffdf5] text-[#7a6a4a] shadow-md hover:shadow-lg hover:bg-[#fff9ec] transition-all"
         >
           <ArrowLeft size={18} />
         </Link>
         <div className="flex flex-col items-center">
-          <h1 className="text-xl font-black tracking-wide text-[#4a6b3a]">
+          <h1
+            className="text-xl font-black tracking-wide"
+            style={{
+              background: "linear-gradient(135deg, #3d6b1e, #5a9330)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
             消灭小怪兽
           </h1>
-          <p className="text-xs text-[#a0936e]">把待办变成怪兽，一只只消灭</p>
+          <p className="text-xs text-[#a0936e] font-medium">把待办变成怪兽，一只只消灭</p>
         </div>
-        <button
-          onClick={resetAll}
-          aria-label="清空数据"
-          className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#d4c9b4] bg-[#fffdf5] text-[#a0936e] shadow-sm hover:text-[#c04040]"
-        >
-          <RotateCcw size={16} />
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setShowInstall(true)}
+            aria-label="安装到桌面"
+            className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#d4c9b4] bg-[#fffdf5] text-[#7a6a4a] shadow-md hover:text-[#5a9330] hover:bg-green-50 hover:border-green-200 transition-all"
+          >
+            <Smartphone size={16} />
+          </button>
+          <button
+            onClick={resetAll}
+            aria-label="清空数据"
+            className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#d4c9b4] bg-[#fffdf5] text-[#a0936e] shadow-md hover:text-[#c04040] hover:bg-red-50 hover:border-red-200 transition-all"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
       </header>
 
       {/* ── Stats strip ── */}
-      <section className="island-shell flex items-center justify-center gap-3 pb-2">
-        <div className="island-soft-panel flex items-center gap-2 px-4 py-2">
+      <div
+        style={{
+          width: "min(100%, 28rem)",
+          margin: "0 auto",
+          padding: "4px 16px 6px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+          position: "relative",
+          zIndex: 5,
+          flexShrink: 0,
+        }}
+      >
+        <div
+          className="island-soft-panel flex items-center gap-2 px-4 py-2"
+          style={{
+            background: "rgba(255,253,245,0.8)",
+            backdropFilter: "blur(8px)",
+            boxShadow: "0 4px 12px rgba(61,52,40,0.06), 0 0 0 1px rgba(255,255,255,0.5) inset",
+          }}
+        >
           <Sparkles size={16} className="text-[#f59e0b]" />
-          <span className="text-sm font-bold text-[#4a6b3a]">
+          <span className="text-sm font-bold" style={{ color: "#4a5e2a" }}>
             今日消灭 <span className="text-[#f59e0b]">{todayDone}</span>
           </span>
         </div>
-        <div className="island-soft-panel flex items-center gap-2 px-4 py-2">
+        <div
+          className="island-soft-panel flex items-center gap-2 px-4 py-2"
+          style={{
+            background: "rgba(255,253,245,0.8)",
+            backdropFilter: "blur(8px)",
+            boxShadow: "0 4px 12px rgba(61,52,40,0.06), 0 0 0 1px rgba(255,255,255,0.5) inset",
+          }}
+        >
           <Sword size={16} className="text-[#a855f7]" />
-          <span className="text-sm font-bold text-[#4a6b3a]">
+          <span className="text-sm font-bold" style={{ color: "#4a5e2a" }}>
             怪兽 <span className="text-[#a855f7]">{monsters.length}/{MAX_MONSTERS}</span>
           </span>
         </div>
-      </section>
+      </div>
+
+      {/* ── Tip hint ── */}
+      {monsters.length > 0 && (
+        <div
+          style={{
+            width: "min(100%, 28rem)",
+            margin: "0 auto",
+            padding: "0 16px 6px",
+            display: "flex",
+            justifyContent: "center",
+            position: "relative",
+            zIndex: 5,
+            flexShrink: 0,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: "#b09a6e",
+              background: "rgba(255,255,255,0.5)",
+              borderRadius: 999,
+              padding: "2px 12px",
+            }}
+          >
+            👆 点击小怪兽消灭已完成的任务
+          </span>
+        </div>
+      )}
 
       {/* ── Desk scene ── */}
       <section
-        className="desk-scene relative"
         style={{
           perspective: "950px",
           perspectiveOrigin: "50% 22%",
-          height: 330,
+          flex: 1,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "flex-start",
           position: "relative",
+          zIndex: 1,
+          minHeight: 0,
         }}
       >
-        {/* floor glow under desk */}
+        {/* floor rug */}
         <div
           style={{
             position: "absolute",
-            top: 150,
-            width: 360,
-            height: 120,
+            top: "48%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 420,
+            height: 140,
             borderRadius: "50%",
-            background: "radial-gradient(ellipse, rgba(90,60,20,0.16), transparent 70%)",
-            filter: "blur(8px)",
+            background:
+              "radial-gradient(ellipse at center, rgba(120,80,30,0.14) 0%, rgba(120,80,30,0.05) 40%, transparent 70%)",
+            filter: "blur(16px)",
+            pointerEvents: "none",
           }}
         />
 
@@ -626,98 +764,102 @@ export default function TodoMonstersPage() {
               position: "relative",
             }}
           >
-          {/* desk top surface */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: 20,
-              border: "3px solid #d9b98a",
-              background:
-                "linear-gradient(160deg, #fdf6e3 0%, #f3e5c3 55%, #ead8b0 100%)",
-              boxShadow:
-                "0 12px 30px rgba(120,85,35,0.3), inset 0 2px 6px rgba(255,255,255,0.6), inset 0 -6px 12px rgba(160,120,60,0.18)",
-            }}
-          />
-          {/* desk grid overlay */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 8,
-              borderRadius: 14,
-              pointerEvents: "none",
-              backgroundImage:
-                "repeating-linear-gradient(0deg, rgba(140,105,55,0.07) 0 1px, transparent 1px 31px), repeating-linear-gradient(90deg, rgba(140,105,55,0.07) 0 1px, transparent 1px 31px)",
-            }}
-          />
-          {/* desk edge thickness (dark layer behind) */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: 20,
-              background: "#c8a06a",
-              transform: "translateZ(-8px)",
-            }}
-          />
+            {/* desk top surface */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: 20,
+                border: "3px solid #d9b98a",
+                background: `
+                  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='40'%3E%3Crect width='200' height='40' fill='%23fdf6e3'/%3E%3Cline x1='0' y1='6' x2='200' y2='7' stroke='rgba(190,155,100,0.12)' stroke-width='1'/%3E%3Cline x1='0' y1='14' x2='200' y2='14.5' stroke='rgba(190,155,100,0.08)' stroke-width='0.8'/%3E%3Cline x1='0' y1='22' x2='200' y2='23' stroke='rgba(190,155,100,0.14)' stroke-width='1.2'/%3E%3Cline x1='0' y1='30' x2='200' y2='30' stroke='rgba(190,155,100,0.06)' stroke-width='0.6'/%3E%3Cline x1='0' y1='36' x2='200' y2='37.5' stroke='rgba(190,155,100,0.1)' stroke-width='0.9'/%3E%3Cellipse cx='60' cy='18' rx='4' ry='2.5' fill='rgba(170,130,70,0.08)'/%3E%3Cellipse cx='165' cy='28' rx='3' ry='2' fill='rgba(170,130,70,0.06)'/%3E%3C/svg%3E"),
+                  linear-gradient(160deg, #fdf6e3 0%, #f3e5c3 55%, #ead8b0 100%)
+                `,
+                boxShadow:
+                  "0 14px 36px rgba(120,85,35,0.28), 0 1px 0 rgba(255,255,255,0.5) inset, 0 -8px 16px rgba(160,120,60,0.15) inset",
+              }}
+            />
+            {/* desk grid */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 8,
+                borderRadius: 14,
+                pointerEvents: "none",
+                backgroundImage:
+                  "repeating-linear-gradient(0deg, rgba(140,105,55,0.06) 0 1px, transparent 1px 31px), repeating-linear-gradient(90deg, rgba(140,105,55,0.06) 0 1px, transparent 1px 31px)",
+              }}
+            />
+            {/* desk edge */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: 20,
+                background: "linear-gradient(180deg, #d4b885, #b89360)",
+                transform: "translateZ(-9px)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: 20,
+                background: "linear-gradient(180deg, #c4a46a, #9a7a4a)",
+                transform: "translateZ(-5px)",
+              }}
+            />
 
-          {/* wandering monsters with shadows + poops */}
-          <MonsterField
-            monsters={monsters}
-            poops={data.poops}
-            selectedId={confirmTarget?.id ?? null}
-            onSelect={(m) => {
-              playSelect();
-              setConfirmTarget(m);
-            }}
-            onPoop={(monsterId, pos) => {
-              setData((d) => ({
-                ...d,
-                poops: [
-                  ...d.poops,
-                  { id: uid(), monsterId, x: pos.x, y: pos.y, droppedAt: Date.now() },
-                ].slice(-40),
-              }));
-            }}
-          />
+            <MonsterField
+              monsters={monsters}
+              poops={data.poops}
+              selectedId={confirmTarget?.id ?? null}
+              onSelect={(m) => {
+                playSelect();
+                setConfirmTarget(m);
+              }}
+              onPoop={(monsterId, pos) => {
+                setData((d) => ({
+                  ...d,
+                  poops: [
+                    ...d.poops,
+                    { id: uid(), monsterId, x: pos.x, y: pos.y, droppedAt: Date.now() },
+                  ].slice(-40),
+                }));
+              }}
+            />
           </div>
         </div>
 
-        {/* empty-state hint floating above desk (not tilted) */}
+        {/* empty-state */}
         {monsters.length === 0 && !burst && (
           <div
             style={{
               position: "absolute",
               left: "50%",
-              top: "36%",
+              top: "42%",
               transform: "translate(-50%, -50%)",
               textAlign: "center",
               color: "#b09a6e",
               pointerEvents: "none",
             }}
           >
-            <div
-              style={{ fontSize: 42, animation: "float-idle 3s ease-in-out infinite" }}
-            >
+            <div style={{ fontSize: 52, animation: "card-float 3s ease-in-out infinite" }}>
               🌱
             </div>
-            <div
-              style={{ fontSize: 13, fontWeight: 600, marginTop: 6, whiteSpace: "nowrap" }}
-            >
-              桌面空空，下面召唤一只怪兽吧
+            <div style={{ fontSize: 14, fontWeight: 600, marginTop: 10, marginBottom: 4, whiteSpace: "nowrap" }}>
+              桌面空空，点击右下角召唤怪兽吧
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.6 }}>
+              💡 每过1小时怪兽会 💩，10分钟内消灭最佳
             </div>
           </div>
         )}
 
-        {/* ── Burst overlay (defeat animation) ── */}
+        {/* burst overlay */}
         {burst && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              pointerEvents: "none",
-            }}
-          >
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
             {burst.particles.map((p, i) => (
               <span
                 key={i}
@@ -757,10 +899,10 @@ export default function TodoMonstersPage() {
                 fontSize: 20,
                 fontWeight: 900,
                 color: "#16a34a",
-                background: "rgba(255,255,255,0.9)",
-                padding: "2px 10px",
+                background: "rgba(255,255,255,0.92)",
+                padding: "3px 12px",
                 borderRadius: 999,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.1), 0 0 0 1px rgba(255,255,255,0.6) inset",
                 whiteSpace: "nowrap",
                 animation: "float-up 0.85s ease-out 0.1s forwards",
               }}
@@ -771,79 +913,321 @@ export default function TodoMonstersPage() {
         )}
       </section>
 
-      {/* ── Input bar ── */}
-      <footer
+      {/* ── Floating add button ── */}
+      <button
+        onClick={openAddModal}
+        aria-label="添加待办"
         style={{
           position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: "calc(18px + env(safe-area-inset-bottom))",
-          padding: "0 16px 8px",
-          zIndex: 30,
+          right: 20,
+          bottom: "calc(80px + env(safe-area-inset-bottom, 16px))",
+          width: 56,
+          height: 56,
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, #7cc838, #5fa81e)",
+          boxShadow: "0 4px 0 #4a8a14, 0 8px 20px rgba(95,168,30,0.35)",
+          border: "none",
+          color: "#fff",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          zIndex: 25,
+          transition: "transform 0.15s ease, box-shadow 0.15s ease",
+        }}
+        onPointerDown={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.92)";
+          (e.currentTarget as HTMLButtonElement).style.boxShadow =
+            "0 1px 0 #4a8a14, 0 4px 10px rgba(95,168,30,0.25)";
+        }}
+        onPointerUp={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
+          (e.currentTarget as HTMLButtonElement).style.boxShadow =
+            "0 4px 0 #4a8a14, 0 8px 20px rgba(95,168,30,0.35)";
         }}
       >
+        <Plus size={28} strokeWidth={2.5} />
+      </button>
+
+      {/* ── Floating install hint banner ── */}
+      {showInstallBanner && (
         <div
-          className="island-soft-panel"
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "8px 8px 8px 14px",
+            position: "fixed",
+            left: 16,
+            right: 16,
+            bottom: 96,
+            zIndex: 35,
+            maxWidth: "28rem",
+            margin: "0 auto",
+            animation: "slide-up 0.35s ease-out",
           }}
         >
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addMonster()}
-            maxLength={TEXT_MAX_LENGTH}
-            placeholder="写个待办，召唤一只小怪兽…"
+          <div
             style={{
-              flex: 1,
-              border: "none",
-              outline: "none",
-              background: "transparent",
-              fontSize: 14,
-              color: "#3f3a2e",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 14px",
+              borderRadius: 16,
+              background: "rgba(255,253,245,0.94)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+              boxShadow: "0 6px 24px rgba(60,40,20,0.12), 0 0 0 1px rgba(200,180,140,0.18)",
+              border: "1px solid rgba(200,180,140,0.2)",
             }}
-          />
-          <Button
-            onClick={addMonster}
-            size="sm"
-            className="island-action-button flex items-center gap-1 !rounded-full px-4"
           >
-            <Plus size={16} />
-            召唤
-          </Button>
+            <span
+              style={{
+                flexShrink: 0,
+                width: 34,
+                height: 34,
+                borderRadius: 12,
+                background: "linear-gradient(135deg, #7cc838, #5fa81e)",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 2px 6px rgba(95,168,30,0.3)",
+              }}
+            >
+              <Gamepad2 size={18} />
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#4a5e2a" }}>
+                添加到桌面，随时消灭怪兽
+              </div>
+              <div style={{ fontSize: 10, color: "#b09a6e", marginTop: 1 }}>
+                必须重新添加，桌面才有小怪兽入口
+              </div>
+            </div>
+            <button
+              onClick={() => setShowInstall(true)}
+              style={{
+                flexShrink: 0,
+                padding: "5px 12px",
+                borderRadius: 999,
+                background: "linear-gradient(135deg, #7cc838, #5fa81e)",
+                color: "#fff",
+                fontSize: 12,
+                fontWeight: 700,
+                border: "none",
+                cursor: "pointer",
+                boxShadow: "0 2px 0 #4a8a14",
+              }}
+            >
+              添加
+            </button>
+            <button
+              onClick={() => {
+                setShowInstallBanner(false);
+                localStorage.setItem("todo-monsters-install-dismissed", "1");
+              }}
+              style={{
+                flexShrink: 0,
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                border: "1px solid rgba(150,130,100,0.15)",
+                background: "rgba(255,255,255,0.5)",
+                color: "#a0936e",
+                fontSize: 12,
+                lineHeight: "20px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+              }}
+              aria-label="关闭"
+            >
+              ×
+            </button>
+          </div>
         </div>
-      </footer>
+      )}
+
+      {/* ── Install dialog ── */}
+      <InstallPrompt open={showInstall} onOpenChange={setShowInstall} />
+
+      {/* ── Add todo modal ── */}
+      {showAddModal && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 backdrop-blur-sm"
+          onClick={() => setShowAddModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(100%, 320px)",
+              margin: "0 24px",
+              padding: "24px 20px 20px",
+              borderRadius: 24,
+              background: "rgba(255,253,245,0.9)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              border: "1.5px solid rgba(200,180,140,0.25)",
+              boxShadow:
+                "0 20px 60px rgba(60,40,20,0.2), 0 0 0 1px rgba(255,255,255,0.3) inset",
+              animation: "modal-in 0.25s cubic-bezier(.34,1.56,.64,1)",
+            }}
+          >
+            {/* modal header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <span style={{ fontSize: 15, fontWeight: 800, color: "#4a5e2a" }}>
+                🎯 召唤新怪兽
+              </span>
+              <button
+                onClick={() => setShowAddModal(false)}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  border: "1px solid rgba(150,130,100,0.2)",
+                  background: "rgba(255,255,255,0.6)",
+                  color: "#a0936e",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* input */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 14px",
+                borderRadius: 16,
+                background: "rgba(255,255,255,0.7)",
+                border: "1.5px solid rgba(180,160,120,0.25)",
+                boxShadow: "inset 0 1px 3px rgba(0,0,0,0.04)",
+              }}
+            >
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addMonster()}
+                maxLength={TEXT_MAX_LENGTH}
+                placeholder="写个待办，召唤一只小怪兽…"
+                style={{
+                  flex: 1,
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  fontSize: 15,
+                  color: "#3f3a2e",
+                  fontWeight: 500,
+                  minWidth: 0,
+                }}
+              />
+            </div>
+
+            {/* character count */}
+            <div style={{ textAlign: "right", fontSize: 10, color: "#b0a080", marginTop: 4, marginBottom: 12 }}>
+              {input.length}/{TEXT_MAX_LENGTH}
+            </div>
+
+            {/* random monster preview */}
+            {input.trim().length > 0 && (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "10px 0 14px",
+                }}
+              >
+                <span style={{ fontSize: 10, fontWeight: 600, color: "#b09a6e" }}>
+                  即将召唤 →
+                </span>
+                <div style={{ fontSize: 48, lineHeight: 1, marginTop: 4, filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.15))" }}>
+                  {pickVisual(input).emoji}
+                </div>
+              </div>
+            )}
+
+            {/* action buttons */}
+            <div className="flex gap-3">
+              <Button
+                variant="ghost"
+                className="flex-1 rounded-full text-[#8a7a58] font-semibold hover:bg-[#f0ead8]"
+                onClick={() => setShowAddModal(false)}
+              >
+                取消
+              </Button>
+              <Button
+                className="island-action-button flex-1 rounded-full flex items-center justify-center gap-1.5"
+                onClick={addMonster}
+                disabled={!input.trim()}
+                style={{
+                  background: "linear-gradient(135deg, #7cc838, #5fa81e)",
+                  boxShadow: "0 3px 0 #4a8a14, 0 4px 8px rgba(95,168,30,0.25)",
+                  fontWeight: 700,
+                  opacity: !input.trim() ? 0.5 : 1,
+                }}
+              >
+                <Plus size={16} />
+                召唤
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Confirm dialog ── */}
       {confirmTarget && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 p-6 backdrop-blur-sm"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm"
           onClick={() => setConfirmTarget(null)}
         >
           <div
-            className="island-soft-panel w-full max-w-[300px] p-5 text-center"
             onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(100%, 300px)",
+              margin: "0 24px",
+              padding: "28px 24px 24px",
+              borderRadius: 28,
+              background: "rgba(255,253,245,0.88)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              border: "1.5px solid rgba(200,180,140,0.25)",
+              boxShadow:
+                "0 20px 60px rgba(60,40,20,0.18), 0 0 0 1px rgba(255,255,255,0.3) inset",
+              textAlign: "center",
+            }}
           >
-            <div className="mb-1 text-5xl" style={{ animation: "monster-wiggle 1.2s ease-in-out infinite" }}>
+            <div
+              className="mb-2 text-6xl"
+              style={{ animation: "wiggle 1.2s ease-in-out infinite", filter: "drop-shadow(0 6px 8px rgba(0,0,0,0.2))" }}
+            >
               {confirmTarget.emoji}
             </div>
-            <p className="text-xs text-[#a0936e]">
+            <p className="text-xs text-[#a0936e] font-medium mb-3">
               完成这个待办，消灭它吗？
             </p>
-            <p
-              className="mx-auto mt-2 inline-block rounded-full px-3 py-1 text-sm font-bold"
-              style={{ background: confirmTarget.accent, color: confirmTarget.color }}
+            <div
+              style={{
+                display: "inline-block",
+                padding: "4px 14px",
+                borderRadius: 999,
+                background: `linear-gradient(135deg, ${confirmTarget.accent}dd, ${confirmTarget.accent}99)`,
+                color: confirmTarget.color,
+                fontSize: 14,
+                fontWeight: 800,
+                boxShadow: `0 2px 8px rgba(0,0,0,0.08), 0 0 0 1px ${confirmTarget.color}18, inset 0 1px 0 rgba(255,255,255,0.4)`,
+              }}
             >
               {confirmTarget.text}
-            </p>
-            <div className="mt-5 flex gap-3">
+            </div>
+            <div className="mt-6 flex gap-3">
               <Button
                 variant="ghost"
-                className="flex-1 rounded-full text-[#8a7a58]"
+                className="flex-1 rounded-full text-[#8a7a58] font-semibold hover:bg-[#f0ead8]"
                 onClick={() => setConfirmTarget(null)}
               >
                 先留着
@@ -851,6 +1235,11 @@ export default function TodoMonstersPage() {
               <Button
                 className="island-action-button flex-1 rounded-full"
                 onClick={() => defeatMonster(confirmTarget)}
+                style={{
+                  background: "linear-gradient(135deg, #7cc838, #5fa81e)",
+                  boxShadow: "0 3px 0 #4a8a14, 0 4px 8px rgba(95,168,30,0.25)",
+                  fontWeight: 700,
+                }}
               >
                 消灭它！
               </Button>
@@ -858,9 +1247,6 @@ export default function TodoMonstersPage() {
           </div>
         </div>
       )}
-
-      {/* bottom spacer so the fixed input bar never covers content */}
-      <div style={{ height: 96 }} />
     </main>
   );
 }

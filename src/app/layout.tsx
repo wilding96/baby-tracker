@@ -8,7 +8,7 @@ import MobileNav from "@/components/layout/mobile-nav";
 export const metadata: Metadata = {
   title: "Baby Tracker",
   description: "记录宝宝成长的每一刻",
-  manifest: "/mainfest.json",
+  manifest: "/manifest.json",
   icons: {
     apple: "/icon-512.png",
   },
@@ -33,7 +33,8 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <head>
-        {/* iOS 状态栏样式：default(白底黑字) / black(黑底白字) / black-translucent(沉浸式) */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="消灭小怪兽" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

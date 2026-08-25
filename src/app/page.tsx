@@ -16,6 +16,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import FloatingParticles from "@/components/FloatingParticles";
+import Reveal from "@/components/Reveal";
+import { useCountUp } from "@/hooks/useCountUp";
 import {
   Dialog,
   DialogContent,
@@ -273,6 +276,14 @@ export default function Home() {
     ? differenceInCalendarDays(parseISO(nextEvent.date), startOfDay(new Date()))
     : null;
 
+  // 数据卡片 / 倒计时的 count-up 动效
+  const feedingMlAnimated = useCountUp(todaySummary.feedingMl);
+  const sleepHoursAnimated = useCountUp(todaySummary.sleepMinutes / 60);
+  const diaperCountAnimated = useCountUp(todaySummary.diaperCount);
+  const daysLeftAnimated = useCountUp(
+    daysLeft !== null && daysLeft > 0 ? daysLeft : 0,
+  );
+
   const upcomingCount = useMemo(() => {
     const today = startOfDay(new Date()).getTime();
     return events.filter((event) => new Date(event.date).getTime() >= today)
@@ -349,7 +360,8 @@ export default function Home() {
 
   return (
     <main className="island-page relative min-h-screen overflow-hidden pb-24">
-      <div className="island-shell space-y-4">
+      <FloatingParticles count={18} />
+      <div className="island-shell relative z-10 space-y-4">
         <div className="pointer-events-none absolute -top-16 -right-10 h-40 w-40 rounded-full bg-[#f7cd67]/30 blur-3xl" />
         <div className="pointer-events-none absolute top-40 -left-12 h-36 w-36 rounded-full bg-[#8ac68a]/25 blur-3xl" />
 
@@ -374,43 +386,46 @@ export default function Home() {
           </div>
         </header>
 
-        <Card color="app-green" className="island-card text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-white flex items-center gap-2 drop-shadow-sm">
-              今日护理
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-1">
-            <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
-                <Droplets size={18} className="mx-auto text-white/90" />
-                <p className="mt-1 text-lg font-black">
-                  {todaySummary.feedingMl}
-                </p>
-                <p className="text-[11px] text-white/85">ml 奶量</p>
+        <Reveal delay={0}>
+          <Card color="app-green" className="island-card text-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-white flex items-center gap-2 drop-shadow-sm">
+                今日护理
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-1">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
+                  <Droplets size={18} className="mx-auto text-white/90" />
+                  <p className="mt-1 text-lg font-black">
+                    {Math.round(feedingMlAnimated)}
+                  </p>
+                  <p className="text-[11px] text-white/85">ml 奶量</p>
+                </div>
+                <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
+                  <Moon size={18} className="mx-auto text-white/90" />
+                  <p className="mt-1 text-lg font-black">
+                    {sleepHoursAnimated.toFixed(1)}
+                  </p>
+                  <p className="text-[11px] text-white/85">小时睡眠</p>
+                </div>
+                <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
+                  <Utensils size={18} className="mx-auto text-white/90" />
+                  <p className="mt-1 text-lg font-black">
+                    {Math.round(diaperCountAnimated)}
+                  </p>
+                  <p className="text-[11px] text-white/85">次尿布</p>
+                </div>
               </div>
-              <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
-                <Moon size={18} className="mx-auto text-white/90" />
-                <p className="mt-1 text-lg font-black">
-                  {(todaySummary.sleepMinutes / 60).toFixed(1)}
-                </p>
-                <p className="text-[11px] text-white/85">小时睡眠</p>
-              </div>
-              <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
-                <Utensils size={18} className="mx-auto text-white/90" />
-                <p className="mt-1 text-lg font-black">
-                  {todaySummary.diaperCount}
-                </p>
-                <p className="text-[11px] text-white/85">次尿布</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </Reveal>
 
-        <Card
-          color="app-yellow"
-          className="island-card relative overflow-hidden text-[#725d42]"
-        >
+        <Reveal delay={80}>
+          <Card
+            color="app-yellow"
+            className="island-card relative overflow-hidden text-[#725d42]"
+          >
           <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/25" />
           <div className="absolute -bottom-10 left-8 h-20 w-20 rounded-full bg-[#fff7dc]/45" />
           <CardHeader className="relative z-10 pb-2">
@@ -442,7 +457,7 @@ export default function Home() {
                     {daysLeft === 0
                       ? "今天就要完成啦"
                       : daysLeft !== null && daysLeft > 0
-                        ? `距离计划还有 ${daysLeft} 天`
+                        ? `距离计划还有 ${Math.round(daysLeftAnimated)} 天`
                         : "已过期，请更新计划"}
                   </p>
                 </div>
@@ -455,7 +470,7 @@ export default function Home() {
                   ) : daysLeft !== null && daysLeft > 0 ? (
                     <>
                       <span className="text-3xl font-black leading-none text-[#d07044]">
-                        {daysLeft}
+                        {Math.round(daysLeftAnimated)}
                       </span>
                       <span className="mt-1 text-[11px] font-black tracking-widest text-[#9a6a1f]">
                         DAYS
@@ -474,7 +489,8 @@ export default function Home() {
               </p>
             )}
           </CardContent>
-        </Card>
+          </Card>
+        </Reveal>
 
         <Divider type="wave-yellow" />
 
@@ -487,9 +503,11 @@ export default function Home() {
           </CardHeader>
           <CardContent className="p-1">
             {sortedDesc.length === 0 ? (
-              <div className="rounded-3xl border-2 border-dashed border-white/55 bg-white/70 p-6 text-center text-sm font-semibold text-[#725d42]">
-                暂无事件，先添加第一条体检/疫苗/大事件吧。
-              </div>
+              <Reveal>
+                <div className="rounded-3xl border-2 border-dashed border-white/55 bg-white/70 p-6 text-center text-sm font-semibold text-[#725d42]">
+                  暂无事件，先添加第一条体检/疫苗/大事件吧。
+                </div>
+              </Reveal>
             ) : (
               <div className="space-y-4">
                 {sortedDesc.map((event, index) => {
@@ -499,10 +517,8 @@ export default function Home() {
                   const isLast = index === sortedDesc.length - 1;
 
                   return (
-                    <div
-                      key={event.id}
-                      className="relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-3"
-                    >
+                    <Reveal key={event.id} delay={index * 60}>
+                      <div className="relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-3">
                       <div className="relative flex justify-center">
                         {!isFirst && (
                           <div className="absolute -top-4 left-1/2 h-[calc(1rem+1.875rem)] -translate-x-1/2 border-l-2 border-dashed border-white/70" />
@@ -575,7 +591,8 @@ export default function Home() {
                           )}
                         </div>
                       </div>
-                    </div>
+                      </div>
+                    </Reveal>
                   );
                 })}
               </div>
@@ -583,8 +600,9 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        <section className="space-y-2.5">
-          <Card color="app-green" className="island-card p-3 text-white">
+        <Reveal delay={120}>
+          <section className="space-y-2.5">
+            <Card color="app-green" className="island-card p-3 text-white">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl bg-white/25 p-2 text-white shadow-sm ring-1 ring-white/35">
@@ -633,13 +651,14 @@ export default function Home() {
               </Button>
             </div>
           </Card>
-        </section>
+          </section>
+        </Reveal>
 
         {/* 浮动新增按钮 */}
         <button
           type="button"
           onClick={() => setDialogOpen(true)}
-          className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#725d42] text-white shadow-xl active:scale-95 transition-transform"
+          className="float-glow fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#725d42] text-white active:scale-95 transition-transform"
           aria-label="新增成长事件"
         >
           <Plus size={28} strokeWidth={3} />

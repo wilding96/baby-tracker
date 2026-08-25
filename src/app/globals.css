@@ -494,3 +494,35 @@
     padding: 18px 24px;
   }
 }
+
+/* ─── 滚动入场动画（Reveal 组件） ─── */
+.reveal {
+  opacity: 0;
+  transform: translateY(20px) scale(0.98);
+  transition:
+    opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* ─── 浮动按钮呼吸光晕 ─── */
+@keyframes float-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(114, 93, 66, 0.35),
+      0 8px 24px rgba(61, 52, 40, 0.25);
+  }
+  50% {
+    box-shadow:
+      0 0 0 12px rgba(114, 93, 66, 0),
+      0 8px 24px rgba(61, 52, 40, 0.25);
+  }
+}
+.float-glow {
+  animation: float-glow 2.6s ease-in-out infinite;
+}

@@ -8,6 +8,7 @@ import { Divider, Modal } from "animal-island-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import FloatingParticles from "@/components/FloatingParticles";
 import { Baby, Sparkles, ArrowRight } from "lucide-react";
 
 export default function LoginPage() {
@@ -99,6 +100,9 @@ export default function LoginPage() {
 
   return (
     <div className="island-page relative min-h-screen w-full flex items-center justify-center overflow-hidden">
+      <FloatingParticles count={14} />
+      <div className="pointer-events-none absolute -top-16 -right-10 h-40 w-40 rounded-full bg-[#f7cd67]/30 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-10 -left-12 h-36 w-36 rounded-full bg-[#8ac68a]/25 blur-3xl" />
       <div className="relative z-10 w-full max-w-sm px-4 animate-fade-in-up">
         <div className="island-card bg-[#fffdf5]/95 rounded-3xl p-8 space-y-6">
           <div className="text-center space-y-2">

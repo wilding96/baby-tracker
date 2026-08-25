@@ -8,6 +8,7 @@ import {
   parseISO,
   differenceInCalendarDays,
   startOfDay,
+  subDays,
 } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { supabase } from "@/lib/supabase";
@@ -19,6 +20,12 @@ import { Label } from "@/components/ui/label";
 import FloatingParticles from "@/components/FloatingParticles";
 import Reveal from "@/components/Reveal";
 import { useCountUp } from "@/hooks/useCountUp";
+import DailyQuote from "@/components/DailyQuote";
+import CelebrationOverlay from "@/components/CelebrationOverlay";
+import BabyAge from "@/components/BabyAge";
+import StreakHeatmap from "@/components/StreakHeatmap";
+import TaskMonsters from "@/components/TaskMonsters";
+import ShareCard from "@/components/ShareCard";
 import {
   Dialog,
   DialogContent,
@@ -104,6 +111,14 @@ export default function Home() {
     sleepMinutes: 0,
     diaperCount: 0,
   });
+  const [babyBirthday, setBabyBirthday] = useState<string | null>(null);
+  const [logDates, setLogDates] = useState<Set<string>>(new Set());
+  const [todayDone, setTodayDone] = useState({
+    feeding: false,
+    sleep: false,
+    diaper: false,
+  });
+  const [celebrating, setCelebrating] = useState(false);
 
   const [eventType, setEventType] = useState<GrowthEventType>("checkup");
   const [eventTitle, setEventTitle] = useState("");
@@ -131,7 +146,8 @@ export default function Home() {
             baby_id,
             babies (
               id,
-              name
+              name,
+              birthday
             )
           `,
           )
@@ -148,8 +164,8 @@ export default function Home() {
         const relation = relationData as {
           baby_id: string | null;
           babies:
-            | { id: string; name: string }
-            | { id: string; name: string }[]
+            | { id: string; name: string; birthday: string | null }
+            | { id: string; name: string; birthday: string | null }[]
             | null;
         } | null;
         const babyRaw = relation?.babies;
@@ -164,6 +180,9 @@ export default function Home() {
         setBabyId(currentBabyId);
         if (baby?.name) {
           setBabyName(baby.name);
+        }
+        if (baby?.birthday) {
+          setBabyBirthday(baby.birthday);
         }
 
         const { data: rows, error: eventsError } = await supabase
@@ -236,6 +255,9 @@ export default function Home() {
       let feedingMl = 0;
       let sleepMinutes = 0;
       let diaperCount = 0;
+      let hasFeeding = false;
+      let hasSleep = false;
+      let hasDiaper = false;
 
       (data as {
         type: string;
@@ -243,17 +265,44 @@ export default function Home() {
       }[]).forEach((log) => {
         if (log.type === "feeding") {
           feedingMl += log.details?.amount || 0;
+          hasFeeding = true;
         } else if (log.type === "sleep") {
           sleepMinutes += log.details?.duration_minutes || 0;
+          hasSleep = true;
         } else if (log.type === "diaper") {
           diaperCount += 1;
+          hasDiaper = true;
         }
       });
 
       setTodaySummary({ feedingMl, sleepMinutes, diaperCount });
+      setTodayDone({
+        feeding: hasFeeding,
+        sleep: hasSleep,
+        diaper: hasDiaper,
+      });
+    };
+
+    // 近 90 天记录日期（用于打卡 streak + heatmap）
+    const fetchLogDates = async () => {
+      const ninetyDaysAgo = subDays(startOfDay(new Date()), 90).toISOString();
+      const { data, error } = await supabase
+        .from("logs")
+        .select("start_time")
+        .eq("baby_id", babyId)
+        .gte("start_time", ninetyDaysAgo);
+
+      if (error || !data) return;
+
+      const dates = new Set<string>();
+      (data as { start_time: string }[]).forEach((row) => {
+        dates.add(format(parseISO(row.start_time), "yyyy-MM-dd"));
+      });
+      setLogDates(dates);
     };
 
     fetchToday();
+    fetchLogDates();
   }, [babyId]);
 
   const sortedDesc = useMemo(
@@ -340,6 +389,7 @@ export default function Home() {
     setEvents((prev) => [event, ...prev]);
     setDialogOpen(false);
     resetForm();
+    setCelebrating(true);
   };
 
   const handleDeleteEvent = async (id: string) => {
@@ -376,6 +426,7 @@ export default function Home() {
           <p className="text-xs text-[#9f927d]" suppressHydrationWarning>
             {format(new Date(), "yyyy年MM月dd日 EEEE", { locale: zhCN })}
           </p>
+          <BabyAge birthday={babyBirthday} />
           <div className="mt-3 flex gap-2">
             <span className="rounded-full bg-[#fffdf5]/90 px-3 py-1 text-[11px] text-[#725d42] border border-[#e8dcc8] shadow-sm">
               共 {events.length} 条事件
@@ -384,6 +435,7 @@ export default function Home() {
               待进行 {upcomingCount} 条
             </span>
           </div>
+          <DailyQuote />
         </header>
 
         <Reveal delay={0}>
@@ -417,6 +469,20 @@ export default function Home() {
                   <p className="text-[11px] text-white/85">次尿布</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </Reveal>
+
+        <Reveal delay={40}>
+          <Card className="island-card bg-[#fffdf5]">
+            <CardContent className="space-y-3 p-4">
+              <TaskMonsters
+                feeding={todayDone.feeding}
+                sleep={todayDone.sleep}
+                diaper={todayDone.diaper}
+              />
+              <div className="border-t-2 border-dashed border-[#e8dcc8]" />
+              <StreakHeatmap logDates={logDates} />
             </CardContent>
           </Card>
         </Reveal>
@@ -654,6 +720,15 @@ export default function Home() {
           </section>
         </Reveal>
 
+        <Reveal delay={160}>
+          <ShareCard
+            babyName={babyName}
+            feedingMl={todaySummary.feedingMl}
+            sleepHours={todaySummary.sleepMinutes / 60}
+            diaperCount={todaySummary.diaperCount}
+          />
+        </Reveal>
+
         {/* 浮动新增按钮 */}
         <button
           type="button"
@@ -776,6 +851,11 @@ export default function Home() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <CelebrationOverlay
+          open={celebrating}
+          onClose={() => setCelebrating(false)}
+        />
       </div>
     </main>
   );

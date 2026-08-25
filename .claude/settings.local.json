@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(git commit -m '@ *)",
+      "Bash(git -C D:/maodou88/baby-tracker log --oneline -5)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

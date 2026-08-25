@@ -164,7 +164,7 @@ export default function LoginPage() {
             </Button>
 
             <Button asChild variant="outline" className="w-full h-11 border-[#8ac68a] bg-[#eef6e7] text-[#5a7f38] hover:bg-[#e0f0d4] hover:text-[#4a6f2a]">
-              <Link href="/discover">不登录，先逛逛 👀</Link>
+              <Link href="/games">不登录，去游戏站放松 🎮</Link>
             </Button>
 
             <div className="relative">

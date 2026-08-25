@@ -1073,7 +1073,7 @@ export default function CubePuzzlePage() {
 
         <div className="flex items-center gap-2 pt-1">
           <Button asChild variant="outline" className="flex-1">
-            <Link href="/discover">返回</Link>
+            <Link href="/games">返回</Link>
           </Button>
         </div>
       </div>

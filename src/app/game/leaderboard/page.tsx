@@ -116,7 +116,7 @@ export default function LeaderboardPage() {
             <Link href="/game">🎮 继续玩</Link>
           </Button>
           <Button asChild variant="outline" className="flex-1">
-            <Link href="/">🏠 回首页</Link>
+            <Link href="/games">🏠 回游戏站</Link>
           </Button>
         </div>
       </div>

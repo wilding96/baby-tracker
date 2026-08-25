@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ReactNode } from "react";
+import { useEffect, useState, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { format, differenceInMinutes } from "date-fns";
 import { supabase } from "@/lib/supabase";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { Card } from "@/components/ui/card";
 import {
   Droplets,
@@ -68,6 +69,15 @@ export default function RecordPage() {
   const [endTime, setEndTime] = useState<string>(
     format(new Date(), "yyyy-MM-dd'T'HH:mm"),
   );
+  // 是否只记录入睡时间（宝宝还在睡，先不填醒来时间）
+  const [sleepOnlyStart, setSleepOnlyStart] = useState<boolean>(false);
+  // 进行中的睡眠（已记入睡、还没补醒来）
+  const [ongoingSleep, setOngoingSleep] = useState<{
+    id: string;
+    start_time: string;
+  } | null>(null);
+  // 是否处于「补记醒来时间」模式
+  const [isCompletingSleep, setIsCompletingSleep] = useState<boolean>(false);
 
   // 尿布数据
   const [diaperType, setDiaperType] = useState<DiaperType>("wet");
@@ -78,7 +88,44 @@ export default function RecordPage() {
     const timeStr = format(now, "yyyy-MM-dd'T'HH:mm");
     setStartTime(timeStr);
     setEndTime(timeStr);
+    setSleepOnlyStart(false);
+    setIsCompletingSleep(false);
     setView(newView);
+  };
+
+  // 进入睡眠视图时，查一下有没有「进行中」的睡眠（已记入睡、还没补醒来）
+  useEffect(() => {
+    if (view !== "sleep" || !baby) return;
+
+    let cancelled = false;
+    const load = async () => {
+      const { data } = await supabase
+        .from("logs")
+        .select("id, start_time")
+        .eq("baby_id", baby.id)
+        .eq("type", "sleep")
+        .is("end_time", null)
+        .order("start_time", { ascending: false })
+        .limit(1);
+
+      if (cancelled) return;
+      const first = data?.[0] as { id: string; start_time: string } | undefined;
+      setOngoingSleep(first || null);
+    };
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [view, baby]);
+
+  // 补记醒来时间：把进行中睡眠的入睡时间带进表单，醒来时间默认当前
+  const handleCompleteSleep = () => {
+    if (!ongoingSleep) return;
+    setStartTime(format(new Date(ongoingSleep.start_time), "yyyy-MM-dd'T'HH:mm"));
+    setEndTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+    setSleepOnlyStart(false);
+    setIsCompletingSleep(true);
   };
 
   // 计算时长
@@ -118,16 +165,44 @@ export default function RecordPage() {
         sub_type: diaperType,
       };
     } else if (view === "sleep") {
-      finalEndTime = new Date(endTime).toISOString();
-      details = {
-        duration_minutes: differenceInMinutes(
-          new Date(endTime),
-          new Date(startTime),
-        ),
-      };
+      if (sleepOnlyStart) {
+        // 只记入睡时间：结束时间和时长都留空，等宝宝醒来后再补记
+        finalEndTime = null;
+        details = {
+          duration_minutes: null,
+        };
+      } else {
+        finalEndTime = new Date(endTime).toISOString();
+        details = {
+          duration_minutes: differenceInMinutes(
+            new Date(endTime),
+            new Date(startTime),
+          ),
+        };
+      }
     }
 
-    // 3. 写入数据库 (带上正确的 baby.id)
+    // 3. 补记模式：更新进行中的睡眠，补上醒来时间
+    if (view === "sleep" && isCompletingSleep && ongoingSleep) {
+      const { error } = await supabase
+        .from("logs")
+        .update({
+          end_time: finalEndTime,
+          details: details,
+        })
+        .eq("id", ongoingSleep.id);
+
+      if (error) {
+        alert("补记失败: " + error.message);
+      } else {
+        router.push("/");
+        router.refresh();
+      }
+      setLoading(false);
+      return;
+    }
+
+    // 4. 写入数据库 (带上正确的 baby.id)
     const { error } = await supabase.from("logs").insert({
       baby_id: baby.id, // 👈 这里的 baby.id 来自 useBaby Hook，绝对正确
       type: view,
@@ -317,6 +392,46 @@ export default function RecordPage() {
         onBack={() => setView("menu")}
       >
         <div className="space-y-6">
+          {/* 有进行中的睡眠时，提示可以补记醒来时间 */}
+          {ongoingSleep && !isCompletingSleep && (
+            <div className="rounded-2xl border-2 border-[#f0d992] bg-[#fff7dc] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-[#8a5a13]">
+                    宝宝正在睡觉 😴
+                  </p>
+                  <p className="text-xs text-[#9a6a1f] mt-0.5">
+                    入睡于{" "}
+                    {format(
+                      new Date(ongoingSleep.start_time),
+                      "M月d日 HH:mm",
+                    )}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 border-[#e6c679] bg-white text-[#8a5a13]"
+                  onClick={handleCompleteSleep}
+                >
+                  补记醒来
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {isCompletingSleep && (
+            <div className="rounded-2xl border-2 border-[#c9ddf2] bg-[#eef7ff] p-3 text-center">
+              <p className="text-sm font-bold text-[#4f63c6]">
+                正在补记醒来时间
+              </p>
+              <p className="text-xs text-[#4f63c6]/80 mt-0.5">
+                入睡时间已带出，确认醒来时间后点「完成记录」
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label className="flex items-center gap-2 text-gray-500">
               <Moon size={16} /> 入睡时间
@@ -328,23 +443,51 @@ export default function RecordPage() {
               className="bg-white text-lg font-medium"
             />
           </div>
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2 text-gray-500">
-              <Sun size={16} /> 醒来时间
-            </Label>
-            <Input
-              type="datetime-local"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              className="bg-white text-lg font-medium"
-            />
-          </div>
-          <div className="bg-[#eef0e6] p-4 rounded-3xl text-center border-2 border-[#d4c9b4]">
-            <p className="text-sm text-[#9a835a] mb-1">共睡眠时长</p>
-            <p className="text-2xl font-black text-[#725d42]">
-              {getSleepDuration()}
-            </p>
-          </div>
+
+          {/* 只记录入睡时间开关（补记模式下隐藏，避免误切） */}
+          {!isCompletingSleep && (
+            <div className="flex items-center justify-between gap-3 rounded-2xl border-2 border-[#e8dcc8] bg-[#faf8f2] p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-[#725d42]">
+                  宝宝还在睡
+                </p>
+                <p className="text-xs text-[#9f927d] mt-0.5">
+                  先只记入睡时间，醒来后再补记
+                </p>
+              </div>
+              <Switch
+                checked={sleepOnlyStart}
+                onCheckedChange={setSleepOnlyStart}
+              />
+            </div>
+          )}
+
+          {sleepOnlyStart ? (
+            <div className="bg-[#eef0e6] p-4 rounded-3xl text-center border-2 border-[#d4c9b4]">
+              <p className="text-sm text-[#9a835a] mb-1">当前状态</p>
+              <p className="text-2xl font-black text-[#725d42]">正在睡觉 😴</p>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-gray-500">
+                  <Sun size={16} /> 醒来时间
+                </Label>
+                <Input
+                  type="datetime-local"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="bg-white text-lg font-medium"
+                />
+              </div>
+              <div className="bg-[#eef0e6] p-4 rounded-3xl text-center border-2 border-[#d4c9b4]">
+                <p className="text-sm text-[#9a835a] mb-1">共睡眠时长</p>
+                <p className="text-2xl font-black text-[#725d42]">
+                  {getSleepDuration()}
+                </p>
+              </div>
+            </>
+          )}
         </div>
         <SaveButton
           loading={loading}

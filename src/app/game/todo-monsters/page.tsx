@@ -706,7 +706,7 @@ export default function TodoMonstersPage() {
         }}
       >
         <Link
-          href="/discover"
+          href="/games"
           className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#d4c9b4] bg-[#fffdf5] text-[#7a6a4a] shadow-md hover:shadow-lg hover:bg-[#fff9ec] transition-all"
         >
           <ArrowLeft size={18} />

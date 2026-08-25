@@ -921,7 +921,7 @@ export default function GamePage() {
 
         <div className="flex items-center gap-2 pt-2">
           <Button asChild variant="outline" className="flex-1"><Link href="/game/leaderboard">🏆 排行榜</Link></Button>
-          <Button asChild variant="outline" className="flex-1"><Link href="/discover">🏠 返回</Link></Button>
+          <Button asChild variant="outline" className="flex-1"><Link href="/games">🏠 返回</Link></Button>
         </div>
       </div>
 

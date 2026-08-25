@@ -227,7 +227,7 @@ export default function ReleaseDayGame() {
           {/* 顶部 */}
           <div className="flex justify-between items-center border-b-2 border-[#2C3E50] pb-3 mb-3">
             <div className="flex items-center gap-3">
-              <Link href="/discover" className="text-xs text-[#5D6D7E] hover:text-[#2C3E50] transition-colors flex items-center gap-1 shrink-0">
+              <Link href="/games" className="text-xs text-[#5D6D7E] hover:text-[#2C3E50] transition-colors flex items-center gap-1 shrink-0">
                 &larr; 返回
               </Link>
               <div>
@@ -543,7 +543,7 @@ export default function ReleaseDayGame() {
               <span>📍 状态：<strong className="text-[#FF6B6B]">{STAGE_NAMES[stage] ?? "未知"}</strong></span>
               <span>{stage < 4 ? "🔋 蓄能阶段" : "✨ 已通关"}</span>
             </div>
-            <Link href="/discover" className="italic hover:text-[#2C3E50] transition-colors">&ldquo;对方是最后的甜，代码是掌中的光。&rdquo;</Link>
+            <Link href="/games" className="italic hover:text-[#2C3E50] transition-colors">&ldquo;对方是最后的甜，代码是掌中的光。&rdquo;</Link>
           </div>
         </div>
       </main>

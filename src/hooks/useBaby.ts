@@ -26,6 +26,7 @@ export function useBaby() {
       }
 
       // 2. 核心逻辑：查 baby_users 表，通过 user_id 找到 baby_id
+      //    用 maybeSingle 兼容「一个账号加入多个家庭」的情况，取第一个即可
       const { data, error } = await supabase
         .from("baby_users")
         .select(
@@ -40,13 +41,23 @@ export function useBaby() {
         `,
         )
         .eq("user_id", user.id)
-        .single(); // 假设目前一个用户只管一个宝宝
+        .limit(1)
+        .maybeSingle();
 
-      if (data && data.babies) {
-        // @ts-ignore
-        setBaby(data.babies);
-      } else {
-        console.error("未找到关联宝宝:", error);
+      if (error) {
+        console.error("查询宝宝关联失败:", error);
+        setLoading(false);
+        return;
+      }
+
+      const relation = data as {
+        babies: Baby | Baby[] | null;
+      } | null;
+      const babyRaw = relation?.babies;
+      const baby = Array.isArray(babyRaw) ? babyRaw[0] : babyRaw;
+
+      if (baby) {
+        setBaby(baby);
       }
       setLoading(false);
     };

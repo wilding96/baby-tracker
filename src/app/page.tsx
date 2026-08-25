@@ -17,6 +17,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   CalendarClock,
   Syringe,
   Stethoscope,
@@ -25,6 +33,8 @@ import {
   Plus,
   Droplets,
   BarChart3,
+  Moon,
+  Utensils,
 } from "lucide-react";
 
 type GrowthEventType = "checkup" | "vaccine" | "milestone" | "custom";
@@ -85,6 +95,12 @@ export default function Home() {
   const [events, setEvents] = useState<GrowthEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [todaySummary, setTodaySummary] = useState({
+    feedingMl: 0,
+    sleepMinutes: 0,
+    diaperCount: 0,
+  });
 
   const [eventType, setEventType] = useState<GrowthEventType>("checkup");
   const [eventTitle, setEventTitle] = useState("");
@@ -200,6 +216,43 @@ export default function Home() {
     };
   }, []);
 
+  // 今日护理汇总（喂养奶量 / 睡眠时长 / 尿布次数）
+  useEffect(() => {
+    if (!babyId) return;
+
+    const fetchToday = async () => {
+      const todayStart = startOfDay(new Date()).toISOString();
+      const { data, error } = await supabase
+        .from("logs")
+        .select("type, details")
+        .eq("baby_id", babyId)
+        .gte("start_time", todayStart);
+
+      if (error || !data) return;
+
+      let feedingMl = 0;
+      let sleepMinutes = 0;
+      let diaperCount = 0;
+
+      (data as {
+        type: string;
+        details: { amount?: number; duration_minutes?: number } | null;
+      }[]).forEach((log) => {
+        if (log.type === "feeding") {
+          feedingMl += log.details?.amount || 0;
+        } else if (log.type === "sleep") {
+          sleepMinutes += log.details?.duration_minutes || 0;
+        } else if (log.type === "diaper") {
+          diaperCount += 1;
+        }
+      });
+
+      setTodaySummary({ feedingMl, sleepMinutes, diaperCount });
+    };
+
+    fetchToday();
+  }, [babyId]);
+
   const sortedDesc = useMemo(
     () =>
       [...events].sort(
@@ -291,6 +344,7 @@ export default function Home() {
     }
 
     setEvents((prev) => prev.filter((event) => event.id !== id));
+    setPendingDeleteId(null);
   };
 
   return (
@@ -319,6 +373,39 @@ export default function Home() {
             </span>
           </div>
         </header>
+
+        <Card color="app-green" className="island-card text-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-white flex items-center gap-2 drop-shadow-sm">
+              今日护理
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-1">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
+                <Droplets size={18} className="mx-auto text-white/90" />
+                <p className="mt-1 text-lg font-black">
+                  {todaySummary.feedingMl}
+                </p>
+                <p className="text-[11px] text-white/85">ml 奶量</p>
+              </div>
+              <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
+                <Moon size={18} className="mx-auto text-white/90" />
+                <p className="mt-1 text-lg font-black">
+                  {(todaySummary.sleepMinutes / 60).toFixed(1)}
+                </p>
+                <p className="text-[11px] text-white/85">小时睡眠</p>
+              </div>
+              <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
+                <Utensils size={18} className="mx-auto text-white/90" />
+                <p className="mt-1 text-lg font-black">
+                  {todaySummary.diaperCount}
+                </p>
+                <p className="text-[11px] text-white/85">次尿布</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card
           color="app-yellow"
@@ -442,7 +529,7 @@ export default function Home() {
                           </div>
                           <button
                             type="button"
-                            onClick={() => handleDeleteEvent(event.id)}
+                            onClick={() => setPendingDeleteId(event.id)}
                             className="shrink-0 rounded-full p-1.5 text-[#a0936e] hover:bg-[#f0e8d8] hover:text-red-500 transition-colors"
                             aria-label="删除事件"
                           >
@@ -638,6 +725,38 @@ export default function Home() {
             </div>
           </div>
         </Modal>
+
+        <Dialog
+          open={pendingDeleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) setPendingDeleteId(null);
+          }}
+        >
+          <DialogContent className="rounded-3xl">
+            <DialogHeader>
+              <DialogTitle>删除这条事件？</DialogTitle>
+              <DialogDescription>
+                删除后无法恢复，确定要删除这条成长事件吗？
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setPendingDeleteId(null)}
+              >
+                取消
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() =>
+                  pendingDeleteId && handleDeleteEvent(pendingDeleteId)
+                }
+              >
+                删除
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </main>
   );

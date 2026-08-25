@@ -9,6 +9,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   ChevronRight,
   Bell,
   Moon,
@@ -36,6 +44,8 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState(true);
   // 新增控制安装弹窗的 state
   const [showInstall, setShowInstall] = useState(false);
+  // 退出登录确认弹窗
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
 
   // ✨ 核心逻辑更新：获取宝宝信息 + 邀请码
   useEffect(() => {
@@ -279,18 +289,54 @@ export default function SettingsPage() {
         {/* 退出登录按钮 */}
         <div className="pt-4">
           <button
-            onClick={handleLogout}
+            onClick={() => setLogoutDialogOpen(true)}
             disabled={loading}
             className="w-full flex items-center justify-center gap-2 h-12 text-base font-bold rounded-full border-2 border-red-200 bg-white text-red-500 hover:bg-red-50 hover:border-red-300 active:scale-[0.97] transition-all disabled:opacity-50"
           >
             <LogOut size={18} />
             {loading ? "正在退出..." : "退出登录"}
           </button>
+          <Link
+            href="/games"
+            className="mt-3 w-full flex items-center justify-center gap-2 h-11 text-sm font-bold rounded-full border-2 border-[#e8dcc8] bg-white text-[#a0936e] hover:bg-[#faf8f2] hover:text-[#725d42] active:scale-[0.97] transition-all"
+          >
+            🎮 游戏站
+          </Link>
           <p className="text-center text-xs text-[#9f927d] mt-4">
             Baby Tracker v1.0.0
           </p>
         </div>
       </div>
+
+      <Dialog
+        open={logoutDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) setLogoutDialogOpen(false);
+        }}
+      >
+        <DialogContent className="rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>退出登录？</DialogTitle>
+            <DialogDescription>
+              退出后需要重新登录才能查看宝宝数据。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLogoutDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setLogoutDialogOpen(false);
+                handleLogout();
+              }}
+            >
+              退出登录
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

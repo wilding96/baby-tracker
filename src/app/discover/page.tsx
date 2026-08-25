@@ -1,63 +1,27 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Gamepad2,
-  Plane,
-  Gamepad,
   Heart,
   MessageCircle,
   BarChart3,
   ChevronRight,
-  Box,
-  Ghost,
+  Lock,
+  ClipboardList,
 } from "lucide-react";
 import { Divider } from "animal-island-ui";
-
-const gameCards = [
-  {
-    href: "/game",
-    icon: Gamepad2,
-    bg: "bg-gradient-to-br from-amber-400 to-orange-500",
-    title: "快乐消消乐",
-    desc: "经典三消游戏，放松心情",
-    action: "去玩",
-  },
-  {
-    href: "/game/perspective-match",
-    icon: Box,
-    bg: "bg-gradient-to-br from-pink-400 to-purple-500",
-    title: "方了个方",
-    desc: "3D糖果积木消除，转动视角找同色",
-    action: "去玩",
-  },
-  {
-    href: "/game/raiden",
-    icon: Plane,
-    bg: "bg-gradient-to-br from-slate-600 to-slate-800",
-    title: "雷电战机",
-    desc: "经典射击游戏，不登录也能玩",
-    action: "去玩",
-  },
-  {
-    href: "/game/todo-monsters",
-    icon: Ghost,
-    bg: "bg-gradient-to-br from-red-400 to-rose-500",
-    title: "消灭小怪兽",
-    desc: "把待办变成小怪兽，一只只消灭",
-    action: "去玩",
-  },
-  {
-    href: "/game/release-day",
-    icon: Gamepad,
-    bg: "bg-gradient-to-br from-violet-500 to-purple-700",
-    title: "下班发售日",
-    desc: "叙事交互小游戏，体验下班快乐",
-    action: "去玩",
-  },
-];
+import { supabase } from "@/lib/supabase";
 
 const lifeCards = [
+  {
+    href: "/record",
+    icon: ClipboardList,
+    bg: "bg-gradient-to-br from-green-400 to-teal-500",
+    title: "快速记录",
+    desc: "喂养、睡眠、尿布一键记",
+    action: "记录",
+  },
   {
     href: "/mood",
     icon: Heart,
@@ -88,6 +52,18 @@ const toolCards = [
 ];
 
 export default function DiscoverPage() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const check = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setIsLoggedIn(Boolean(user));
+    };
+    check();
+  }, []);
+
   return (
     <main className="island-page relative min-h-screen overflow-hidden pb-24">
       <div className="island-shell space-y-4">
@@ -95,56 +71,21 @@ export default function DiscoverPage() {
         <div className="pointer-events-none absolute top-60 -left-10 h-28 w-28 rounded-full bg-[#f7cd67]/25 blur-3xl" />
 
         <header className="relative space-y-1">
-          <p className="text-xs font-bold text-[#6fba2c]">Explore</p>
+          <p className="text-xs font-bold text-[#6fba2c]">Care Tools</p>
           <h1 className="text-2xl font-black text-[#725d42] tracking-tight">
-            发现更多
+            育儿工具
           </h1>
           <p className="text-xs text-[#9f927d]">
-            游戏、心情、社区，放松一下
+            记录、心情、家庭留言，都在这里
           </p>
         </header>
 
-        {/* 游戏中心 */}
-        <section>
-          <div className="flex items-center gap-2 mb-3">
-            <Gamepad2 size={16} className="text-[#9a6a1f]" />
-            <span className="text-sm font-bold text-[#725d42]">游戏中心</span>
-          </div>
-          <div className="space-y-2.5">
-            {gameCards.map((card) => (
-              <Link
-                key={card.href}
-                href={card.href}
-                className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm border border-[#e8dcc8] active:scale-[0.98] transition-transform"
-              >
-                <div
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${card.bg} text-white shadow-md`}
-                >
-                  <card.icon size={20} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-[#725d42]">
-                    {card.title}
-                  </p>
-                  <p className="text-xs text-[#9f927d] mt-0.5">{card.desc}</p>
-                </div>
-                <span className="text-xs text-[#5a7f38] font-semibold flex items-center gap-0.5 shrink-0">
-                  {card.action}
-                  <ChevronRight size={14} />
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <Divider type="wave-yellow" />
-
-        {/* 心情 & 社区 */}
+        {/* 记录 & 心情 & 社区 */}
         <section>
           <div className="flex items-center gap-2 mb-3">
             <Heart size={16} className="text-[#d07044]" />
             <span className="text-sm font-bold text-[#725d42]">
-              心情 & 社区
+              记录 & 家庭
             </span>
           </div>
           <div className="space-y-2.5">
@@ -165,7 +106,14 @@ export default function DiscoverPage() {
                   </p>
                   <p className="text-xs text-[#9f927d] mt-0.5">{card.desc}</p>
                 </div>
-                <span className="text-xs text-[#5a7f38] font-semibold flex items-center gap-0.5 shrink-0">
+                <span className="text-xs text-[#5a7f38] font-semibold flex items-center gap-1 shrink-0">
+                  {["/mood", "/board", "/record"].includes(card.href) &&
+                    !isLoggedIn && (
+                      <span className="flex items-center gap-0.5 text-[#9f927d]">
+                        <Lock size={12} />
+                        需登录
+                      </span>
+                    )}
                   {card.action}
                   <ChevronRight size={14} />
                 </span>
@@ -176,7 +124,7 @@ export default function DiscoverPage() {
 
         <Divider type="wave-yellow" />
 
-        {/* 工具 */}
+        {/* 数据工具 */}
         <section>
           <div className="flex items-center gap-2 mb-3">
             <BarChart3 size={16} className="text-[#247b67]" />
@@ -200,7 +148,13 @@ export default function DiscoverPage() {
                   </p>
                   <p className="text-xs text-[#9f927d] mt-0.5">{card.desc}</p>
                 </div>
-                <span className="text-xs text-[#5a7f38] font-semibold flex items-center gap-0.5 shrink-0">
+                <span className="text-xs text-[#5a7f38] font-semibold flex items-center gap-1 shrink-0">
+                  {["/stats"].includes(card.href) && !isLoggedIn && (
+                    <span className="flex items-center gap-0.5 text-[#9f927d]">
+                      <Lock size={12} />
+                      需登录
+                    </span>
+                  )}
                   {card.action}
                   <ChevronRight size={14} />
                 </span>

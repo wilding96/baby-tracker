@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, ClipboardList, Gamepad2, User } from "lucide-react";
+import { Home, ClipboardList, LayoutGrid, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
   { href: "/", label: "首页", icon: Home },
   { href: "/record", label: "记录", icon: ClipboardList },
-  { href: "/discover", label: "发现", icon: Gamepad2 },
+  { href: "/discover", label: "工具", icon: LayoutGrid },
   { href: "/settings", label: "我的", icon: User },
 ];
 
@@ -19,11 +19,10 @@ export default function MobileNav() {
     "/login",
     "/welcome",
     "/auth/callback",
-    "/game/raiden",
-    "/game/release-day",
-    "/game/todo-monsters",
   ];
-  const shouldHide = hideOnPaths.includes(pathname);
+  // 游戏站（/game、/games 及其所有子页面）不显示育儿底部导航
+  const shouldHide =
+    pathname.startsWith("/game") || hideOnPaths.includes(pathname);
 
   if (shouldHide) {
     return null;

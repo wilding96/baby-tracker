@@ -726,6 +726,14 @@ export default function Home() {
             feedingMl={todaySummary.feedingMl}
             sleepHours={todaySummary.sleepMinutes / 60}
             diaperCount={todaySummary.diaperCount}
+            birthday={babyBirthday}
+            nextEventTitle={nextEvent?.title ?? null}
+            nextEventDate={
+              nextEvent ? format(parseISO(nextEvent.date), "M月d日") : null
+            }
+            nextEventType={
+              nextEvent ? eventTypeMap[nextEvent.type].label : null
+            }
           />
         </Reveal>
 

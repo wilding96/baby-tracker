@@ -6,6 +6,33 @@ interface RevealProps {
   children: ReactNode;
   delay?: number;
   className?: string;
+  id?: string;
+}
+
+// 模块级共享 IntersectionObserver：所有 Reveal 共用一个，避免各建一个导致开销堆积
+let sharedObserver: IntersectionObserver | null = null;
+const pending = new WeakMap<Element, () => void>();
+
+function ensureObserver(): IntersectionObserver | null {
+  if (typeof IntersectionObserver === "undefined") return null;
+  if (!sharedObserver) {
+    sharedObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const show = pending.get(entry.target);
+            if (show) {
+              show();
+              pending.delete(entry.target);
+              sharedObserver?.unobserve(entry.target);
+            }
+          }
+        });
+      },
+      { threshold: 0.08, rootMargin: "0px 0px -40px 0px" },
+    );
+  }
+  return sharedObserver;
 }
 
 /**
@@ -17,6 +44,7 @@ export default function Reveal({
   children,
   delay = 0,
   className = "",
+  id,
 }: RevealProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -25,30 +53,25 @@ export default function Reveal({
     const el = ref.current;
     if (!el) return;
 
-    if (typeof IntersectionObserver === "undefined") {
+    const observer = ensureObserver();
+    if (!observer) {
       setVisible(true);
       return;
     }
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setVisible(true);
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.08, rootMargin: "0px 0px -40px 0px" },
-    );
-
+    pending.set(el, () => setVisible(true));
     observer.observe(el);
-    return () => observer.disconnect();
+
+    return () => {
+      pending.delete(el);
+      observer.unobserve(el);
+    };
   }, []);
 
   return (
     <div
       ref={ref}
+      id={id}
       className={`reveal ${visible ? "is-visible" : ""} ${className}`}
       style={{ transitionDelay: `${delay}ms` }}
     >

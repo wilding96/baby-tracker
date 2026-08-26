@@ -23,9 +23,11 @@ import { useCountUp } from "@/hooks/useCountUp";
 import DailyQuote from "@/components/DailyQuote";
 import CelebrationOverlay from "@/components/CelebrationOverlay";
 import BabyAge from "@/components/BabyAge";
+import AgeBadge from "@/components/AgeBadge";
 import StreakHeatmap from "@/components/StreakHeatmap";
 import TaskMonsters from "@/components/TaskMonsters";
 import ShareCard from "@/components/ShareCard";
+import AnchorNav from "@/components/AnchorNav";
 import {
   Dialog,
   DialogContent,
@@ -96,6 +98,14 @@ const eventTypeMap: Record<
     icon: CalendarClock,
   },
 };
+
+const ANCHOR_SECTIONS = [
+  { id: "next", label: "下个事件", color: "#e6a817" }, // 金黄，呼应下个事件卡片
+  { id: "timeline", label: "时间线", color: "#d07044" }, // 橙，呼应时间线暖色节点
+  { id: "today", label: "今日护理", color: "#6fba2c" }, // 绿，呼应今日护理卡片
+  { id: "streak", label: "打卡", color: "#2f8f78" }, // 青绿，呼应打卡徽章
+  { id: "share", label: "分享", color: "#4f63c6" }, // 蓝，呼应分享/统计
+];
 
 export default function Home() {
   const router = useRouter();
@@ -411,83 +421,39 @@ export default function Home() {
   return (
     <main className="island-page relative min-h-screen overflow-hidden pb-24">
       <FloatingParticles count={18} />
+      <AnchorNav sections={ANCHOR_SECTIONS} />
       <div className="island-shell relative z-10 space-y-4">
         <div className="pointer-events-none absolute -top-16 -right-10 h-40 w-40 rounded-full bg-[#f7cd67]/30 blur-3xl" />
         <div className="pointer-events-none absolute top-40 -left-12 h-36 w-36 rounded-full bg-[#8ac68a]/25 blur-3xl" />
 
-        <header className="relative space-y-1 pr-28">
-          {/* <div className="absolute right-0 top-0 origin-top-right scale-[0.55]">
-            <Time />
-          </div> */}
-          <p className="text-xs font-bold text-[#6fba2c]">Baby Tracker</p>
-          <h1 className="text-2xl font-black text-[#725d42] tracking-tight">
-            {babyName} 的成长记录
-          </h1>
-          <p className="text-xs text-[#9f927d]" suppressHydrationWarning>
-            {format(new Date(), "yyyy年MM月dd日 EEEE", { locale: zhCN })}
-          </p>
-          <BabyAge birthday={babyBirthday} />
-          <div className="mt-3 flex gap-2">
-            <span className="rounded-full bg-[#fffdf5]/90 px-3 py-1 text-[11px] text-[#725d42] border border-[#e8dcc8] shadow-sm">
-              共 {events.length} 条事件
-            </span>
-            <span className="rounded-full bg-[#eef6e7] px-3 py-1 text-[11px] text-[#5a7f38] border border-[#d9e8c9] shadow-sm">
-              待进行 {upcomingCount} 条
-            </span>
+        <header className="relative space-y-1">
+          <AgeBadge birthday={babyBirthday} />
+          <div className="pr-24">
+            <p className="text-xs font-bold text-[#6fba2c]">Baby Tracker</p>
+            <h1 className="text-2xl font-black text-[#725d42] tracking-tight">
+              {babyName} 的成长记录
+            </h1>
+            <p className="text-xs text-[#9f927d]" suppressHydrationWarning>
+              {format(new Date(), "yyyy年MM月dd日 EEEE", { locale: zhCN })}
+            </p>
           </div>
+          <BabyAge
+            birthday={babyBirthday}
+            extraBadges={
+              <>
+                <span className="inline-flex items-center rounded-full bg-[#fffdf5]/90 px-2.5 py-1 text-[11px] text-[#725d42] border border-[#e8dcc8] shadow-sm">
+                  共 {events.length} 条事件
+                </span>
+                <span className="inline-flex items-center rounded-full bg-[#eef6e7] px-2.5 py-1 text-[11px] text-[#5a7f38] border border-[#d9e8c9] shadow-sm">
+                  待进行 {upcomingCount} 条
+                </span>
+              </>
+            }
+          />
           <DailyQuote />
         </header>
 
-        <Reveal delay={0}>
-          <Card color="app-green" className="island-card text-white">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-white flex items-center gap-2 drop-shadow-sm">
-                今日护理
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-1">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
-                  <Droplets size={18} className="mx-auto text-white/90" />
-                  <p className="mt-1 text-lg font-black">
-                    {Math.round(feedingMlAnimated)}
-                  </p>
-                  <p className="text-[11px] text-white/85">ml 奶量</p>
-                </div>
-                <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
-                  <Moon size={18} className="mx-auto text-white/90" />
-                  <p className="mt-1 text-lg font-black">
-                    {sleepHoursAnimated.toFixed(1)}
-                  </p>
-                  <p className="text-[11px] text-white/85">小时睡眠</p>
-                </div>
-                <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
-                  <Utensils size={18} className="mx-auto text-white/90" />
-                  <p className="mt-1 text-lg font-black">
-                    {Math.round(diaperCountAnimated)}
-                  </p>
-                  <p className="text-[11px] text-white/85">次尿布</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </Reveal>
-
-        <Reveal delay={40}>
-          <Card className="island-card bg-[#fffdf5]">
-            <CardContent className="space-y-3 p-4">
-              <TaskMonsters
-                feeding={todayDone.feeding}
-                sleep={todayDone.sleep}
-                diaper={todayDone.diaper}
-              />
-              <div className="border-t-2 border-dashed border-[#e8dcc8]" />
-              <StreakHeatmap logDates={logDates} />
-            </CardContent>
-          </Card>
-        </Reveal>
-
-        <Reveal delay={80}>
+        <Reveal delay={0} id="next">
           <Card
             color="app-yellow"
             className="island-card relative overflow-hidden text-[#725d42]"
@@ -560,12 +526,13 @@ export default function Home() {
 
         <Divider type="wave-yellow" />
 
-        <Card color="app-green" className="island-card text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-white flex items-center gap-2 drop-shadow-sm">
-              <Sparkles size={14} className="text-white/90" />
-              成长时间线
-            </CardTitle>
+        <section id="timeline">
+          <Card color="app-green" className="island-card text-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-white flex items-center gap-2 drop-shadow-sm">
+                <Sparkles size={14} className="text-white/90" />
+                成长时间线
+              </CardTitle>
           </CardHeader>
           <CardContent className="p-1">
             {sortedDesc.length === 0 ? (
@@ -664,7 +631,57 @@ export default function Home() {
               </div>
             )}
           </CardContent>
-        </Card>
+          </Card>
+        </section>
+
+        <Reveal delay={40} id="today">
+          <Card color="app-green" className="island-card text-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-white flex items-center gap-2 drop-shadow-sm">
+                今日护理
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-1">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
+                  <Droplets size={18} className="mx-auto text-white/90" />
+                  <p className="mt-1 text-lg font-black">
+                    {Math.round(feedingMlAnimated)}
+                  </p>
+                  <p className="text-[11px] text-white/85">ml 奶量</p>
+                </div>
+                <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
+                  <Moon size={18} className="mx-auto text-white/90" />
+                  <p className="mt-1 text-lg font-black">
+                    {sleepHoursAnimated.toFixed(1)}
+                  </p>
+                  <p className="text-[11px] text-white/85">小时睡眠</p>
+                </div>
+                <div className="rounded-2xl bg-white/20 p-3 text-center ring-1 ring-white/35">
+                  <Utensils size={18} className="mx-auto text-white/90" />
+                  <p className="mt-1 text-lg font-black">
+                    {Math.round(diaperCountAnimated)}
+                  </p>
+                  <p className="text-[11px] text-white/85">次尿布</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Reveal>
+
+        <Reveal delay={80} id="streak">
+          <Card className="island-card bg-[#fffdf5]">
+            <CardContent className="space-y-3 p-4">
+              <TaskMonsters
+                feeding={todayDone.feeding}
+                sleep={todayDone.sleep}
+                diaper={todayDone.diaper}
+              />
+              <div className="border-t-2 border-dashed border-[#e8dcc8]" />
+              <StreakHeatmap logDates={logDates} />
+            </CardContent>
+          </Card>
+        </Reveal>
 
         <Reveal delay={120}>
           <section className="space-y-2.5">
@@ -720,7 +737,7 @@ export default function Home() {
           </section>
         </Reveal>
 
-        <Reveal delay={160}>
+        <Reveal delay={160} id="share">
           <ShareCard
             babyName={babyName}
             feedingMl={todaySummary.feedingMl}

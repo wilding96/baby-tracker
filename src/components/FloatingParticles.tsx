@@ -35,6 +35,14 @@ export default function FloatingParticles({
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
+    // 用户系统开启「减少动效」时直接不渲染粒子，省性能
+    if (
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -69,7 +77,7 @@ export default function FloatingParticles({
     };
 
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       w = window.innerWidth;
       h = window.innerHeight;
       canvas.width = w * dpr;

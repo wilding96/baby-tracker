@@ -8,6 +8,7 @@ import {
   Box,
   Ghost,
   Trophy,
+  Crown,
   ChevronRight,
 } from "lucide-react";
 import { Divider } from "animal-island-ui";
@@ -48,6 +49,13 @@ const games = [
     bg: "bg-gradient-to-br from-violet-500 to-purple-700",
     title: "下班发售日",
     desc: "叙事交互小游戏，体验下班快乐",
+  },
+  {
+    href: "/game/my-re-life",
+    icon: Crown,
+    bg: "bg-gradient-to-br from-fuchsia-500 to-pink-600",
+    title: "我的反差妹妹",
+    desc: "剧情互动游戏，重生逆袭爽文",
   },
   {
     href: "/game/leaderboard",

@@ -987,8 +987,8 @@ main();
       <div
         className="ceo-game-back pointer-events-none absolute z-50"
         style={{
-          top: "max(10px, env(safe-area-inset-top, 0px))",
-          left: "max(10px, env(safe-area-inset-left, 0px))",
+          top: "calc(max(12px, env(safe-area-inset-top, 0px)) + 92px)",
+          left: "max(14px, env(safe-area-inset-left, 0px))",
         }}
       >
         <Link

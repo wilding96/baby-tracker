@@ -974,7 +974,7 @@ main();
 
   return (
     <main
-      className="ceo-game-page min-h-screen pb-24"
+      className="ceo-game-page relative h-screen h-[100dvh] w-full overflow-hidden -mb-20"
       style={{
         backgroundImage:
           "linear-gradient(135deg, #2d1b2e 0%, #1a1a2e 50%, #1f1f3a 100%)",
@@ -983,24 +983,37 @@ main();
           '-apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, "Segoe UI", Arial, Roboto, "PingFang SC", MiSans, "miui", "Hiragino Sans GB", "Microsoft Yahei", sans-serif',
       }}
     >
-      <div id="app" className="ceo-game-app" />
+      <div id="app" className="ceo-game-app absolute inset-0" />
       <div
-        className="ceo-game-back"
-        style={{ display: "flex", justifyContent: "center", padding: "4px 0 0" }}
+        className="ceo-game-back pointer-events-none absolute z-50"
+        style={{
+          top: "calc(max(12px, env(safe-area-inset-top, 0px)) + 92px)",
+          left: "max(14px, env(safe-area-inset-left, 0px))",
+        }}
       >
         <Link
           href="/games"
+          aria-label="返回游戏站"
+          title="返回游戏站"
+          className="pointer-events-auto"
           style={{
-            display: "inline-block",
-            padding: "8px 18px",
+            display: "inline-flex",
+            width: "36px",
+            height: "36px",
+            alignItems: "center",
+            justifyContent: "center",
             borderRadius: "999px",
-            background: "rgba(255,255,255,0.12)",
-            color: "rgba(255,255,255,0.9)",
-            fontSize: "14px",
+            background: "rgba(0,0,0,0.45)",
+            color: "#ffffff",
+            fontSize: "20px",
+            lineHeight: 1,
             textDecoration: "none",
+            backdropFilter: "blur(8px)",
+            border: "1px solid rgba(255,255,255,0.18)",
+            boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
           }}
         >
-          ← 返回游戏站
+          ‹
         </Link>
       </div>
     </main>

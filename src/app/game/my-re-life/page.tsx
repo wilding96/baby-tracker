@@ -985,29 +985,35 @@ main();
     >
       <div id="app" className="ceo-game-app absolute inset-0" />
       <div
-        className="ceo-game-back pointer-events-none absolute left-0 right-0 z-50 flex justify-center"
+        className="ceo-game-back pointer-events-none absolute z-50"
         style={{
-          bottom: "max(12px, env(safe-area-inset-bottom, 0px))",
-          padding: "0 12px",
+          top: "max(10px, env(safe-area-inset-top, 0px))",
+          left: "max(10px, env(safe-area-inset-left, 0px))",
         }}
       >
         <Link
           href="/games"
+          aria-label="返回游戏站"
+          title="返回游戏站"
           className="pointer-events-auto"
           style={{
-            display: "inline-block",
-            padding: "8px 18px",
+            display: "inline-flex",
+            width: "36px",
+            height: "36px",
+            alignItems: "center",
+            justifyContent: "center",
             borderRadius: "999px",
-            background: "rgba(255,255,255,0.12)",
-            color: "rgba(255,255,255,0.9)",
-            fontSize: "14px",
+            background: "rgba(0,0,0,0.45)",
+            color: "#ffffff",
+            fontSize: "20px",
+            lineHeight: 1,
             textDecoration: "none",
             backdropFilter: "blur(8px)",
-            border: "1px solid rgba(255,255,255,0.15)",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+            border: "1px solid rgba(255,255,255,0.18)",
+            boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
           }}
         >
-          ← 返回游戏站
+          ‹
         </Link>
       </div>
     </main>

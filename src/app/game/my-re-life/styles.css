@@ -1,7 +1,13 @@
 .ceo-game-app {
   display: flex;
   padding: 20px;
-  overflow: auto;
+  overflow: hidden;
+}
+
+.ceo-game-page::after {
+  /* 防止 absolute 子元素导致页面滚动时出现 1px 抖动 */
+  display: none;
+  content: "";
 }
 
 .start-screen {
@@ -515,8 +521,7 @@
 
 @media (max-width: 768px) {
   html,
-  body,
-  .ceo-game-app {
+  body {
     height: 100%;
     height: 100dvh;
   }

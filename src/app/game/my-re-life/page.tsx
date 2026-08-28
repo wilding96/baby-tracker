@@ -974,7 +974,7 @@ main();
 
   return (
     <main
-      className="ceo-game-page min-h-screen pb-24"
+      className="ceo-game-page relative h-screen h-[100dvh] w-full overflow-hidden -mb-20"
       style={{
         backgroundImage:
           "linear-gradient(135deg, #2d1b2e 0%, #1a1a2e 50%, #1f1f3a 100%)",
@@ -983,13 +983,17 @@ main();
           '-apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, "Segoe UI", Arial, Roboto, "PingFang SC", MiSans, "miui", "Hiragino Sans GB", "Microsoft Yahei", sans-serif',
       }}
     >
-      <div id="app" className="ceo-game-app" />
+      <div id="app" className="ceo-game-app absolute inset-0" />
       <div
-        className="ceo-game-back"
-        style={{ display: "flex", justifyContent: "center", padding: "4px 0 0" }}
+        className="ceo-game-back pointer-events-none absolute left-0 right-0 z-50 flex justify-center"
+        style={{
+          bottom: "max(12px, env(safe-area-inset-bottom, 0px))",
+          padding: "0 12px",
+        }}
       >
         <Link
           href="/games"
+          className="pointer-events-auto"
           style={{
             display: "inline-block",
             padding: "8px 18px",
@@ -998,6 +1002,9 @@ main();
             color: "rgba(255,255,255,0.9)",
             fontSize: "14px",
             textDecoration: "none",
+            backdropFilter: "blur(8px)",
+            border: "1px solid rgba(255,255,255,0.15)",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
           }}
         >
           ← 返回游戏站

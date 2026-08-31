@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import "./styles.css";
+import { applyOutcome, type ChoiceOutcome, MAX_HEARTS } from "./hearts";
 
 export default function CeoLovesMePage() {
   useEffect(() => {
@@ -10,15 +11,23 @@ export default function CeoLovesMePage() {
     // 原文件顶部 import "./styles.css" 已由本页 import 承接
 interface GameState {
   player: string;
-  power: number;
-  fame: number;
+  hearts: number;
   sceneId: string;
   dialogueIndex: number;
   loop: number;
+  loopStartSceneId: string;
   memories: string[];
 }
 
 interface Choice {
+  text: string;
+  nextSceneId: string;
+  requiresMemory?: string;
+  gainMemory?: string;
+  outcome: ChoiceOutcome;
+}
+
+interface LegacyChoice {
   text: string;
   power: number;
   fame: number;
@@ -41,17 +50,29 @@ interface Scene {
   onLoop?: boolean;
 }
 
+interface RawScene {
+  id: string;
+  title: string;
+  image?: string;
+  imageStops?: { at: number; image?: string; background?: "gray" | "black" }[];
+  dialogue: string[];
+  choices?: LegacyChoice[];
+  isEnding?: boolean;
+  endingType?: "god" | "pride" | "small" | "coward";
+  onLoop?: boolean;
+}
+
 const gameState: GameState = {
   player: "",
-  power: 0,
-  fame: 0,
+  hearts: MAX_HEARTS,
   sceneId: "",
   dialogueIndex: 0,
   loop: 1,
+  loopStartSceneId: "prologue",
   memories: []
 };
 
-const scenes: Scene[] = [
+const rawScenes: RawScene[] = [
   // ============ 序章：人物登场 ============
   {
     id: "prologue",
@@ -525,12 +546,39 @@ const sceneImages: Record<string, string> = {
 
 
 
-for (const scene of scenes) {
+for (const scene of rawScenes) {
   const image = sceneImages[scene.id];
   if (image != null) {
     scene.image = image;
   }
 }
+
+const choiceOutcomes: Record<string, ChoiceOutcome[]> = {
+  prologue: ["safe", "risky", "risky"],
+  "l1-morning": ["safe", "risky", "risky"],
+  "l1-humiliate": ["safe", "risky", "safe"],
+  "l1-claim": ["bonus", "safe", "bonus"],
+  "l2-morning": ["safe", "risky", "bonus"],
+  "l2-meeting": ["risky", "safe", "safe"],
+  "l2-demo": ["safe", "safe", "risky"],
+  "l2-sister": ["safe", "bonus", "risky"],
+  "l2-conspiracy": ["risky", "safe", "risky"],
+  "l3-morning": ["risky", "safe", "bonus"],
+  "l3-board": ["risky", "safe", "risky", "risky"],
+  "l3-reveal": ["safe", "bonus", "safe"],
+  "l3-sister": ["safe", "safe", "safe", "safe"],
+};
+
+const scenes: Scene[] = rawScenes.map((scene) => ({
+  ...scene,
+  choices: scene.choices?.map((choice, index) => ({
+    text: choice.text,
+    nextSceneId: choice.nextSceneId,
+    ...(choice.requiresMemory ? { requiresMemory: choice.requiresMemory } : {}),
+    ...(choice.gainMemory ? { gainMemory: choice.gainMemory } : {}),
+    outcome: choiceOutcomes[scene.id]?.[index] ?? "safe",
+  })),
+}));
 
 const scenesMap = new Map(scenes.map((item) => [item.id, item]));
 
@@ -548,20 +596,20 @@ function initGameUI(): void {
     <h2 id="scene-title" class="scene-title"></h2>
 
     <div class="stats-bar">
-      <div class="stat-item">
-        <span class="stat-label">实力</span>
-        <div class="stat-bar">
-          <div id="power-bar" class="stat-fill power" style="width: 0"></div>
+      <div class="stat-item hearts-item">
+        <span class="stat-label">状态</span>
+        <div class="hearts-meter">
+          <div class="hearts-track">
+            <div class="hearts-fill" id="hearts-fill"></div>
+            <div class="hearts-markers" id="hearts-markers">
+              <span class="heart-marker">❤️</span>
+              <span class="heart-marker">❤️</span>
+              <span class="heart-marker">❤️</span>
+              <span class="heart-marker">❤️</span>
+              <span class="heart-marker">❤️</span>
+            </div>
+          </div>
         </div>
-        <span id="power-value" class="stat-value">0</span>
-      </div>
-
-      <div class="stat-item">
-        <span class="stat-label">声望</span>
-        <div class="stat-bar">
-          <div id="fame-bar" class="stat-fill fame" style="width: 0"></div>
-        </div>
-        <span id="fame-value" class="stat-value">0</span>
       </div>
 
       <div class="stat-item loop-item">
@@ -635,20 +683,16 @@ function updateSceneInfo(title: string, visual: { image?: string; background?: s
 }
 
 function updateStats(): void {
-  const powerBar = document.getElementById("power-bar")!;
-  const powerValue = document.getElementById("power-value")!;
-  const fameBar = document.getElementById("fame-bar")!;
-  const fameValue = document.getElementById("fame-value")!;
+  const hearts = Math.max(0, Math.min(MAX_HEARTS, gameState.hearts));
+  const fill = document.getElementById("hearts-fill")!;
   const loopValue = document.getElementById("loop-value")!;
 
-  const powerClamped = Math.max(0, Math.min(100, gameState.power));
-  const fameClamped = Math.max(0, Math.min(100, gameState.fame));
+  fill.style.width = `${(hearts / MAX_HEARTS) * 100}%`;
 
-  powerBar.style.width = `${powerClamped}%`;
-  powerValue.textContent = `${powerClamped}`;
-
-  fameBar.style.width = `${fameClamped}%`;
-  fameValue.textContent = `${fameClamped}`;
+  document.querySelectorAll(".heart-marker").forEach((marker, index) => {
+    marker.classList.toggle("filled", index < hearts);
+    marker.classList.toggle("empty", index >= hearts);
+  });
 
   loopValue.textContent = `第 ${gameState.loop} 轮`;
 }
@@ -691,13 +735,36 @@ function availableChoices(scene: Scene): Choice[] {
     if (choice.requiresMemory != null && !gameState.memories.includes(choice.requiresMemory)) {
       return false;
     }
-    if (choice.requiresPower != null && gameState.power < choice.requiresPower) {
-      return false;
-    }
-    if (choice.requiresFame != null && gameState.fame < choice.requiresFame) {
-      return false;
-    }
     return true;
+  });
+}
+
+function renderGameOver(): void {
+  const app = document.getElementById("app")!;
+
+  app.innerHTML = `
+<div class="game-over-screen">
+  <div class="game-over-content">
+    <div class="game-over-emoji">💔</div>
+    <h2 class="game-over-title">这一世，你没能走到最后</h2>
+    <p class="game-over-text">命运没有给你重来的机会。但轮回，还在等着你。</p>
+    <div class="game-over-actions">
+      <button class="start-button" id="retry-loop-btn">回到本周目开头</button>
+      <button class="start-button ghost" id="restart-game-btn">重新开始</button>
+    </div>
+  </div>
+</div>
+`;
+
+  document.getElementById("retry-loop-btn")!.addEventListener("click", () => {
+    gameState.hearts = MAX_HEARTS;
+    gameState.dialogueIndex = 0;
+    gameState.sceneId = gameState.loopStartSceneId || "prologue";
+    renderSceneEntry();
+  });
+
+  document.getElementById("restart-game-btn")!.addEventListener("click", () => {
+    location.reload();
   });
 }
 
@@ -766,9 +833,14 @@ function handleChoice(choices: Choice[], choiceIndex: number): void {
   }
 
   const choice = choices[choiceIndex];
+  const result = applyOutcome(gameState.hearts, choice.outcome);
 
-  gameState.power = Math.max(0, Math.min(100, gameState.power + choice.power));
-  gameState.fame = Math.max(0, Math.min(100, gameState.fame + choice.fame));
+  if (result.gameOver) {
+    renderGameOver();
+    return;
+  }
+
+  gameState.hearts = result.hearts;
   gameState.sceneId = choice.nextSceneId;
   gameState.dialogueIndex = 0;
 
@@ -813,10 +885,10 @@ function renderEndingScene(scene: Scene): void {
   }
 }
 
-function enterLoop(nextLoop: number): void {
+function enterLoop(nextLoop: number, startSceneId: string): void {
   gameState.loop = nextLoop;
-  gameState.power = 0;
-  gameState.fame = 0;
+  gameState.hearts = MAX_HEARTS;
+  gameState.loopStartSceneId = startSceneId;
   gameState.sceneId = "";
   gameState.dialogueIndex = 0;
 }
@@ -835,7 +907,7 @@ function renderLoopTransition(nextLoop: number, startSceneId: string): void {
 `;
 
   document.getElementById("loop-continue-btn")!.addEventListener("click", () => {
-    enterLoop(nextLoop);
+    enterLoop(nextLoop, startSceneId);
     gameState.sceneId = startSceneId;
     renderScene();
   });

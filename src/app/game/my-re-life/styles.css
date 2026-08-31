@@ -184,6 +184,7 @@
 }
 
 .game-container {
+  position: relative;
   width: 100%;
   min-width: 600px;
   max-width: 1200px;
@@ -681,6 +682,146 @@
 
 .choice-button:active {
   transform: translateY(0);
+}
+
+.choice-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.choice-label {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.24);
+  border-radius: 999px;
+}
+
+.choice-text {
+  flex: 1;
+}
+
+.choice-button.choice-risky {
+  background-image: linear-gradient(135deg, #f64f59 0%, #ff9a3d 100%);
+  box-shadow: 0 4px 16px rgba(246, 79, 89, 0.36);
+}
+
+.choice-button.choice-safe {
+  background-image: linear-gradient(135deg, #3f7ef0 0%, #36d399 100%);
+  box-shadow: 0 4px 16px rgba(63, 126, 240, 0.28);
+}
+
+.choice-button.choice-bonus {
+  background-image: linear-gradient(135deg, #2f9e63 0%, #7ed957 100%);
+  box-shadow: 0 4px 16px rgba(47, 158, 99, 0.3);
+}
+
+.choice-button.choice-risky:hover {
+  background-image: linear-gradient(135deg, #ff5963 0%, #ffab4f 100%);
+}
+
+.choice-button.choice-safe:hover {
+  background-image: linear-gradient(135deg, #5a92f2 0%, #4fe0a3 100%);
+}
+
+.choice-button.choice-bonus:hover {
+  background-image: linear-gradient(135deg, #37ac6e 0%, #91e26d 100%);
+}
+
+.choice-button:disabled {
+  opacity: 0.62;
+  cursor: wait;
+  transform: none;
+}
+
+.choice-feedback {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.86);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.choice-feedback.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.choice-feedback.risky {
+  background: rgba(126, 24, 35, 0.78);
+}
+
+.choice-feedback.bonus {
+  background: rgba(26, 108, 71, 0.82);
+}
+
+.choice-feedback.safe {
+  background: rgba(28, 66, 121, 0.78);
+}
+
+.choice-feedback-emoji {
+  font-size: 1.1rem;
+}
+
+.hearts-track.hurt {
+  animation: heartHurt 0.42s ease;
+}
+
+.hearts-track.heal {
+  animation: heartHeal 0.42s ease;
+}
+
+@keyframes heartHurt {
+  0%, 100% {
+    filter: none;
+    transform: translateX(0);
+  }
+  25% {
+    filter: brightness(1.7);
+    transform: translateX(-4px);
+  }
+  50% {
+    filter: brightness(1.2);
+    transform: translateX(4px);
+  }
+  75% {
+    filter: brightness(1.5);
+    transform: translateX(-2px);
+  }
+}
+
+@keyframes heartHeal {
+  0% {
+    filter: brightness(1.7);
+    transform: scale(0.94);
+  }
+  60% {
+    filter: brightness(1.15);
+    transform: scale(1.03);
+  }
+  100% {
+    filter: none;
+    transform: scale(1);
+  }
 }
 
 .restart-button {

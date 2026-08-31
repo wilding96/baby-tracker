@@ -626,6 +626,7 @@ function initGameUI(): void {
       <div id="choices-area"></div>
     </div>
   </div>
+  <div id="choice-feedback" class="choice-feedback" aria-hidden="true"></div>
 </div>
 `;
 }
@@ -792,8 +793,13 @@ function renderScene(): void {
     ? `
     <div class="choices-container">
       ${choices.map((choice, index) => `
-        <button class="choice-button" data-index="${index}">
-          ${choice.text}
+        <button class="choice-button choice-${choice.outcome}" data-index="${index}">
+          <span class="choice-copy">
+            <span class="choice-label">
+              ${choice.outcome === "risky" ? "⚠️ 风险" : choice.outcome === "bonus" ? "❤️ 回血" : "✨ 稳妥"}
+            </span>
+            <span class="choice-text">${choice.text}</span>
+          </span>
         </button>
       `).join("")}
     </div>
@@ -813,7 +819,7 @@ function renderScene(): void {
 
     for (const item of document.querySelectorAll(".choice-button")) {
       item.addEventListener("click", (event) => {
-        const index = Number.parseInt((event.target as HTMLElement).dataset.index || "0");
+        const index = Number.parseInt((event.currentTarget as HTMLElement).dataset.index || "0");
         handleChoice(choices, index);
       });
     }
@@ -823,6 +829,36 @@ function renderScene(): void {
       renderScene();
     });
   }
+}
+
+function showChoiceFeedback(outcome: ChoiceOutcome): void {
+  const el = document.getElementById("choice-feedback");
+  if (el == null) {
+    return;
+  }
+
+  const content =
+    outcome === "risky"
+      ? '<span class="choice-feedback-emoji">⚠️</span><span>鲁莽了，命运 -1</span>'
+      : outcome === "bonus"
+        ? '<span class="choice-feedback-emoji">❤️</span><span>选对了，命运 +1</span>'
+        : '<span class="choice-feedback-emoji">✨</span><span>稳妥一步</span>';
+
+  el.innerHTML = content;
+  el.className = `choice-feedback show ${outcome}`;
+
+  const track = document.querySelector(".hearts-track");
+  track?.classList.remove("hurt", "heal");
+  if (outcome === "risky") {
+    track?.classList.add("hurt");
+  } else if (outcome === "bonus") {
+    track?.classList.add("heal");
+  }
+
+  window.setTimeout(() => {
+    el.className = "choice-feedback";
+    track?.classList.remove("hurt", "heal");
+  }, 520);
 }
 
 function handleChoice(choices: Choice[], choiceIndex: number): void {
@@ -836,19 +872,29 @@ function handleChoice(choices: Choice[], choiceIndex: number): void {
   const result = applyOutcome(gameState.hearts, choice.outcome);
 
   if (result.gameOver) {
-    renderGameOver();
+    showChoiceFeedback("risky");
+    window.setTimeout(renderGameOver, 460);
     return;
   }
 
   gameState.hearts = result.hearts;
-  gameState.sceneId = choice.nextSceneId;
-  gameState.dialogueIndex = 0;
+  updateStats();
+  showChoiceFeedback(choice.outcome);
 
-  if (choice.gainMemory != null && !gameState.memories.includes(choice.gainMemory)) {
-    gameState.memories.push(choice.gainMemory);
-  }
+  document.querySelectorAll<HTMLButtonElement>(".choice-button").forEach((button) => {
+    button.disabled = true;
+  });
 
-  renderScene();
+  window.setTimeout(() => {
+    gameState.sceneId = choice.nextSceneId;
+    gameState.dialogueIndex = 0;
+
+    if (choice.gainMemory != null && !gameState.memories.includes(choice.gainMemory)) {
+      gameState.memories.push(choice.gainMemory);
+    }
+
+    renderScene();
+  }, 540);
 }
 
 function renderEndingScene(scene: Scene): void {

@@ -904,45 +904,32 @@ function renderStartScreen(): void {
   app.innerHTML = `
 <div class="start-screen">
   <div class="start-content">
+    <div class="start-badge">✨ 重生爽文剧场</div>
     <h1 class="game-title">我的妹妹不可爱</h1>
     <p class="game-subtitle">重生逆袭 · 无限打脸 · 极致爽文</p>
 
-    <div class="input-group">
-      <label for="player-name">请输入你的称呼</label>
-      <input type="text" id="player-name" placeholder="例如：哥哥" maxlength="10">
+    <div class="start-features">
+      <span>🔁 多周目</span>
+      <span>⚡ 选择分支</span>
+      <span>🏆 多结局</span>
     </div>
 
     <button class="start-button" id="start-game-btn">开始游戏</button>
+    <p class="start-hint">点击开始后，我会先准备好剧情画面</p>
   </div>
 </div>
 `;
 
   const startButton = document.getElementById("start-game-btn")!;
-  const nameInput = document.getElementById("player-name") as HTMLInputElement;
 
   startButton.addEventListener("click", () => {
-    const name = nameInput.value.trim();
-
-    if (name.length > 0) {
-      gameState.player = name;
-      gameState.sceneId = "prologue";
-      renderSceneEntry();
-    } else {
-      nameInput.classList.add("error");
-      setTimeout(() => {
-        nameInput.classList.remove("error");
-      }, 1000);
-    }
-  });
-
-  nameInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") {
-      startButton.click();
-    }
+    gameState.sceneId = "prologue";
+    gameState.dialogueIndex = 0;
+    startWithLoading();
   });
 }
 
-function preloadImages(): void {
+function collectSceneImages(): string[] {
   const urls = new Set<string>();
 
   for (const scene of scenes) {
@@ -958,14 +945,74 @@ function preloadImages(): void {
     }
   }
 
-  for (const url of urls) {
-    const img = new Image();
-    img.src = url;
-  }
+  return Array.from(urls);
+}
+
+function startWithLoading(): void {
+  const app = document.getElementById("app")!;
+
+  app.innerHTML = `
+<div class="loading-screen">
+  <div class="loading-content">
+    <div class="loading-emoji">🎬</div>
+    <h2 class="loading-title">正在准备剧情...</h2>
+    <p class="loading-status" id="loading-status">正在加载第一张画面</p>
+    <div class="loading-bar-track">
+      <div class="loading-bar-fill" id="loading-bar-fill"></div>
+    </div>
+    <p class="loading-percent" id="loading-percent">0%</p>
+  </div>
+</div>
+`;
+
+  const urls = collectSceneImages();
+  const fill = document.getElementById("loading-bar-fill")!;
+  const percent = document.getElementById("loading-percent")!;
+  const status = document.getElementById("loading-status")!;
+
+  let loaded = 0;
+  const total = urls.length;
+
+  const updateProgress = () => {
+    const progress = total === 0 ? 100 : Math.round((loaded / total) * 100);
+    fill.style.width = `${progress}%`;
+    percent.textContent = `${progress}%`;
+    status.textContent =
+      progress >= 100
+        ? "准备就绪，马上进入故事"
+        : `正在加载剧情画面 ${loaded}/${total}`;
+  };
+
+  updateProgress();
+
+  const tasks = urls.map((url) => {
+    return new Promise<void>((resolve) => {
+      const img = new Image();
+      img.decoding = "async";
+      img.onload = () => {
+        loaded += 1;
+        updateProgress();
+        resolve();
+      };
+      img.onerror = () => {
+        loaded += 1;
+        updateProgress();
+        resolve();
+      };
+      img.src = url;
+    });
+  });
+
+  void Promise.all(tasks).then(() => {
+    window.setTimeout(() => {
+      gameState.sceneId = "prologue";
+      gameState.dialogueIndex = 0;
+      renderSceneEntry();
+    }, 250);
+  });
 }
 
 function main(): void {
-  preloadImages();
   renderStartScreen();
 }
 

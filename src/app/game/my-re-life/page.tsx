@@ -89,9 +89,9 @@ const rawScenes: RawScene[] = [
       "我揉了揉眼睛。新的一天，又开始了。"
     ],
     choices: [
-      { text: "神清气爽，晨跑去上班", power: 5, fame: 0, nextSceneId: "l1-morning" },
-      { text: "踩点冲刺，路上跟同事打招呼混脸熟", power: 0, fame: 5, nextSceneId: "l1-morning" },
-      { text: "赖床五分钟，赌一把不会迟到", power: 0, fame: 0, nextSceneId: "l1-morning" }
+      { text: "起早点，晨跑去公司", power: 5, fame: 0, nextSceneId: "l1-morning" },
+      { text: "踩点出门，路上和同事混个脸熟", power: 0, fame: 5, nextSceneId: "l1-morning" },
+      { text: "再赖五分钟，赌不会迟到", power: 0, fame: 0, nextSceneId: "l1-morning" }
     ]
   },
 
@@ -116,9 +116,9 @@ const rawScenes: RawScene[] = [
       "人群最后面，妹妹站着，一直没有说话。"
     ],
     choices: [
-      { text: "攥紧拳头，低头认了", power: 0, fame: 0, nextSceneId: "l1-humiliate" },
+      { text: "攥紧拳头，先低头认了", power: 0, fame: 0, nextSceneId: "l1-humiliate" },
       { text: "「王总，方案有问题我改。」", power: 5, fame: -5, nextSceneId: "l1-humiliate" },
-      { text: "抬眼直视：「这方案不是我交的那版。」", power: 10, fame: -10, nextSceneId: "l1-humiliate" }
+      { text: "抬眼看他：「这版不是我交的。」", power: 10, fame: -10, nextSceneId: "l1-humiliate" }
     ]
   },
   {
@@ -135,9 +135,9 @@ const rawScenes: RawScene[] = [
       "她的声音很冷。可我看见，她走过去的时候，肩膀在轻轻发抖。"
     ],
     choices: [
-      { text: "夜里加班，改方案证明自己", power: 10, fame: 0, nextSceneId: "l1-claim" },
-      { text: "越想越气，半夜爬起来练代码", power: 15, fame: 0, nextSceneId: "l1-claim" },
-      { text: "憋着不吭声，但把今天的事全记下", power: 5, fame: 5, nextSceneId: "l1-claim" }
+      { text: "夜里加班，把方案改到无可挑剔", power: 10, fame: 0, nextSceneId: "l1-claim" },
+      { text: "越气越清醒，半夜爬起来练代码", power: 15, fame: 0, nextSceneId: "l1-claim" },
+      { text: "不吭声，把今天的事先记下", power: 5, fame: 5, nextSceneId: "l1-claim" }
     ]
   },
   {
@@ -158,9 +158,9 @@ const rawScenes: RawScene[] = [
       "「方案我偷偷备份在你 E 盘了，蠢货。」"
     ],
     choices: [
-      { text: "谢谢你，妹妹", power: 10, fame: 0, nextSceneId: "l1-death" },
-      { text: "眼眶发酸，攥紧那张便利贴", power: 5, fame: 5, nextSceneId: "l1-death" },
-      { text: "把便利贴拍照存档——证据在手", power: 15, fame: 0, nextSceneId: "l1-death" }
+      { text: "谢谢，妹妹", power: 10, fame: 0, nextSceneId: "l1-death" },
+      { text: "眼眶发酸，攥紧便利贴", power: 5, fame: 5, nextSceneId: "l1-death" },
+      { text: "把便利贴拍照存下来", power: 15, fame: 0, nextSceneId: "l1-death" }
     ]
   },
   {
@@ -201,8 +201,8 @@ const rawScenes: RawScene[] = [
     ],
     choices: [
       { text: "深呼吸，平静地收拾出门", power: 5, fame: 0, nextSceneId: "l2-meeting" },
-      { text: "对着镜子，一字一句：「我回来了。」", power: 10, fame: 0, nextSceneId: "l2-meeting" },
-      { text: "先给妹妹做顿早饭，再出门", power: 0, fame: 10, nextSceneId: "l2-meeting" }
+      { text: "对着镜子，低声说一句「我回来了」", power: 10, fame: 0, nextSceneId: "l2-meeting" },
+      { text: "先给妹妹做顿早饭", power: 0, fame: 10, nextSceneId: "l2-meeting" }
     ]
   },
   {
@@ -219,9 +219,9 @@ const rawScenes: RawScene[] = [
       "有人小声问：「东区机房昨天才出问题，他什么时候调的？」"
     ],
     choices: [
-      { text: "当场演示，用实力说话", power: 20, fame: 10, nextSceneId: "l2-demo" },
-      { text: "点到为止，收刀入鞘", power: 10, fame: 15, nextSceneId: "l2-demo" },
-      { text: "先留一手，藏三分锋芒", power: 15, fame: 5, nextSceneId: "l2-demo" }
+      { text: "当场演示，用结果说话", power: 20, fame: 10, nextSceneId: "l2-demo" },
+      { text: "点到为止，不再多解释", power: 10, fame: 15, nextSceneId: "l2-demo" },
+      { text: "先留一手，别把底牌亮完", power: 15, fame: 5, nextSceneId: "l2-demo" }
     ]
   },
   {
@@ -242,9 +242,9 @@ const rawScenes: RawScene[] = [
       "陆少的脸色一下子白了。"
     ],
     choices: [
-      { text: "「别紧张，我不会说。不过——以后少踩人。」", power: 10, fame: 20, nextSceneId: "l2-sister" },
-      { text: "「今天的事，还请你保密。」淡淡转身", power: 15, fame: 10, nextSceneId: "l2-sister" },
-      { text: "顺势敲打：「你欠我一个人情。」", power: 20, fame: 5, nextSceneId: "l2-sister" }
+      { text: "「别紧张，我不会说。以后少踩人。」", power: 10, fame: 20, nextSceneId: "l2-sister" },
+      { text: "「今天的事，请替我保密。」", power: 15, fame: 10, nextSceneId: "l2-sister" },
+      { text: "顺势说：「你欠我一个人情。」", power: 20, fame: 5, nextSceneId: "l2-sister" }
     ]
   },
   {
@@ -266,7 +266,7 @@ const rawScenes: RawScene[] = [
     choices: [
       { text: "「有你在，哥什么都不怕。」", power: 10, fame: 0, nextSceneId: "l2-conspiracy" },
       { text: "「回家，我给你做你爱吃的。」", power: 0, fame: 10, nextSceneId: "l2-conspiracy" },
-      { text: "「哥在查一件大事，你帮我盯着点。」", power: 15, fame: 0, nextSceneId: "l2-conspiracy" }
+      { text: "「哥在查件大事，你帮我留意一下。」", power: 15, fame: 0, nextSceneId: "l2-conspiracy" }
     ]
   },
   {
@@ -284,9 +284,9 @@ const rawScenes: RawScene[] = [
       "原来这场轮回里藏着的，不只是几个欺负人的小丑，还有一条想卖掉林氏的蛀虫。"
     ],
     choices: [
-      { text: "深挖下去，揪出幕后黑手", power: 15, fame: 0, nextSceneId: "l2-death", gainMemory: "黑手徽记" },
-      { text: "保存证据，天亮再说", power: 5, fame: 5, nextSceneId: "l2-death" },
-      { text: "故意留下痕迹，引蛇出洞", power: 20, fame: -10, nextSceneId: "l2-death" }
+      { text: "继续查下去，把幕后的人挖出来", power: 15, fame: 0, nextSceneId: "l2-death", gainMemory: "黑手徽记" },
+      { text: "先把证据存好，天亮再说", power: 5, fame: 5, nextSceneId: "l2-death" },
+      { text: "故意留点痕迹，引蛇出洞", power: 20, fame: -10, nextSceneId: "l2-death" }
     ]
   },
   {
@@ -329,9 +329,9 @@ const rawScenes: RawScene[] = [
       "我笑了：「来，哥今天演场大戏给你看。」"
     ],
     choices: [
-      { text: "神挡杀神，佛挡杀佛", power: 20, fame: 0, nextSceneId: "l3-board" },
-      { text: "扮猪吃虎，一剑封喉", power: 15, fame: 10, nextSceneId: "l3-board" },
-      { text: "先给妹妹做顿早饭，告诉她别担心", power: 5, fame: 15, nextSceneId: "l3-board" }
+      { text: "今天谁也不惯着", power: 20, fame: 0, nextSceneId: "l3-board" },
+      { text: "先不动声色，关键时刻再出手", power: 15, fame: 10, nextSceneId: "l3-board" },
+      { text: "先给妹妹做早饭，让她别担心", power: 5, fame: 15, nextSceneId: "l3-board" }
     ]
   },
   {
@@ -348,10 +348,10 @@ const rawScenes: RawScene[] = [
       "会议室一下子炸了。王总的脸色变得惨白。"
     ],
     choices: [
-      { text: "当众揭穿黑手，甩出证据链", power: 30, fame: 20, nextSceneId: "l3-reveal" },
-      { text: "先给董事长看数据，再亮身份", power: 20, fame: 25, nextSceneId: "l3-reveal" },
-      { text: "全网直播，让全行业看着你封神", power: 25, fame: 30, nextSceneId: "l3-reveal" },
-      { text: "连幕后黑手一起揪出来", power: 30, fame: 30, nextSceneId: "l3-reveal", requiresMemory: "黑手徽记" }
+      { text: "当众摊牌，把证据链甩出来", power: 30, fame: 20, nextSceneId: "l3-reveal" },
+      { text: "先把数据给董事长看，再亮身份", power: 20, fame: 25, nextSceneId: "l3-reveal" },
+      { text: "直接全网直播，让所有人看见", power: 25, fame: 30, nextSceneId: "l3-reveal" },
+      { text: "把幕后黑手也一起揪出来", power: 30, fame: 30, nextSceneId: "l3-reveal", requiresMemory: "黑手徽记" }
     ]
   },
   {
@@ -369,9 +369,9 @@ const rawScenes: RawScene[] = [
       "「至于你们几位，」我看向他们，「保安，送客。」"
     ],
     choices: [
-      { text: "接管公司，把林氏带上巅峰", power: 20, fame: 30, nextSceneId: "l3-sister" },
-      { text: "「收拾干净就行，公司还是你们的。」转身就走", power: 30, fame: 20, nextSceneId: "l3-sister" },
-      { text: "先不亮底牌，把谈判筹码攥在手里", power: 25, fame: 25, nextSceneId: "l3-sister" }
+      { text: "接下公司，把林氏带上去", power: 20, fame: 30, nextSceneId: "l3-sister" },
+      { text: "「收拾干净就行，公司还是你们的。」", power: 30, fame: 20, nextSceneId: "l3-sister" },
+      { text: "先不亮底牌，把筹码攥在手里", power: 25, fame: 25, nextSceneId: "l3-sister" }
     ]
   },
   {
@@ -394,9 +394,9 @@ const rawScenes: RawScene[] = [
     ],
     choices: [
       { text: "执掌林氏，重登巅峰", power: 30, fame: 30, nextSceneId: "ending-god", requiresPower: 60, requiresFame: 40 },
-      { text: "深藏功名，低调带妹", power: 20, fame: 40, nextSceneId: "ending-pride", requiresPower: 60 },
+      { text: "深藏功名，低调陪她", power: 20, fame: 40, nextSceneId: "ending-pride", requiresPower: 60 },
       { text: "带妹妹离开，另起炉灶", power: 15, fame: 35, nextSceneId: "ending-small", requiresFame: 45 },
-      { text: "继续装，深藏不露", power: 10, fame: 10, nextSceneId: "ending-coward" }
+      { text: "继续装傻，深藏不露", power: 10, fame: 10, nextSceneId: "ending-coward" }
     ]
   },
 

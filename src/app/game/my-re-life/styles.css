@@ -684,55 +684,6 @@
   transform: translateY(0);
 }
 
-.choice-copy {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.choice-label {
-  flex-shrink: 0;
-  padding: 3px 8px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: #ffffff;
-  background: rgba(0, 0, 0, 0.24);
-  border-radius: 999px;
-}
-
-.choice-text {
-  flex: 1;
-}
-
-.choice-button.choice-risky {
-  background-image: linear-gradient(135deg, #f64f59 0%, #ff9a3d 100%);
-  box-shadow: 0 4px 16px rgba(246, 79, 89, 0.36);
-}
-
-.choice-button.choice-safe {
-  background-image: linear-gradient(135deg, #3f7ef0 0%, #36d399 100%);
-  box-shadow: 0 4px 16px rgba(63, 126, 240, 0.28);
-}
-
-.choice-button.choice-bonus {
-  background-image: linear-gradient(135deg, #2f9e63 0%, #7ed957 100%);
-  box-shadow: 0 4px 16px rgba(47, 158, 99, 0.3);
-}
-
-.choice-button.choice-risky:hover {
-  background-image: linear-gradient(135deg, #ff5963 0%, #ffab4f 100%);
-}
-
-.choice-button.choice-safe:hover {
-  background-image: linear-gradient(135deg, #5a92f2 0%, #4fe0a3 100%);
-}
-
-.choice-button.choice-bonus:hover {
-  background-image: linear-gradient(135deg, #37ac6e 0%, #91e26d 100%);
-}
-
 .choice-button:disabled {
   opacity: 0.62;
   cursor: wait;

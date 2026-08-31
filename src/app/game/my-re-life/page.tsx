@@ -793,13 +793,8 @@ function renderScene(): void {
     ? `
     <div class="choices-container">
       ${choices.map((choice, index) => `
-        <button class="choice-button choice-${choice.outcome}" data-index="${index}">
-          <span class="choice-copy">
-            <span class="choice-label">
-              ${choice.outcome === "risky" ? "⚠️ 风险" : choice.outcome === "bonus" ? "❤️ 回血" : "✨ 稳妥"}
-            </span>
-            <span class="choice-text">${choice.text}</span>
-          </span>
+        <button class="choice-button" data-index="${index}">
+          ${choice.text}
         </button>
       `).join("")}
     </div>

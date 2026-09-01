@@ -54,7 +54,7 @@ const games = [
     href: "/game/my-re-life",
     icon: Crown,
     bg: "bg-gradient-to-br from-fuchsia-500 to-pink-600",
-    title: "我的反差妹妹",
+    title: "这一次，换我护你",
     desc: "剧情互动游戏，重生逆袭爽文",
   },
   {

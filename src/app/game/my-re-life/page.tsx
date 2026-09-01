@@ -974,7 +974,7 @@ function renderStartScreen(): void {
 <div class="start-screen">
   <div class="start-content">
     <div class="start-badge">✨ 重生爽文剧场</div>
-    <h1 class="game-title">我的妹妹不可爱</h1>
+    <h1 class="game-title">这一次，换我护你</h1>
     <p class="game-subtitle">重生逆袭 · 无限打脸 · 极致爽文</p>
 
     <div class="start-features">

@@ -18,6 +18,8 @@ export interface CardDef {
   desc: string;
   /** 同一张卡最多叠几层 */
   max: number;
+  /** 已拥有的层数；只在三选一里填充，用来区分「新获得」和「升级」 */
+  lv?: number;
 }
 
 export interface MetaData {
@@ -68,9 +70,15 @@ export interface Bullet {
   element: Element;
   big: boolean;
   life: number;
+  /** 僚机发出的子弹：造型和本机不同，避免分不清谁打的 */
+  wing: boolean;
+  /** 上一颗命中的敌人 uid：防止穿透弹在同一个敌人身上反复扣穿透次数 */
+  lastUid: number;
 }
 
 export interface Enemy {
+  /** 唯一编号：对象池复用后编号会变，穿透弹靠它区分"同一个敌人" */
+  uid: number;
   x: number;
   y: number;
   vx: number;
@@ -137,6 +145,24 @@ export interface FloatText {
   scale: number;
 }
 
+/** 击破爆炸：一次击杀放一朵，播放 5 帧后消失 */
+export interface Blast {
+  x: number;
+  y: number;
+  t: number;
+  size: number;
+}
+
+/** 连锁闪电的电弧：从命中点连到被电击的敌人 */
+export interface Zap {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  t: number;
+  seed: number;
+}
+
 // ── 局内状态 ──
 
 export interface RunState {
@@ -174,6 +200,8 @@ export interface RunState {
   reviveTimer: number;
   announce: string;
   announceTimer: number;
+  /** 公告的起始帧数：用来算淡入，不然短公告会整段不可见 */
+  announceMax: number;
 
   shake: number;
   bgScroll: number;
@@ -181,6 +209,16 @@ export interface RunState {
   splitTimer: number;
   /** 受击护盾触发后剩余的无敌帧 */
   guardTimer: number;
+
+  // ── 打击感 ──
+  /** 命中停帧：>0 时世界暂停推进，只渲染 */
+  freeze: number;
+  /** 枪口闪光剩余帧数 */
+  muzzle: number;
+  /** 全屏闪光剩余帧数 */
+  flash: number;
+  /** 全屏闪光是否用危险红（受击），否则用纸白（爆炸 / 炸弹） */
+  flashRed: boolean;
 }
 
 // ── 音频适配器（由 React 侧注入，引擎只喊事件名） ──

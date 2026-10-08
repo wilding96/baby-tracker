@@ -230,6 +230,11 @@ export default function PopRaiderGame() {
                     <span className="pop-card-school" style={{ background: SCHOOL_COLOR[c.school] }}>
                       {SCHOOL_NAME[c.school]}
                     </span>
+                    {(c.lv ?? 0) > 0 ? (
+                      <span className="pop-card-up">升级 Lv{c.lv} → {(c.lv ?? 0) + 1}</span>
+                    ) : (
+                      <span className="pop-card-new">新卡</span>
+                    )}
                     <span className="pop-card-icon">{c.icon}</span>
                     <span className="pop-card-name">{c.name}</span>
                     <span className="pop-card-desc">{c.desc}</span>
@@ -345,7 +350,7 @@ const STYLES = `
     font-family: "Arial Black", Impact, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
   }
   .pop-frame {
-    width: 100%; max-width: 420px;
+    width: 100%; max-width: 560px;
     display: flex; flex-direction: column;
     background: ${PAL.paper};
   }
@@ -361,8 +366,10 @@ const STYLES = `
   .pop-stage {
     position: relative;
     width: 100%;
+    /* 用 max-width 而不是 max-height 来适配视口高度：
+       用 max-height 会覆盖 aspect-ratio，把画布纵向压扁 */
+    max-width: calc((100dvh - 44px) * ${GAME_W / GAME_H});
     aspect-ratio: ${GAME_W} / ${GAME_H};
-    max-height: calc(100dvh - 44px);
     margin: 0 auto;
     overflow: hidden;
     background: ${PAL.paper};
@@ -432,6 +439,12 @@ const STYLES = `
     font-size: 10px; letter-spacing: 2px; padding: 2px 0;
   }
   .pop-card-icon { font-size: 24px; line-height: 1.1; }
+  .pop-card-new, .pop-card-up {
+    font-size: 9px; letter-spacing: 1px; padding: 1px 7px;
+    border: 2px solid ${PAL.ink}; font-family: inherit;
+  }
+  .pop-card-new { background: ${PAL.paper}; color: ${PAL.ink}; }
+  .pop-card-up { background: ${PAL.yellow}; color: ${PAL.ink}; }
   .pop-card-name { font-size: 13px; color: ${PAL.ink}; }
   .pop-card-desc {
     font-size: 10px; line-height: 1.35; color: rgba(16,16,16,0.8);

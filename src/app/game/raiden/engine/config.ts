@@ -45,9 +45,9 @@ export const SHIP_INFO: Record<
   ShipType,
   { label: string; blurb: string; element: Element; icon: string }
 > = {
-  ion: { label: "离子炮", blurb: "贯穿激光 · 高单体", element: "electric", icon: "🔫" },
+  ion: { label: "离子炮", blurb: "贯穿激光 · 单体高伤", element: "electric", icon: "🔫" },
   nova: { label: "新星", blurb: "散射火力 · 广覆盖", element: "fire", icon: "💥" },
-  pulse: { label: "脉冲", blurb: "波纹冲击 · 带回旋", element: "ice", icon: "〰️" },
+  pulse: { label: "脉冲", blurb: "扇形冲击 · 弹道飘", element: "ice", icon: "〰️" },
 };
 
 export const SHIP_ELEMENT: Record<ShipType, Element> = {
@@ -79,6 +79,11 @@ export const WEAPON_TABLE: Record<ShipType, { n: number; dmg: number; cd: number
 };
 
 // ── 玩家基础 ──
+/** 僚机挂点：第 k 级僚机相对机身的左右横向偏移（逻辑像素），开火与绘制共用同一套坐标 */
+export const WING_X: readonly number[] = [0, 25, 34];
+/** 僚机相对机身的纵向偏移 */
+export const WING_Y = 2;
+
 export const PLAYER = {
   speed: 4.4,
   hitR: 5,
@@ -146,8 +151,8 @@ export const CARDS: CardDef[] = [
 
   // 元素流
   { id: "chain", name: "连锁闪电", school: "element", icon: "⚡", desc: "命中时电击最近的敌人", max: 2 },
-  { id: "burn", name: "点燃", school: "element", icon: "🔥", desc: "命中叠加灼烧，满层引爆", max: 2 },
-  { id: "chill", name: "冰缓", school: "element", icon: "❄", desc: "命中减速敌人 22%", max: 2 },
+  { id: "burn", name: "点燃", school: "element", icon: "🔥", desc: "命中即灼烧，每半秒掉血", max: 2 },
+  { id: "chill", name: "冰缓", school: "element", icon: "❄", desc: "命中即让敌人减速 22%", max: 2 },
   { id: "mastery", name: "属性精通", school: "element", icon: "◆", desc: "属性克制倍率 +0.5", max: 2 },
 
   // 生存流

@@ -18,6 +18,10 @@ export interface SpriteBank {
   player: Record<ShipType, Sprite>;
   pBullet: Record<ShipType, Sprite>;
   pBulletBig: Record<ShipType, Sprite>;
+  /** 僚机子弹：造型和本机区分开 */
+  pBulletWing: Sprite;
+  /** 僚机本体 */
+  wingman: Sprite;
   eBullet: Sprite;
   eBulletBig: Sprite;
   enemies: Sprite[];
@@ -28,12 +32,43 @@ export interface SpriteBank {
   frag: Sprite;
   fragBig: Sprite;
   badge: Record<Element, Sprite>;
+  muzzle: Sprite;
   halftone: HTMLCanvasElement;
   tile: number;
 }
 
 const TILE = 14;
 const HEAVY = '900 %Ppx Impact, "Arial Black", system-ui, sans-serif';
+
+// ── 位图精灵覆盖层 ──
+// public/game/raiden/pop/<name>.png 存在就用图，不存在就回退到矢量精灵。
+// 生成图四周留了约 10% 白边，所以调用方要按比矢量包围盒更大的尺寸绘制。
+const POP_IMAGES = [
+  "player_ion", "player_nova", "player_pulse",
+  "enemy_small", "enemy_med", "enemy_elite",
+  "boss_fortress", "boss_carrier", "boss_eye",
+  "boom0", "boom1", "boom2", "boom3", "boom4",
+] as const;
+
+const popImages = new Map<string, HTMLImageElement | null>();
+
+/** 惰性加载一张位图；未加载完成时返回 null，调用方自行回退 */
+export function getPopImage(name: string): HTMLImageElement | null {
+  if (typeof window === "undefined") return null;
+  const hit = popImages.get(name);
+  if (hit !== undefined) return hit;
+  popImages.set(name, null); // 占位：避免每帧重复创建 Image
+  const img = new window.Image();
+  img.onload = () => popImages.set(name, img);
+  img.onerror = () => popImages.set(name, null);
+  img.src = `/game/raiden/pop/${name}.png`;
+  return null;
+}
+
+/** 开局一次性发起请求，避免游戏中才逐张出现 */
+export function preloadPopImages() {
+  for (const n of POP_IMAGES) getPopImage(n);
+}
 
 function makeSprite(dpr: number) {
   return (w: number, h: number, draw: (g: CanvasRenderingContext2D, w: number, h: number) => void): Sprite => {
@@ -125,13 +160,23 @@ function drawPlayer(g: CanvasRenderingContext2D, ship: ShipType) {
 function drawPlayerBullet(g: CanvasRenderingContext2D, ship: ShipType, big: boolean) {
   const k = big ? 1.5 : 1;
   if (ship === "ion") {
-    inkFill(g, PAL.blue, 2 * k, (p) => { p.rect(8 - 3 * k, 1, 6 * k, 18 * k); });
+    // 激光：细长光束。白色内芯 + 墨黑描边 + 蓝色外缘，长度接近屏幕高度的 1/10
+    inkFill(g, PAL.blue, 2 * k, (p) => { p.rect(3 * k, 2 * k, 4 * k, 30 * k); });
+    g.fillStyle = "#FFFFFF";
+    g.fillRect(4 * k, 5 * k, 2 * k, 24 * k);
   } else if (ship === "nova") {
-    inkFill(g, PAL.blue, 2 * k, (p) => { p.arc(7, 7, 5 * k, 0, Math.PI * 2); });
+    // 散射：圆形弹
+    inkFill(g, PAL.blue, 2 * k, (p) => { p.arc(7 * k, 7 * k, 5 * k, 0, Math.PI * 2); });
+    g.fillStyle = "#FFFFFF";
+    g.beginPath(); g.arc(7 * k, 7 * k, 2 * k, 0, Math.PI * 2); g.fill();
   } else {
-    inkFill(g, PAL.blue, 2 * k, (p) => {
-      p.moveTo(7, 0); p.lineTo(7 + 5 * k, 7); p.lineTo(7, 14 * k); p.lineTo(7 - 5 * k, 7); p.closePath();
-    });
+    // 波纹：空心环 + 白色核心，和「波纹冲击」的说明对上
+    g.beginPath(); g.arc(8 * k, 8 * k, 6 * k, 0, Math.PI * 2);
+    g.lineWidth = 2.5 * k; g.strokeStyle = PAL.ink; g.stroke();
+    g.beginPath(); g.arc(8 * k, 8 * k, 6 * k, 0, Math.PI * 2);
+    g.lineWidth = 1.5 * k; g.strokeStyle = PAL.blue; g.stroke();
+    g.fillStyle = "#FFFFFF";
+    g.beginPath(); g.arc(8 * k, 8 * k, 2 * k, 0, Math.PI * 2); g.fill();
   }
 }
 
@@ -246,6 +291,7 @@ function boomFrames(sprite: ReturnType<typeof makeSprite>): Sprite[] {
 
 export function createSprites(dpr: number): SpriteBank {
   const sprite = makeSprite(dpr);
+  preloadPopImages();
 
   const player = {
     ion: sprite(30, 34, (g) => drawPlayer(g, "ion")),
@@ -254,31 +300,32 @@ export function createSprites(dpr: number): SpriteBank {
   } as Record<ShipType, Sprite>;
 
   const pBullet = {
-    ion: sprite(14, 20, (g) => drawPlayerBullet(g, "ion", false)),
+    ion: sprite(10, 34, (g) => drawPlayerBullet(g, "ion", false)),
     nova: sprite(14, 14, (g) => drawPlayerBullet(g, "nova", false)),
-    pulse: sprite(14, 16, (g) => drawPlayerBullet(g, "pulse", false)),
+    pulse: sprite(16, 16, (g) => drawPlayerBullet(g, "pulse", false)),
   } as Record<ShipType, Sprite>;
 
   const pBulletBig = {
-    ion: sprite(18, 28, (g) => drawPlayerBullet(g, "ion", true)),
-    nova: sprite(20, 20, (g) => drawPlayerBullet(g, "nova", true)),
-    pulse: sprite(20, 22, (g) => drawPlayerBullet(g, "pulse", true)),
+    ion: sprite(15, 51, (g) => drawPlayerBullet(g, "ion", true)),
+    nova: sprite(21, 21, (g) => drawPlayerBullet(g, "nova", true)),
+    pulse: sprite(24, 24, (g) => drawPlayerBullet(g, "pulse", true)),
   } as Record<ShipType, Sprite>;
 
   // Ben-Day 网点瓦片
+  // 只画点、不画底：这样它能叠在色块之上，做出真正的网点遮色效果。
+  // （如果瓦片带一层不透明的纸白，整块平铺会把底下所有色块盖掉。）
   const halftone = document.createElement("canvas");
   halftone.width = Math.round(TILE * dpr);
   halftone.height = Math.round(TILE * dpr);
   {
     const g = halftone.getContext("2d")!;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    g.fillStyle = PAL.paper;
-    g.fillRect(0, 0, TILE, TILE);
-    g.fillStyle = "rgba(16,16,16,0.16)";
+    g.clearRect(0, 0, TILE, TILE);
+    g.fillStyle = "rgba(16,16,16,0.22)";
     for (let y = 0; y < 2; y++) {
       for (let x = 0; x < 2; x++) {
         g.beginPath();
-        g.arc(3.5 + x * 7, 3.5 + y * 7, 1.7, 0, Math.PI * 2);
+        g.arc(3.5 + x * 7, 3.5 + y * 7, 1.9, 0, Math.PI * 2);
         g.fill();
       }
     }
@@ -291,6 +338,22 @@ export function createSprites(dpr: number): SpriteBank {
     pBulletBig,
     eBullet: sprite(12, 12, (g) => drawEnemyBullet(g, PAL.red, 4.6, false)),
     eBulletBig: sprite(18, 18, (g) => drawEnemyBullet(g, PAL.magenta, 6, true)),
+    // 僚机：菱形机身 + 黄色传感器 + 蓝色尾喷
+    wingman: sprite(20, 20, (g) => {
+      inkFill(g, PAL.cyan, 2, (p) => {
+        p.moveTo(10, 1); p.lineTo(18, 10); p.lineTo(10, 19); p.lineTo(2, 10); p.closePath();
+      });
+      inkFill(g, PAL.yellow, 1.5, (p) => { p.arc(10, 9, 3, 0, Math.PI * 2); });
+      inkFill(g, PAL.blue, 1.2, (p) => { p.rect(8, 15, 4, 4); });
+    }),
+    // 僚机子弹：琥珀色菱形（本机是蓝的），一眼能分清谁打的
+    pBulletWing: sprite(12, 16, (g) => {
+      inkFill(g, PAL.yellow, 2, (p) => {
+        p.moveTo(6, 0); p.lineTo(11, 8); p.lineTo(6, 16); p.lineTo(1, 8); p.closePath();
+      });
+      g.fillStyle = "#FFFFFF";
+      g.beginPath(); g.arc(6, 8, 2, 0, Math.PI * 2); g.fill();
+    }),
     enemies: [
       sprite(24, 22, drawSmall),
       sprite(36, 32, drawMed),
@@ -327,6 +390,15 @@ export function createSprites(dpr: number): SpriteBank {
       fire: sprite(18, 18, (g) => badge(g, PAL.red, "flame")),
       ice: sprite(18, 18, (g) => badge(g, PAL.blue, "flake")),
     },
+    muzzle: sprite(34, 34, (g) => {
+      // 四角星形枪口闪光
+      inkFill(g, PAL.yellow, 2.5, (p) => {
+        p.moveTo(17, 0); p.lineTo(21, 13); p.lineTo(34, 17); p.lineTo(21, 21);
+        p.lineTo(17, 34); p.lineTo(13, 21); p.lineTo(0, 17); p.lineTo(13, 13);
+        p.closePath();
+      });
+      inkFill(g, PAL.paper, 1.5, (p) => { p.arc(17, 17, 3.5, 0, Math.PI * 2); });
+    }),
     halftone,
     tile: TILE,
   };

@@ -15,6 +15,8 @@ import {
   STAGE_SCALE,
   W,
   WEAPON_TABLE,
+  WING_X,
+  WING_Y,
   WORD,
 } from "./config";
 import {
@@ -33,6 +35,7 @@ import {
 import { makePool, type Pool } from "./pools";
 import type {
   AudioAdapter,
+  Blast,
   Bullet,
   CardDef,
   Element,
@@ -47,6 +50,7 @@ import type {
   RunState,
   RunStats,
   ShipType,
+  Zap,
 } from "./types";
 import { stardustFor } from "./meta";
 import { createSprites, type SpriteBank } from "../render/sprites";
@@ -64,6 +68,10 @@ export interface World {
   fr: Pool<Fragment>;
   pt: Pool<Particle>;
   ft: Pool<FloatText>;
+  /** 击破爆炸 */
+  bl: Pool<Blast>;
+  /** 连锁闪电的电弧 */
+  z: Pool<Zap>;
 }
 
 const CAP = {
@@ -73,18 +81,20 @@ const CAP = {
   fr: 260,
   pt: 700,
   ft: 24,
+  bl: 48,
+  z: 40,
 } as const;
 
 function newBullet(): Bullet {
   return {
     x: 0, y: 0, vx: 0, vy: 0, dmg: 0, r: 3,
-    pierce: 0, element: "fire", big: false, life: 0,
+    pierce: 0, element: "fire", big: false, life: 0, wing: false, lastUid: 0,
   };
 }
 
 function newEnemy(): Enemy {
   return {
-    x: 0, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, kind: 0,
+    uid: 0, x: 0, y: 0, vx: 0, vy: 0, hp: 1, maxHp: 1, r: 12, kind: 0,
     element: "fire", resist: null, weak: null, t: 0, fireCd: 60, flash: 0,
     slow: 0, burn: 0, amp: 0, ph: 0, score: 0, energy: 0,
   };
@@ -102,6 +112,14 @@ function newFloat(): FloatText {
   return { x: 0, y: 0, t: 0, life: 1, sprite: 0, scale: 1 };
 }
 
+function newBlast(): Blast {
+  return { x: 0, y: 0, t: 0, size: 64 };
+}
+
+function newZap(): Zap {
+  return { x1: 0, y1: 0, x2: 0, y2: 0, t: 0, seed: 0 };
+}
+
 export function createWorld(): World {
   return {
     s: createRun("ion", null),
@@ -111,6 +129,8 @@ export function createWorld(): World {
     fr: makePool(CAP.fr, newFragment),
     pt: makePool(CAP.pt, newParticle),
     ft: makePool(CAP.ft, newFloat),
+    bl: makePool(CAP.bl, newBlast),
+    z: makePool(CAP.z, newZap),
   };
 }
 
@@ -147,10 +167,15 @@ export function createRun(ship: ShipType, meta: MetaData | null): RunState {
     reviveTimer: 0,
     announce: "",
     announceTimer: 0,
+    announceMax: 0,
     shake: 0,
     bgScroll: 0,
     splitTimer: 0,
     guardTimer: 0,
+    freeze: 0,
+    muzzle: 0,
+    flash: 0,
+    flashRed: false,
   };
 }
 
@@ -161,6 +186,8 @@ function clearWorld(w: World) {
   w.fr.clear();
   w.pt.clear();
   w.ft.clear();
+  w.bl.clear();
+  w.z.clear();
 }
 
 function clamp(v: number, a: number, b: number) {
@@ -198,6 +225,7 @@ export function createEngine(
   let meta: MetaData | null = null;
   let msAvg = 16.7;
   let shootToggle = 0;
+  let enemyUid = 0;
 
   const keys: Record<string, boolean> = Object.create(null);
   let drag: { x: number; y: number; ax: number; ay: number } | null = null;
@@ -229,7 +257,8 @@ export function createEngine(
   }
 
   function onPointerDown(e: PointerEvent) {
-    if (w.s.phase !== "playing" || paused) return;
+    // 倒计时期间也允许拖拽，让玩家能先摆好位置
+    if ((w.s.phase !== "playing" && w.s.phase !== "countdown") || paused) return;
     audio.init();
     const p = toLocal(e.clientX, e.clientY);
     drag = { x: p.x, y: p.y, ax: w.s.player.x, ay: w.s.player.y };
@@ -302,6 +331,27 @@ export function createEngine(
     f.t = 0;
   }
 
+  function spawnBlast(x: number, y: number, size: number) {
+    const b = w.bl.spawn();
+    if (!b) return;
+    b.x = x; b.y = y; b.t = 0; b.size = size;
+  }
+
+  function spawnZap(x1: number, y1: number, x2: number, y2: number) {
+    const z = w.z.spawn();
+    if (!z) return;
+    z.x1 = x1; z.y1 = y1; z.x2 = x2; z.y2 = y2;
+    z.t = 0; z.seed = Math.random() * 100;
+  }
+
+  /** 屏幕中央公告。记下起始帧数，渲染层才能算出正确的淡入 */
+  function announce(text: string, frames: number) {
+    const s = w.s;
+    s.announce = text;
+    s.announceTimer = frames;
+    s.announceMax = frames;
+  }
+
   function fireEnemyBullet(
     x: number, y: number, vx: number, vy: number, element: Element, big: boolean,
   ) {
@@ -313,15 +363,18 @@ export function createEngine(
   }
 
   function firePlayerBullet(
-    x: number, y: number, vx: number, vy: number, dmg: number, big: boolean,
+    x: number, y: number, vx: number, vy: number, dmg: number, big: boolean, wing = false,
   ) {
     const b = w.pb.spawn();
     if (!b) return;
     b.x = x; b.y = y; b.vx = vx; b.vy = vy;
     b.dmg = dmg; b.big = big; b.r = big ? 5 : 3;
     b.element = SHIP_ELEMENT[w.s.ship];
-    b.pierce = pierceCount(w.s);
+    // 离子炮的定位就是「贯穿激光」，天生带 1 次穿透；贯穿卡在此基础上叠加
+    b.pierce = pierceCount(w.s) + (w.s.ship === "ion" ? 1 : 0);
     b.life = 220;
+    b.lastUid = 0;
+    b.wing = wing;
   }
 
   function spawnEnemy(kind: 0 | 1 | 2) {
@@ -330,6 +383,7 @@ export function createEngine(
     const proto = ENEMY_PROTO[kind];
     const scale = Math.pow(STAGE_SCALE.hp, w.s.stage - 1);
     e.kind = kind;
+    e.uid = ++enemyUid;
     e.x = 34 + Math.random() * (W - 68);
     e.y = -30;
     e.r = proto.r;
@@ -375,8 +429,7 @@ export function createEngine(
       t: 0, phase: 0, fireCd: 40, flash: 0, dying: 0,
     };
     s.bossWarn = 90;
-    s.announce = `STAGE ${s.stage} · ${info.name}`;
-    s.announceTimer = 150;
+    announce(`STAGE ${s.stage} · ${info.name}`, 150);
     audio.bossWarning();
     emitFloat(W / 2, H / 2 - 60, WORD.warn, 60);
   }
@@ -392,6 +445,7 @@ export function createEngine(
 
   function firePlayer() {
     const s = w.s;
+    s.muzzle = 4;
     const lvl = weaponStep();
     const mul = damageMul(s);
     const big = s.weaponLv >= 4;
@@ -423,9 +477,9 @@ export function createEngine(
 
     const wings = lv(s, "wings");
     for (let k = 1; k <= wings; k++) {
-      const off = 16 + k * 9;
-      firePlayerBullet(s.player.x - off, s.player.y + 2, 0, -11, lvl.dmg * 0.6 * mul, false);
-      firePlayerBullet(s.player.x + off, s.player.y + 2, 0, -11, lvl.dmg * 0.6 * mul, false);
+      const off = WING_X[k] ?? WING_X[WING_X.length - 1];
+      firePlayerBullet(s.player.x - off, s.player.y + WING_Y, 0, -11, lvl.dmg * 0.6 * mul, false, true);
+      firePlayerBullet(s.player.x + off, s.player.y + WING_Y, 0, -11, lvl.dmg * 0.6 * mul, false, true);
     }
 
     shootToggle ^= 1;
@@ -449,13 +503,20 @@ export function createEngine(
       s.boss.hp -= 130;
       s.boss.flash = 5;
     }
+    // 炸弹是全场最重的一击：停帧和全屏闪光都拉满
+    s.freeze = Math.max(s.freeze, 8);
+    s.flash = 16;
+    s.flashRed = false;
     emitFloat(W / 2, H / 2, WORD.clear, 60);
   }
 
   function killEnemy(i: number) {
     const e = w.en.items[i];
     const s = w.s;
+    // 停帧：精英咬得更久一点（取 max，避免同一帧多杀时被后来的覆盖掉）
+    s.freeze = Math.max(s.freeze, e.kind > 0 ? 3 : 2);
     emitBurst(e.x, e.y, e.kind > 0);
+    spawnBlast(e.x, e.y, e.kind === 0 ? 54 : e.kind === 1 ? 78 : 112);
     audio.explosion(e.kind > 0);
     s.score += e.score;
     s.kills++;
@@ -479,6 +540,9 @@ export function createEngine(
     s.player.hp--;
     s.player.invuln = PLAYER.invulnOnHit + guardFrames(s);
     s.shake = 12;
+    s.freeze = Math.max(s.freeze, 5);
+    s.flash = 12;
+    s.flashRed = true;
     audio.playerHit();
     emitBurst(s.player.x, s.player.y, false);
     emitFloat(s.player.x, s.player.y - 24, WORD.hurt, 40);
@@ -536,17 +600,44 @@ export function createEngine(
   // 步进
   // ═══════════════════════════════════════════════════════════════
 
+  /** 键盘走位（拖拽时由 pointermove 直接接管） */
+  function movePlayer() {
+    if (drag) return;
+    const p = w.s.player;
+    let dx = 0;
+    let dy = 0;
+    if (keys["a"] || keys["arrowleft"]) dx -= 1;
+    if (keys["d"] || keys["arrowright"]) dx += 1;
+    if (keys["w"] || keys["arrowup"]) dy -= 1;
+    if (keys["s"] || keys["arrowdown"]) dy += 1;
+    if (!dx && !dy) return;
+    const l = Math.hypot(dx, dy);
+    p.x = clamp(p.x + (dx / l) * PLAYER.speed, 14, W - 14);
+    p.y = clamp(p.y + (dy / l) * PLAYER.speed, 24, H - 24);
+  }
+
   function step() {
     const s = w.s;
     s.t++;
     s.bgScroll += 0.9;
     if (s.shake > 0) s.shake *= 0.86;
 
+    // ── 命中停帧：让每一下"咬"住一瞬，世界停、画面继续 ──
+    if (s.freeze > 0) {
+      s.freeze--;
+      return;
+    }
+
     if (s.phase === "countdown") {
+      // 倒计时期间就能走位，只是敌人和开火还没开始
+      movePlayer();
       if (--s.countdown <= 0) {
         s.phase = "playing";
-        s.announce = "GO!";
-        s.announceTimer = 60;
+        announce("GO!", 60);
+        s.muzzle = 6;
+        s.flash = 10;
+        s.flashRed = false;
+        s.shake = 8;
         emit("playing", [], null);
       }
       return;
@@ -561,20 +652,10 @@ export function createEngine(
     if (s.splitTimer > 0) s.splitTimer--;
     if (s.announceTimer > 0) s.announceTimer--;
     if (s.bossCooldown > 0) s.bossCooldown--;
+    if (s.muzzle > 0) s.muzzle--;
+    if (s.flash > 0) s.flash--;
 
-    if (!drag) {
-      let dx = 0;
-      let dy = 0;
-      if (keys["a"] || keys["arrowleft"]) dx -= 1;
-      if (keys["d"] || keys["arrowright"]) dx += 1;
-      if (keys["w"] || keys["arrowup"]) dy -= 1;
-      if (keys["s"] || keys["arrowdown"]) dy += 1;
-      if (dx || dy) {
-        const l = Math.hypot(dx, dy);
-        s.player.x = clamp(s.player.x + (dx / l) * PLAYER.speed, 14, W - 14);
-        s.player.y = clamp(s.player.y + (dy / l) * PLAYER.speed, 24, H - 24);
-      }
-    }
+    movePlayer();
 
     if (--s.player.fireCd <= 0) {
       s.player.fireCd = Math.max(3, Math.round(weaponStep().cd * fireRateMul(s)));
@@ -599,6 +680,8 @@ export function createEngine(
     updateEnemyBullets();
     updateFragments();
     updateParticles();
+    updateBlasts();
+    updateZaps();
     updateFloats();
   }
 
@@ -658,7 +741,10 @@ export function createEngine(
     if (B.dying > 0) {
       B.dying--;
       if (B.dying % 6 === 0) {
-        emitBurst(B.x + (Math.random() - 0.5) * 130, B.y + (Math.random() - 0.5) * 80, true);
+        const bx = B.x + (Math.random() - 0.5) * 130;
+        const by = B.y + (Math.random() - 0.5) * 80;
+        emitBurst(bx, by, true);
+        spawnBlast(bx, by, 120 + Math.random() * 40);
         audio.explosion(true);
       }
       if (B.dying <= 0) {
@@ -669,8 +755,9 @@ export function createEngine(
         s.bossCooldown = 90;
         s.shake = 18;
         emitFloat(W / 2, H / 2, WORD.clear, 70);
-        s.announce = `STAGE ${s.stage}`;
-        s.announceTimer = 110;
+        s.flash = Math.max(s.flash, 20);
+        s.flashRed = false;
+        announce(`STAGE ${s.stage}`, 110);
       }
       return;
     }
@@ -678,6 +765,9 @@ export function createEngine(
     if (B.hp <= 0) {
       B.dying = 60;
       w.eb.clear();
+      s.freeze = Math.max(s.freeze, 12);
+      s.flash = Math.max(s.flash, 14);
+      s.flashRed = false;
       audio.explosion(true);
       return;
     }
@@ -692,6 +782,9 @@ export function createEngine(
       emitBurst(B.x, B.y, true);
       emitFloat(B.x, B.y - 44, WORD.elite, 46);
       s.shake = 10;
+      s.freeze = Math.max(s.freeze, 6);
+      s.flash = Math.max(s.flash, 10);
+      s.flashRed = false;
     }
 
     if (B.y < 96) return;
@@ -725,12 +818,14 @@ export function createEngine(
     }
   }
 
-  function applyStatus(e: Enemy, element: Element) {
+  // 卡本身就是效果的来源，不再要求子弹属性匹配。
+  // 之前用 element === "fire"/"ice" 过滤，导致离子炮和脉冲拿到这两张卡时完全失效。
+  function applyStatus(e: Enemy) {
     const s = w.s;
     const burn = lv(s, "burn");
-    if (burn > 0 && element === "fire") e.burn = Math.min(150, e.burn + 45 * burn);
+    if (burn > 0) e.burn = Math.min(150, e.burn + 45 * burn);
     const chill = lv(s, "chill");
-    if (chill > 0 && element === "ice") e.slow = 75;
+    if (chill > 0) e.slow = 75;
   }
 
   /** 连锁闪电：以命中点为中心，电击最近的另一个敌人 */
@@ -754,6 +849,7 @@ export function createEngine(
       : o.resist === element ? ELEMENT_MOD.resist : 1;
     o.hp -= 5 * chainLv * mod;
     o.flash = 2;
+    spawnZap(x, y, o.x, o.y);
     if (o.hp <= 0) killEnemy(best);
   }
 
@@ -776,6 +872,8 @@ export function createEngine(
         const dy = b.y - e.y;
         const rr = e.r + b.r;
         if (dx * dx + dy * dy > rr * rr) continue;
+        // 穿透弹不能反复打同一个敌人，否则穿透次数全被它吃掉
+        if (e.uid === b.lastUid) continue;
 
         const ex = e.x;
         const ey = e.y;
@@ -784,13 +882,14 @@ export function createEngine(
         else if (e.resist === b.element) mod = ELEMENT_MOD.resist;
         e.hp -= b.dmg * mod;
         e.flash = 3;
+        b.lastUid = e.uid;
 
         const dead = e.hp <= 0;
         if (dead) {
           if (lv(s, "split") > 0) s.splitTimer = 120;
           killEnemy(j);
         } else {
-          applyStatus(e, b.element);
+          applyStatus(e);
         }
         chainFrom(ex, ey, b.element, dead ? null : e);
 
@@ -807,6 +906,8 @@ export function createEngine(
           else if (B.resist === b.element) mod = ELEMENT_MOD.resist;
           B.hp -= b.dmg * mod;
           B.flash = 3;
+          // 打 Boss 时也要触发连锁（之前只在打小怪时调用，Boss 战里这张卡等于失效）
+          chainFrom(b.x, b.y, b.element, null);
           if (b.pierce > 0) b.pierce--;
           else consumed = true;
         }
@@ -896,7 +997,8 @@ export function createEngine(
 
   function openCardOffer() {
     const s = w.s;
-    s.offer = rollOffer(s.cards, 3);
+    // 带上已拥有层数：UI 靠它把「新获得」和「升级」区分开
+    s.offer = rollOffer(s.cards, 3).map((c) => ({ ...c, lv: s.cards[c.id] ?? 0 }));
     s.phase = "card";
     audio.card();
     emit("card", s.offer, null);
@@ -911,6 +1013,23 @@ export function createEngine(
       p.vx *= 0.94;
       p.vy = p.vy * 0.94 + 0.05;
       if (p.t >= 4) w.pt.kill(i);
+    }
+  }
+
+  function updateBlasts() {
+    for (let i = w.bl.n - 1; i >= 0; i--) {
+      const b = w.bl.items[i];
+      b.t++;
+      // 10 帧 / 5 张图 = 每张显示 2 帧，整段约 166ms
+      if (b.t >= 10) w.bl.kill(i);
+    }
+  }
+
+  function updateZaps() {
+    for (let i = w.z.n - 1; i >= 0; i--) {
+      const z = w.z.items[i];
+      z.t++;
+      if (z.t >= 8) w.z.kill(i);
     }
   }
 
@@ -972,8 +1091,7 @@ export function createEngine(
       w.s = createRun(ship, m);
       w.s.phase = "countdown";
       w.s.countdown = 3 * 60;
-      w.s.announce = "READY";
-      w.s.announceTimer = 3 * 60;
+      announce("READY", 3 * 60);
       paused = false;
       drag = null;
       audio.init();

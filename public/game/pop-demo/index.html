@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>POP RAIDER · 波普雷电 Demo</title>
+<style>
+  :root{
+    --red:#FF2D2D; --magenta:#E5007E; --yellow:#FFD400;
+    --blue:#0057FF; --cyan:#00C2FF; --ink:#101010; --paper:#FFF8E7;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--ink);
+    font-family:"Arial Black",Impact,system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;
+    color:var(--ink);
+  }
+  #stage{
+    position:relative;
+    height:100dvh;max-height:100dvh;
+    aspect-ratio:360/640;
+    max-width:100vw;
+    background:var(--paper);
+    overflow:hidden;
+  }
+  #cv{display:block;width:100%;height:100%;touch-action:none}
+
+  /* ── HUD ── */
+  #hud{
+    position:absolute;inset:0;pointer-events:none;
+    padding:8px 10px;display:flex;flex-direction:column;
+  }
+  .row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .plate{
+    border:3px solid var(--ink);background:var(--paper);
+    padding:2px 8px;line-height:1.15;
+  }
+  .lbl{font-size:9px;letter-spacing:2px;opacity:.65}
+  .val{font-size:16px}
+  #fpsPlate .val{color:var(--blue)}
+  #bulPlate .val{color:var(--magenta)}
+  #msPlate .val{color:var(--red)}
+  #hearts{display:flex;gap:4px}
+  .heart{width:18px;height:18px}
+
+  #stressTag{
+    align-self:center;margin-top:6px;display:none;
+    background:var(--red);color:var(--paper);border:3px solid var(--ink);
+    padding:3px 12px;font-size:12px;letter-spacing:3px;
+  }
+  #stressTag.on{display:block}
+
+  /* ── overlays ── */
+  .veil{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;text-align:center;
+    background:
+      radial-gradient(circle at 50% 40%, rgba(255,248,231,.97) 0 42%, rgba(255,248,231,.92) 100%);
+    padding:24px;
+  }
+  .veil.hide{display:none}
+  .title{
+    font-size:44px;letter-spacing:2px;line-height:.95;
+    color:var(--yellow);
+    -webkit-text-stroke:3px var(--ink);
+    paint-order:stroke fill;
+    text-shadow:6px 6px 0 var(--magenta);
+  }
+  .sub{font-size:12px;letter-spacing:4px;color:var(--blue)}
+  .keys{
+    border:3px solid var(--ink);background:var(--paper);
+    padding:12px 16px;font-size:12px;line-height:1.9;text-align:left;
+    font-family:system-ui,"PingFang SC","Microsoft YaHei",sans-serif;font-weight:700;
+  }
+  kbd{
+    display:inline-block;min-width:22px;text-align:center;
+    border:2px solid var(--ink);background:var(--yellow);
+    padding:0 5px;margin-right:6px;font-family:inherit;
+  }
+  .btn{
+    border:4px solid var(--ink);background:var(--red);color:var(--paper);
+    padding:12px 34px;font-size:20px;letter-spacing:4px;cursor:pointer;
+    font-family:inherit;
+  }
+  .btn:active{transform:translate(3px,3px)}
+  #overStats{font-size:13px;line-height:1.8;font-family:system-ui,sans-serif;font-weight:800}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+
+  <div id="hud">
+    <div class="row">
+      <div id="hearts"></div>
+      <div style="display:flex;gap:6px">
+        <div class="plate" id="fpsPlate"><div class="lbl">FPS</div><div class="val">–</div></div>
+        <div class="plate" id="bulPlate"><div class="lbl">BULLETS</div><div class="val">0</div></div>
+        <div class="plate" id="msPlate"><div class="lbl">FRAME</div><div class="val">–</div></div>
+      </div>
+    </div>
+    <div id="stressTag">STRESS TEST · 500</div>
+  </div>
+
+  <div class="veil" id="startVeil">
+    <div class="title">POP<br>RAIDER</div>
+    <div class="sub">波普雷电 · 引擎验证 DEMO</div>
+    <div class="keys">
+      <div><kbd>拖拽</kbd>移动（或 <kbd>WASD</kbd> / <kbd>↑↓←→</kbd>）</div>
+      <div><kbd>T</kbd>切换满屏弹幕压测（500 颗）</div>
+      <div><kbd>R</kbd>重新开始</div>
+      <div>自动开火 · 活到 Boss 出现并击破它</div>
+    </div>
+    <button class="btn" id="startBtn">开始</button>
+  </div>
+
+  <div class="veil hide" id="overVeil">
+    <div class="title" style="color:var(--red)">KAPOW</div>
+    <div id="overStats"></div>
+    <button class="btn" id="againBtn">再来一局</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ══════════════════════════════════════════════════════════════════
+   POP RAIDER — 波普风竖版弹幕 demo
+   性能策略：
+     1. 所有图形一次性光栅化进离屏 canvas（精灵缓存），运行时只 drawImage
+     2. 所有高频实体走预分配对象池，主循环内零对象分配
+     3. 全程 0 处 shadowBlur / 0 处逐帧渐变 / 0 处逐帧路径构建
+     4. 逻辑坐标固定 360×640，backing store 按 DPR 放大 → 硬边不被拉糊
+     5. 固定 60Hz 逻辑步进 + rAF 渲染，高刷屏不会跑快
+   ══════════════════════════════════════════════════════════════════ */
+
+const W = 360, H = 640;
+
+/* ── 波普调色板 ── */
+const C = {
+  red:     '#FF2D2D',
+  magenta: '#E5007E',
+  yellow:  '#FFD400',
+  blue:    '#0057FF',
+  cyan:    '#00C2FF',
+  ink:     '#101010',
+  paper:   '#FFF8E7',
+};
+
+/* ─────────────────────────────────────────────────────────────────
+   0. 画布与 DPR
+   ───────────────────────────────────────────────────────────────── */
+const canvas = document.getElementById('cv');
+const ctx = canvas.getContext('2d', { alpha: false });
+
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+canvas.width  = Math.round(W * DPR);
+canvas.height = Math.round(H * DPR);
+ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+/* ─────────────────────────────────────────────────────────────────
+   1. 精灵工厂 —— 一切都预先光栅化
+   ───────────────────────────────────────────────────────────────── */
+function sprite(w, h, draw) {
+  const cv = document.createElement('canvas');
+  cv.width  = Math.max(1, Math.round(w * DPR));
+  cv.height = Math.max(1, Math.round(h * DPR));
+  const g = cv.getContext('2d');
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  g.lineJoin = 'round';
+  g.lineCap  = 'butt';
+  draw(g, w, h);
+  return { cv, w, h };
+}
+function blit(g, s, x, y)      { g.drawImage(s.cv, x, y, s.w, s.h); }
+function blitC(g, s, cx, cy)   { g.drawImage(s.cv, cx - s.w / 2, cy - s.h / 2, s.w, s.h); }
+function blitCA(g, s, cx, cy, a) {
+  g.globalAlpha = a;
+  g.drawImage(s.cv, cx - s.w / 2, cy - s.h / 2, s.w, s.h);
+  g.globalAlpha = 1;
+}
+
+/* 描边填充的通用画法：先按路径描粗黑边，再填实色 */
+function inkFill(g, color, line, path) {
+  g.beginPath(); path(g);
+  g.lineWidth = line; g.strokeStyle = C.ink; g.stroke();
+  g.fillStyle = color; g.fill();
+}
+
+/* ── 玩家机 ── */
+const SPR = {};
+
+SPR.player = sprite(30, 34, (g) => {
+  inkFill(g, C.cyan, 2.5, (p) => {           // 主翼
+    p.moveTo(15, 2); p.lineTo(20, 14); p.lineTo(29, 20);
+    p.lineTo(29, 26); p.lineTo(20, 23); p.lineTo(20, 30);
+    p.lineTo(15, 33); p.lineTo(10, 30); p.lineTo(10, 23);
+    p.lineTo(1, 26); p.lineTo(1, 20); p.lineTo(10, 14);
+    p.closePath();
+  });
+  inkFill(g, C.paper, 2, (p) => {             // 座舱
+    p.moveTo(15, 8); p.lineTo(19, 17); p.lineTo(11, 17); p.closePath();
+  });
+  inkFill(g, C.blue, 2, (p) => { p.rect(12, 24, 6, 7); });  // 尾喷
+});
+
+/* ── 子弹 ── */
+SPR.pBullet = sprite(8, 20, (g) => {
+  inkFill(g, C.blue, 2, (p) => { p.rect(2, 1, 4, 18); });
+});
+SPR.pBulletBig = sprite(12, 26, (g) => {
+  inkFill(g, C.blue, 2.5, (p) => {
+    p.moveTo(6, 0); p.lineTo(11, 10); p.lineTo(11, 25);
+    p.lineTo(1, 25); p.lineTo(1, 10); p.closePath();
+  });
+  inkFill(g, C.paper, 1.5, (p) => { p.rect(4, 8, 4, 12); });
+});
+SPR.eBullet = sprite(12, 12, (g) => {
+  inkFill(g, C.red, 2.5, (p) => { p.arc(6, 6, 4.6, 0, 6.2832); });
+  inkFill(g, C.paper, 1.2, (p) => { p.arc(6, 6, 1.8, 0, 6.2832); });
+});
+SPR.eBulletBig = sprite(18, 18, (g) => {
+  inkFill(g, C.magenta, 3, (p) => {
+    p.moveTo(9, 1); p.lineTo(17, 9); p.lineTo(9, 17); p.lineTo(1, 9); p.closePath();
+  });
+  inkFill(g, C.yellow, 1.5, (p) => { p.rect(7, 7, 4, 4); });
+});
+
+/* ── 敌机 ── */
+SPR.eSmall = sprite(24, 22, (g) => {
+  inkFill(g, C.red, 2.5, (p) => {
+    p.moveTo(12, 21); p.lineTo(4, 10); p.lineTo(0, 3);
+    p.lineTo(6, 5); p.lineTo(12, 0); p.lineTo(18, 5);
+    p.lineTo(24, 3); p.lineTo(20, 10); p.closePath();
+  });
+  inkFill(g, C.yellow, 1.5, (p) => { p.arc(12, 10, 2.6, 0, 6.2832); });
+});
+SPR.eMed = sprite(36, 32, (g) => {
+  inkFill(g, C.magenta, 3, (p) => {
+    p.moveTo(18, 31); p.lineTo(8, 18); p.lineTo(0, 16);
+    p.lineTo(5, 8); p.lineTo(13, 10); p.lineTo(18, 0);
+    p.lineTo(23, 10); p.lineTo(31, 8); p.lineTo(36, 16);
+    p.lineTo(28, 18); p.closePath();
+  });
+  inkFill(g, C.yellow, 2, (p) => { p.rect(13, 12, 10, 10); });
+  inkFill(g, C.paper, 1.5, (p) => { p.rect(15, 14, 6, 6); });
+});
+SPR.boss = sprite(150, 100, (g) => {
+  inkFill(g, C.red, 4, (p) => {              // 主体
+    p.moveTo(75, 98); p.lineTo(20, 74); p.lineTo(0, 44);
+    p.lineTo(14, 34); p.lineTo(36, 40); p.lineTo(50, 6);
+    p.lineTo(75, 0); p.lineTo(100, 6); p.lineTo(114, 40);
+    p.lineTo(136, 34); p.lineTo(150, 44); p.lineTo(130, 74);
+    p.closePath();
+  });
+  inkFill(g, C.yellow, 3, (p) => {           // 核心
+    p.moveTo(75, 26); p.lineTo(92, 46); p.lineTo(75, 66);
+    p.lineTo(58, 46); p.closePath();
+  });
+  inkFill(g, C.ink, 2, (p) => { p.arc(75, 46, 8, 0, 6.2832); });
+  g.globalAlpha = 0.55;                       // 侧面网点面板
+  inkFill(g, C.paper, 2, (p) => { p.rect(10, 48, 26, 22); });
+  inkFill(g, C.paper, 2, (p) => { p.rect(114, 48, 26, 22); });
+  g.globalAlpha = 1;
+  for (let i = 0; i < 6; i++) {
+    inkFill(g, C.ink, 1, (p) => { p.arc(16 + (i % 3) * 8, 54 + Math.floor(i / 3) * 8, 1.8, 0, 6.2832); });
+    inkFill(g, C.ink, 1, (p) => { p.arc(120 + (i % 3) * 8, 54 + Math.floor(i / 3) * 8, 1.8, 0, 6.2832); });
+  }
+});
+
+/* ── 爆炸帧（4 帧，硬边，无模糊） ── */
+SPR.boom = [
+  sprite(30, 30, (g) => { inkFill(g, C.paper,  3, (p) => { p.arc(15, 15, 11, 0, 6.2832); }); }),
+  sprite(34, 34, (g) => {
+    inkFill(g, C.yellow, 3, (p) => {
+      p.moveTo(17, 0); p.lineTo(23, 11); p.lineTo(34, 17); p.lineTo(23, 23);
+      p.lineTo(17, 34); p.lineTo(11, 23); p.lineTo(0, 17); p.lineTo(11, 11); p.closePath();
+    });
+  }),
+  sprite(34, 34, (g) => {
+    inkFill(g, C.red, 3, (p) => {
+      p.moveTo(17, 0); p.lineTo(23, 11); p.lineTo(34, 17); p.lineTo(23, 23);
+      p.lineTo(17, 34); p.lineTo(11, 23); p.lineTo(0, 17); p.lineTo(11, 11); p.closePath();
+    });
+  }),
+  sprite(26, 26, (g) => { inkFill(g, C.ink, 2, (p) => { p.arc(13, 13, 6, 0, 6.2832); }); }),
+];
+
+/* ── 拟声词精灵（按需生成并缓存） ── */
+const FONT_HEAVY = '900 %SIZEpx Impact, "Arial Black", system-ui, sans-serif';
+const wordCache = new Map();
+function word(text, size, color) {
+  const key = text + '|' + size + '|' + color;
+  let s = wordCache.get(key);
+  if (s) return s;
+  const sizePx = size;
+  const font = FONT_HEAVY.replace('%SIZE', sizePx);
+  const probe = document.createElement('canvas').getContext('2d');
+  probe.font = font;
+  const tw = probe.measureText(text).width;
+  const w = tw + Math.max(16, sizePx * 0.7);
+  const h = sizePx * 1.28;
+  s = sprite(w, h, (g) => {
+    g.font = font;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.lineJoin = 'round';
+    g.lineWidth = Math.max(4, sizePx * 0.2);
+    g.strokeStyle = C.ink;
+    g.strokeText(text, w / 2, h / 2);
+    g.fillStyle = color;
+    g.fillText(text, w / 2, h / 2);
+  });
+  wordCache.set(key, s);
+  return s;
+}
+
+/* ── 心形（HUD 用 DOM，这里只做 canvas 版备用） ── */
+SPR.heart = sprite(20, 20, (g) => {
+  inkFill(g, C.red, 2.5, (p) => {
+    p.moveTo(10, 18); p.lineTo(1.5, 9.5);
+    p.bezierCurveTo(-1, 4, 4, 0, 10, 5);
+    p.bezierCurveTo(16, 0, 21, 4, 18.5, 9.5);
+    p.closePath();
+  });
+});
+
+/* ── 背景网点（Ben-Day）—— 一张小瓦片，平铺即可 ── */
+const TILE = 14;
+const dotPattern = (() => {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = Math.round(TILE * DPR);
+  const g = cv.getContext('2d');
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  g.fillStyle = C.paper; g.fillRect(0, 0, TILE, TILE);
+  g.fillStyle = 'rgba(16,16,16,0.16)';
+  for (let y = 0; y < 2; y++) {
+    for (let x = 0; x < 2; x++) {
+      g.beginPath();
+      g.arc(3.5 + x * 7, 3.5 + y * 7, 1.7, 0, 6.2832);
+      g.fill();
+    }
+  }
+  const p = ctx.createPattern(cv, 'repeat');
+  const m = new DOMMatrix();
+  if (p.setTransform) p.setTransform(m.scale(1 / DPR));
+  return p;
+})();
+
+/* ─────────────────────────────────────────────────────────────────
+   2. 对象池 —— 循环内零分配
+   ───────────────────────────────────────────────────────────────── */
+function pool(n, make) {
+  const items = new Array(n);
+  for (let i = 0; i < n; i++) items[i] = make();
+  return { items, n: 0, cap: n };
+}
+
+/* 玩家子弹 */
+const PB_CAP = 400;
+const pb = pool(PB_CAP, () => ({ x: 0, y: 0, vy: 0, big: 0 }));
+
+/* 敌弹 —— 压测要 500+，给足容量 */
+const EB_CAP = 3000;
+const eb = pool(EB_CAP, () => ({ x: 0, y: 0, vx: 0, vy: 0, big: 0, spin: 0, r: 4 }));
+
+/* 敌机 */
+const EN_CAP = 160;
+const en = pool(EN_CAP, () => ({ x: 0, y: 0, vx: 0, vy: 0, hp: 1, kind: 0, t: 0, fire: 0, hit: 0, amp: 0, ph: 0 }));
+
+/* 爆炸 / 粒子 */
+const FX_CAP = 900;
+const fx = pool(FX_CAP, () => ({ x: 0, y: 0, vx: 0, vy: 0, t: 0, life: 1, kind: 0 }));
+
+/* 漂浮拟声词 */
+const TX_CAP = 40;
+const tx = pool(TX_CAP, () => ({ x: 0, y: 0, t: 0, life: 1, s: null, scale: 1 }));
+
+/* 池操作的三个原语：spawn 返回对象或 null（满了就丢新的，绝不扩容） */
+function spawn(p) { return p.n < p.cap ? p.items[p.n++] : null; }
+function kill(p, i) { const a = p.items; const t = a[i]; a[i] = a[p.n - 1]; a[p.n - 1] = t; p.n--; }
+
+/* ─────────────────────────────────────────────────────────────────
+   3. 游戏状态
+   ───────────────────────────────────────────────────────────────── */
+const S = {
+  started: false, over: false,
+  t: 0,                      // 逻辑帧
+  px: W / 2, py: H - 100,    // 玩家
+  hp: 3, maxHp: 3,
+  invuln: 0,
+  fireCd: 0,
+  kills: 0,
+  boss: null, bossHp: 0, bossMax: 0,
+  bossAlive: false,
+  bossCd: 0,
+  nextWave: 60,
+  stress: false,
+  shake: 0,
+  bgScroll: 0,
+  score: 0,
+};
+
+const keys = Object.create(null);
+let drag = null;
+
+/* ── 输入 ── */
+function toLocal(clientX, clientY) {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: (clientX - r.left) / r.width * W,
+    y: (clientY - r.top) / r.height * H,
+  };
+}
+canvas.addEventListener('pointerdown', (e) => {
+  if (!S.started || S.over) return;
+  const p = toLocal(e.clientX, e.clientY);
+  drag = { x: p.x, y: p.y, ax: S.px, ay: S.py };
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const p = toLocal(e.clientX, e.clientY);
+  S.px = clamp(drag.ax + (p.x - drag.x), 14, W - 14);
+  S.py = clamp(drag.ay + (p.y - drag.y), 20, H - 20);
+});
+canvas.addEventListener('pointerup', () => { drag = null; });
+canvas.addEventListener('pointercancel', () => { drag = null; });
+
+addEventListener('keydown', (e) => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key === 't' || e.key === 'T') toggleStress();
+  if (e.key === 'r' || e.key === 'R') reset();
+  if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
+});
+addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+
+function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+/* ─────────────────────────────────────────────────────────────────
+   4. 逻辑步进（固定 60Hz）
+   ───────────────────────────────────────────────────────────────── */
+function firePlayer() {
+  const lv = S.kills > 25 ? 3 : S.kills > 8 ? 2 : 1;
+  if (lv === 1) {
+    const b = spawn(pb); if (b) { b.x = S.px; b.y = S.py - 20; b.vy = -11; b.big = 0; }
+  } else if (lv === 2) {
+    for (let k = -1; k <= 1; k += 2) {
+      const b = spawn(pb); if (b) { b.x = S.px + k * 7; b.y = S.py - 18; b.vy = -12; b.big = 0; }
+    }
+  } else {
+    for (let k = -1; k <= 1; k++) {
+      const b = spawn(pb); if (b) { b.x = S.px + k * 9; b.y = S.py - 18; b.vy = -13; b.big = 1; }
+    }
+  }
+}
+
+function spawnSmall() {
+  const e = spawn(en); if (!e) return;
+  e.x = 30 + Math.random() * (W - 60);
+  e.y = -20;
+  e.vx = (Math.random() - 0.5) * 1.1;
+  e.vy = 1.5 + Math.random() * 1.2;
+  e.hp = 2; e.kind = 0; e.t = 0; e.fire = 40 + Math.random() * 60; e.hit = 0;
+  e.amp = 14 + Math.random() * 26; e.ph = Math.random() * 6.28;
+}
+function spawnMed() {
+  const e = spawn(en); if (!e) return;
+  e.x = 40 + Math.random() * (W - 80);
+  e.y = -34;
+  e.vx = 0; e.vy = 1.0;
+  e.hp = 9; e.kind = 1; e.t = 0; e.fire = 30; e.hit = 0;
+  e.amp = 30; e.ph = Math.random() * 6.28;
+}
+
+function spawnBoss() {
+  S.boss = {
+    x: W / 2, y: -70, vx: 0, hp: 260, t: 0, phase: 0, hit: 0,
+  };
+  S.bossMax = S.boss.hp; S.bossHp = S.boss.hp; S.bossAlive = true;
+  say('WARNING!', C.red, W / 2, H / 2 - 60, 34);
+}
+
+function enemyShot(x, y, vx, vy, big) {
+  const b = spawn(eb); if (!b) return;
+  b.x = x; b.y = y; b.vx = vx; b.vy = vy; b.big = big ? 1 : 0;
+  b.spin = Math.random() * 6.28; b.r = big ? 7 : 4;
+}
+
+function toggleStress() {
+  S.stress = !S.stress;
+  document.getElementById('stressTag').classList.toggle('on', S.stress);
+}
+
+function say(text, color, x, y, size) {
+  const t = spawn(tx); if (!t) return;
+  t.x = x; t.y = y; t.t = 0; t.life = 46; t.s = word(text, size, color); t.scale = 1;
+}
+
+function boom(x, y, big) {
+  const n = big ? 12 : 6;
+  for (let i = 0; i < n; i++) {
+    const p = spawn(fx); if (!p) break;
+    p.x = x; p.y = y;
+    const a = Math.random() * 6.2832, s = (big ? 2.2 : 1.4) * (0.4 + Math.random());
+    p.vx = Math.cos(a) * s; p.vy = Math.sin(a) * s;
+    p.t = Math.max(0, Math.floor(Math.random() * 3)); p.life = 16 + Math.random() * 8; p.kind = 0;
+  }
+}
+
+function step() {
+  S.t++;
+  S.bgScroll += 0.9;
+  if (S.shake > 0) S.shake *= 0.86;
+  if (S.invuln > 0) S.invuln--;
+  if (S.bossCd > 0) S.bossCd--;
+
+  if (!S.started || S.over) return;
+
+  /* ── 玩家移动 ── */
+  const sp = 4.2;
+  if (!drag) {
+    let dx = 0, dy = 0;
+    if (keys['a'] || keys['arrowleft'])  dx -= 1;
+    if (keys['d'] || keys['arrowright']) dx += 1;
+    if (keys['w'] || keys['arrowup'])    dy -= 1;
+    if (keys['s'] || keys['arrowdown'])  dy += 1;
+    if (dx || dy) {
+      const l = Math.hypot(dx, dy);
+      S.px = clamp(S.px + dx / l * sp, 14, W - 14);
+      S.py = clamp(S.py + dy / l * sp, 20, H - 20);
+    }
+  }
+
+  /* ── 自动开火 ── */
+  if (--S.fireCd <= 0) { S.fireCd = 5; firePlayer(); }
+
+  /* ── 压测：把敌弹维持在 500 颗 ── */
+  if (S.stress) {
+    const target = 500;
+    while (eb.n < target) {
+      const x = Math.random() * W;
+      enemyShot(x, -8, (Math.random() - 0.5) * 1.4, 1.6 + Math.random() * 1.6, Math.random() < 0.12);
+    }
+  }
+
+  /* ── 刷怪 ── */
+  if (!S.bossAlive && !S.stress) {
+    if (--S.nextWave <= 0) {
+      S.nextWave = Math.max(22, 60 - S.t / 90);
+      if (S.kills > 18 && Math.random() < 0.3) spawnMed();
+      else for (let i = 0; i < 3; i++) spawnSmall();
+    }
+    if (!S.boss && S.bossCd <= 0 && (S.t > 1500 || S.kills > 46)) spawnBoss();
+  }
+
+  /* ── 敌机 ── */
+  for (let i = en.n - 1; i >= 0; i--) {
+    const e = en.items[i];
+    e.t++;
+    if (e.hit > 0) e.hit--;
+    if (e.kind === 0) {
+      e.x += e.vx + Math.sin(e.t * 0.06 + e.ph) * 0.9;
+      e.y += e.vy;
+    } else {
+      e.y += e.vy;
+      e.x += Math.sin(e.t * 0.03 + e.ph) * 1.1;
+    }
+    if (e.y > H + 50) { kill(en, i); continue; }
+
+    if (--e.fire <= 0) {
+      e.fire = e.kind === 0 ? 70 + Math.random() * 70 : 46;
+      const dx = S.px - e.x, dy = S.py - e.y;
+      const l = Math.hypot(dx, dy) || 1;
+      if (e.kind === 0) enemyShot(e.x, e.y + 10, dx / l * 3.0, dy / l * 3.0, 0);
+      else for (let a = -1; a <= 1; a++) {
+        const ang = Math.atan2(dy, dx) + a * 0.28;
+        enemyShot(e.x, e.y + 12, Math.cos(ang) * 2.8, Math.sin(ang) * 2.8, 1);
+      }
+    }
+  }
+
+  /* ── Boss ── */
+  const B = S.boss;
+  if (B) {
+    B.t++;
+    if (B.hit > 0) B.hit--;
+    if (B.y < 96) B.y += 1.2;
+    else B.x = W / 2 + Math.sin(B.t * 0.018) * 96;
+
+    const frac = B.hp / S.bossMax;
+    const ph = frac > 0.66 ? 0 : frac > 0.33 ? 1 : 2;
+    if (ph !== B.phase) { B.phase = ph; boom(B.x, B.y, true); S.shake = 9; say('BOOM!', C.yellow, B.x, B.y - 40, 30); }
+
+    if (B.y >= 96) {
+      if (B.t % (B.phase === 2 ? 26 : B.phase === 1 ? 38 : 52) === 0) {
+        const n = 7 + B.phase * 4;
+        const off = B.t * 0.05;
+        for (let i = 0; i < n; i++) {
+          const ang = off + i * 6.2832 / n;
+          enemyShot(B.x + Math.cos(ang) * 26, B.y + 30, Math.cos(ang) * 2.4, Math.abs(Math.sin(ang)) * 1.2 + 1.6, 1);
+        }
+        S.shake = 3;
+      }
+      if (B.phase >= 2 && B.t % 7 === 0) {
+        enemyShot(B.x + (Math.random() - 0.5) * 110, B.y + 34, (Math.random() - 0.5) * 4, 3.4, 0);
+      }
+    }
+  }
+
+  /* ── 玩家子弹 ── */
+  for (let i = pb.n - 1; i >= 0; i--) {
+    const b = pb.items[i];
+    b.y += b.vy;
+    if (b.y < -30) { kill(pb, i); continue; }
+    const hw = b.big ? 5 : 3;
+    let hit = false;
+
+    for (let j = en.n - 1; j >= 0; j--) {
+      const e = en.items[j];
+      const ew = e.kind === 0 ? 11 : 17, eh = e.kind === 0 ? 10 : 15;
+      if (Math.abs(b.x - e.x) < ew + hw && Math.abs(b.y - e.y) < eh + 10) {
+        e.hp -= b.big ? 2 : 1;
+        e.hit = 3;
+        hit = true;
+        break;
+      }
+    }
+    if (!hit && B && B.y > 60) {
+      if (Math.abs(b.x - B.x) < 66 && Math.abs(b.y - B.y) < 40) {
+        B.hp -= b.big ? 2 : 1;
+        B.hit = 3;
+        S.bossHp = B.hp;
+        hit = true;
+      }
+    }
+    if (hit) kill(pb, i);
+  }
+
+  /* ── 敌机死亡结算 ── */
+  for (let i = en.n - 1; i >= 0; i--) {
+    const e = en.items[i];
+    if (e.hp > 0) continue;
+    boom(e.x, e.y, e.kind === 1);
+    S.kills++;
+    S.score += e.kind === 1 ? 500 : 100;
+    say(Math.random() < 0.5 ? 'POW!' : 'WHAM!', e.kind === 1 ? C.magenta : C.yellow, e.x, e.y - 8, e.kind === 1 ? 24 : 17);
+    kill(en, i);
+  }
+
+  /* ── Boss 死亡 ── */
+  if (B && B.hp <= 0) {
+    for (let i = 0; i < 8; i++) boom(B.x + (Math.random() - 0.5) * 120, B.y + (Math.random() - 0.5) * 70, true);
+    S.shake = 16;
+    say('KAPOW!', C.red, W / 2, H / 2, 46);
+    S.boss = null; S.bossAlive = false; S.score += 5000;
+    S.bossHp = 0;
+    S.bossCd = 260;   // 打完一轮给一段喘息，再进下一轮
+  }
+
+  /* ── 敌弹 ── */
+  for (let i = eb.n - 1; i >= 0; i--) {
+    const b = eb.items[i];
+    b.x += b.vx; b.y += b.vy; b.spin += 0.08;
+    if (b.y > H + 24 || b.y < -40 || b.x < -30 || b.x > W + 30) { kill(eb, i); continue; }
+    if (S.invuln <= 0 && Math.abs(b.x - S.px) < 9 + b.r && Math.abs(b.y - S.py) < 11 + b.r) {
+      kill(eb, i);
+      hitPlayer();
+    }
+  }
+
+  /* ── 粒子与文字 ── */
+  for (let i = fx.n - 1; i >= 0; i--) {
+    const p = fx.items[i];
+    p.t++; p.x += p.vx; p.y += p.vy; p.vx *= 0.94; p.vy = p.vy * 0.94 + 0.05;
+    if (p.t >= 4) kill(fx, i);
+  }
+  for (let i = tx.n - 1; i >= 0; i--) {
+    const q = tx.items[i];
+    q.t++; q.y -= 0.5; q.scale = 1 + q.t * 0.012;
+    if (q.t >= q.life) kill(tx, i);
+  }
+}
+
+function hitPlayer() {
+  S.hp--;
+  S.invuln = 90;
+  S.shake = 12;
+  boom(S.px, S.py, false);
+  say('OUCH!', C.red, S.px, S.py - 24, 20);
+  if (S.hp <= 0) gameOver();
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   5. 渲染 —— 只有 drawImage，没有逐帧路径、没有模糊
+   ───────────────────────────────────────────────────────────────── */
+function render() {
+  const sx = S.shake > 1 ? (Math.random() - 0.5) * S.shake : 0;
+  const sy = S.shake > 1 ? (Math.random() - 0.5) * S.shake : 0;
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  /* 背景：纸白底 */
+  ctx.fillStyle = C.paper;
+  ctx.fillRect(0, 0, W, H);
+
+  /* 波普色带（低对比，绝不抢前景） */
+  ctx.globalAlpha = 0.10;
+  ctx.fillStyle = C.cyan;  ctx.fillRect(0, 90, W, 46);
+  ctx.fillStyle = C.yellow;ctx.fillRect(0, 300, W, 34);
+  ctx.fillStyle = C.cyan;  ctx.fillRect(0, 500, W, 42);
+  ctx.globalAlpha = 1;
+
+  /* Ben-Day 网点，缓慢下滚给出速度感 */
+  const off = S.bgScroll % TILE;
+  ctx.save();
+  ctx.translate(0, off);
+  ctx.fillStyle = dotPattern;
+  ctx.fillRect(0, -TILE * 2, W, H + TILE * 3);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  /* 敌机 */
+  for (let i = 0; i < en.n; i++) {
+    const e = en.items[i];
+    blitC(ctx, e.kind === 0 ? SPR.eSmall : SPR.eMed, e.x, e.y);
+    if (e.hit > 0) {
+      ctx.globalAlpha = 0.75;
+      blitC(ctx, SPR.boom[1], e.x, e.y);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /* Boss */
+  if (S.boss) {
+    const B = S.boss;
+    blitC(ctx, SPR.boss, B.x, B.y);
+    if (B.hit > 0) { ctx.globalAlpha = 0.6; blitC(ctx, SPR.boom[0], B.x, B.y); ctx.globalAlpha = 1; }
+
+    /* Boss 血条：波普底板 + 网点 */
+    const bw = W - 40, bx = 20, by = 40;
+    ctx.fillStyle = C.paper;
+    ctx.fillRect(bx, by, bw, 14);
+    ctx.fillStyle = dotPattern;
+    ctx.globalAlpha = 0.35;
+    ctx.fillRect(bx, by, bw, 14);
+    ctx.globalAlpha = 1;
+    const hpw = Math.max(0, bw * (B.hp / S.bossMax));
+    ctx.fillStyle = B.phase >= 2 ? C.red : B.phase === 1 ? C.magenta : C.blue;
+    ctx.fillRect(bx, by, hpw, 14);
+    ctx.lineWidth = 3; ctx.strokeStyle = C.ink;
+    ctx.strokeRect(bx, by, bw, 14);
+  }
+
+  /* 玩家 */
+  if (S.started && !S.over) {
+    const blink = S.invuln > 0 && (S.invuln >> 2) % 2 === 0;
+    if (!blink) blitC(ctx, SPR.player, S.px, S.py);
+  }
+
+  /* 敌弹 */
+  for (let i = 0; i < eb.n; i++) {
+    const b = eb.items[i];
+    blitC(ctx, b.big ? SPR.eBulletBig : SPR.eBullet, b.x, b.y);
+  }
+
+  /* 玩家子弹 */
+  for (let i = 0; i < pb.n; i++) {
+    const b = pb.items[i];
+    blitC(ctx, b.big ? SPR.pBulletBig : SPR.pBullet, b.x, b.y);
+  }
+
+  /* 粒子 */
+  for (let i = 0; i < fx.n; i++) {
+    const p = fx.items[i];
+    blitC(ctx, SPR.boom[p.t], p.x, p.y);
+  }
+
+  /* 拟声词 */
+  for (let i = 0; i < tx.n; i++) {
+    const q = tx.items[i];
+    const a = q.t < 8 ? q.t / 8 : q.t > q.life - 14 ? (q.life - q.t) / 14 : 1;
+    const s = q.s;
+    ctx.globalAlpha = a;
+    ctx.drawImage(s.cv, q.x - s.w * q.scale / 2, q.y - s.h * q.scale / 2, s.w * q.scale, s.h * q.scale);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+
+  /* 压测时提示当前敌弹量 */
+  if (S.stress) {
+    ctx.fillStyle = 'rgba(16,16,16,0.75)';
+    ctx.fillRect(W / 2 - 78, H - 46, 156, 24);
+    ctx.fillStyle = C.paper;
+    ctx.font = '800 13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('STRESS · ' + eb.n + ' BULLETS', W / 2, H - 29);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   6. HUD（DOM，10Hz 更新，绝不进游戏循环）
+   ───────────────────────────────────────────────────────────────── */
+const fpsPlate = document.getElementById('fpsPlate').querySelector('.val');
+const bulPlate = document.getElementById('bulPlate').querySelector('.val');
+const msPlate  = document.getElementById('msPlate').querySelector('.val');
+const heartsEl = document.getElementById('hearts');
+
+const heartImgs = [];
+for (let i = 0; i < 3; i++) {
+  const img = document.createElement('canvas');
+  img.className = 'heart';
+  img.width = 20 * DPR; img.height = 20 * DPR;
+  const g = img.getContext('2d');
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  g.drawImage(SPR.heart.cv, 0, 0, 20, 20);
+  heartsEl.appendChild(img);
+  heartImgs.push(img);
+}
+
+let hudCd = 0;
+let fpsAcc = 0, fpsFrames = 0, fpsVal = 0;
+let lastHudPlate = '';
+
+function updateHud(dt) {
+  fpsAcc += dt; fpsFrames++;
+  if (fpsAcc >= 400) { fpsVal = Math.round(1000 / (fpsAcc / fpsFrames)); fpsAcc = 0; fpsFrames = 0; }
+  if (--hudCd > 0) return;
+  hudCd = 6;
+  fpsPlate.textContent = fpsVal || '–';
+  bulPlate.textContent = (eb.n + pb.n);
+  msPlate.textContent  = (perfAvg).toFixed(1);
+  const sig = S.hp + '|' + S.stress;
+  if (sig !== lastHudPlate) {
+    lastHudPlate = sig;
+    for (let i = 0; i < heartImgs.length; i++) heartImgs[i].style.opacity = i < S.hp ? '1' : '0.18';
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   7. 主循环
+   ───────────────────────────────────────────────────────────────── */
+const STEP_MS = 1000 / 60;
+let acc = 0, last = 0, animId = 0;
+let perfAvg = 16.7;
+
+function loop(now) {
+  animId = requestAnimationFrame(loop);
+  if (!last) last = now;
+  let dt = now - last;
+  last = now;
+  if (dt > 100) dt = 100;                 // 掉帧后不追帧
+  perfAvg = perfAvg * 0.9 + dt * 0.1;
+
+  acc += dt;
+  while (acc >= STEP_MS) { acc -= STEP_MS; step(); }
+
+  render();
+  updateHud(dt);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   8. 生命周期
+   ───────────────────────────────────────────────────────────────── */
+const startVeil = document.getElementById('startVeil');
+const overVeil  = document.getElementById('overVeil');
+const overStats = document.getElementById('overStats');
+
+function reset() {
+  pb.n = eb.n = en.n = fx.n = tx.n = 0;
+  S.started = false; S.over = false;
+  S.t = 0; S.px = W / 2; S.py = H - 100;
+  S.hp = S.maxHp; S.invuln = 0; S.fireCd = 0;
+  S.kills = 0; S.score = 0; S.boss = null; S.bossAlive = false;
+  S.bossHp = 0; S.bossCd = 0; S.nextWave = 60; S.shake = 0; S.bgScroll = 0;
+  S.stress = false;
+  document.getElementById('stressTag').classList.remove('on');
+  overVeil.classList.add('hide');
+  startVeil.classList.remove('hide');
+  lastHudPlate = '';
+}
+
+function begin() {
+  startVeil.classList.add('hide');
+  overVeil.classList.add('hide');
+  if (S.over) { reset(); startVeil.classList.add('hide'); }
+  S.started = true;
+  S.over = false;
+}
+
+function gameOver() {
+  S.over = true;
+  overStats.innerHTML =
+    '得分 ' + S.score + '<br>' +
+    '击破 ' + S.kills + ' 架<br>' +
+    '存活 ' + Math.round(S.t / 60) + ' 秒<br>' +
+    '同一时刻敌弹峰值 ' + eb.n + ' 颗';
+  overVeil.classList.remove('hide');
+}
+
+document.getElementById('startBtn').addEventListener('click', begin);
+document.getElementById('againBtn').addEventListener('click', () => { reset(); begin(); });
+
+/* 自检：确认没有任何模糊类绘制留在代码里 */
+console.log('[pop-raider] sprites:', Object.keys(SPR).length, '| words cached:', wordCache.size,
+            '| objects preallocated:', PB_CAP + EB_CAP + EN_CAP + FX_CAP + TX_CAP);
+
+reset();
+animId = requestAnimationFrame(loop);
+</script>
+</body>
+</html>

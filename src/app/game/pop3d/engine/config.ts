@@ -320,6 +320,7 @@ export const CARDS: readonly CardDef[] = [
   { id: "leech", name: "击杀回血", school: "survival", icon: "✚", desc: "每 40 击杀回复 6 点生命", max: 2 },
   { id: "guard", name: "受击护盾", school: "survival", icon: "🛡", desc: "受伤后无敌时间 +1.2 秒", max: 1 },
   { id: "last", name: "背水一战", school: "survival", icon: "‼", desc: "生命低于 30% 时伤害 ×1.6", max: 1 },
+  { id: "orbit", name: "环绕护卫弹", school: "survival", icon: "◎", desc: "Lv1 两发 / Lv2 四发绕机公转，接触伤害", max: 2 },
   // 经济流
   { id: "flow", name: "能量回流", school: "economy", icon: "∞", desc: "升级所需能量 -14%", max: 3 },
   { id: "bounty", name: "赏金猎人", school: "economy", icon: "★", desc: "击杀得分 +50%", max: 2 },

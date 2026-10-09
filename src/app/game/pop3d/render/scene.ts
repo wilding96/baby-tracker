@@ -15,6 +15,7 @@ import {
   FIELD,
   HEIGHT,
   JUICE,
+  ORBIT,
   PAL,
   POOL,
   WORDS,
@@ -32,6 +33,7 @@ import {
   createEnemyGeometry,
   createFieldBorder,
   createFieldGrid,
+  createOrbGeometry,
   createPlayerBulletGeometries,
   createPlayerMesh,
   createWingmanMesh,
@@ -216,6 +218,15 @@ export function createRenderer(mount: HTMLElement): Renderer {
     wingmanMeshes.push(m);
   }
 
+  // 环绕护卫弹：最多 4 颗，同样是 Group 级数量
+  const orbMeshes: THREE.Mesh[] = [];
+  for (let i = 0; i < 4; i += 1) {
+    const m = new THREE.Mesh(createOrbGeometry(), new THREE.MeshBasicMaterial({ color: PAL.cyan }));
+    m.visible = false;
+    scene.add(m);
+    orbMeshes.push(m);
+  }
+
   // ── 贴地投影：画在地面真实坐标上，不做位置补偿（它就是"真实位置"的标记）──
   const shadowGeo = new THREE.CircleGeometry(1, 16);
   shadowGeo.rotateX(-Math.PI / 2); // 平躺在地面
@@ -377,6 +388,22 @@ export function createRenderer(mount: HTMLElement): Renderer {
       mesh.visible = world.phase === "playing";
       mesh.position.set(w.x, HEIGHT.player, rz(w.z, HEIGHT.player));
       pushShadow(w.x, w.z, 1.3);
+    }
+
+    // 环绕护卫弹：绕玩家公转（位置内联展开 orbitPos）
+    for (const m of orbMeshes) m.visible = false;
+    const orbs = world.orbs;
+    let orbN = 0;
+    for (let i = 0; i < orbs.slots.capacity; i += 1) {
+      if (!orbs.slots.alive[i]) continue;
+      const o = orbs.items[i];
+      const mesh = orbMeshes[orbN];
+      orbN += 1;
+      if (!mesh) break;
+      const ox = p.pos.x + Math.cos(o.angle) * ORBIT.radius;
+      const oz = p.pos.z + Math.sin(o.angle) * ORBIT.radius;
+      mesh.visible = world.phase === "playing";
+      mesh.position.set(ox, HEIGHT.bullet, rz(oz, HEIGHT.bullet));
     }
 
     // 敌机（实体 + 描边外壳）

@@ -458,6 +458,10 @@ export function createEngine({
       case "frost":
         lastElement = "ice";
         break;
+      case "orbit":
+        // 卡是数据、实体是状态：拿了卡就立刻把环绕弹补到位
+        syncOrbs((world.cards["orbit"] ?? 0) * 2);
+        break;
       default:
         break;
     }
@@ -749,6 +753,65 @@ export function createEngine({
         w.cd = mods.fireCd * WINGMAN.fireCdMul;
         spawnPlayerBullet(kind, w.x, w.z - 1.2, 0, -def.speed, WINGMAN.dmgMul);
       }
+    }
+  }
+
+  // ── 环绕护卫弹（附着物：绕玩家公转的接触伤害）──
+  /** 把环绕弹数量补/减到目标值（和僚机一样：卡是数据，实体是状态） */
+  function syncOrbs(want: number): void {
+    const target = Math.min(ORBIT.max, want);
+    let have = countAlive(world.orbs);
+    while (have < target) {
+      const i = world.orbs.slots.acquire();
+      if (i < 0) break;
+      const o = world.orbs.items[i];
+      o.angle = (have * Math.PI * 2) / target; // 均匀铺开，避免重叠
+      o.cd = 0;
+      have += 1;
+    }
+    while (have > target) {
+      for (let i = world.orbs.slots.capacity - 1; i >= 0; i -= 1) {
+        if (world.orbs.slots.alive[i]) {
+          world.orbs.slots.release(i);
+          have -= 1;
+          break;
+        }
+      }
+    }
+  }
+
+  /** 用一个圆去撞敌机；命中一台就返回 true（环绕弹的接触伤害） */
+  function hitEnemyAt(x: number, z: number, r: number, dmg: number): boolean {
+    const es = world.enemies;
+    for (let i = 0; i < es.slots.capacity; i += 1) {
+      if (!es.slots.alive[i]) continue;
+      const e = es.items[i];
+      const dx = e.x - x;
+      const dz = e.z - z;
+      const rr = e.r + r;
+      if (dx * dx + dz * dz > rr * rr) continue;
+      e.hp -= dmg * playerDamageMul();
+      e.flash = 0.08;
+      if (e.hp <= 0) killEnemy(e, i, true);
+      return true;
+    }
+    return false;
+  }
+
+  function updateOrbs(dt: number): void {
+    const set = world.orbs;
+    if (set.slots.freeCount === set.slots.capacity) return; // 一颗都没有，直接跳过
+    for (let i = 0; i < set.slots.capacity; i += 1) {
+      if (!set.slots.alive[i]) continue;
+      const o = set.items[i];
+      o.angle += ORBIT.angular * dt;
+      if (o.cd > 0) o.cd -= dt;
+
+      // 位置内联展开 orbitPos：每帧每颗都算，不能分配
+      const ox = player.pos.x + Math.cos(o.angle) * ORBIT.radius;
+      const oz = player.pos.z + Math.sin(o.angle) * ORBIT.radius;
+      if (o.cd > 0) continue;
+      if (hitEnemyAt(ox, oz, 0.55, mods.bulletDmg * ORBIT.dmgMul)) o.cd = ORBIT.dmgCd;
     }
   }
 
@@ -1357,6 +1420,7 @@ export function createEngine({
 
     firePlayer(dt);
     updateWingmen(dt);
+    updateOrbs(dt);
     updatePlayerBullets(dt);
     updateEnemyBullets(dt);
     updateEnemies(dt);

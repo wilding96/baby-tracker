@@ -276,12 +276,12 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       new THREE.MeshBasicMaterial({ color: 0xffffff }),
       POOL.playerBullets,
     );
-    // 描边：实心弹用反向外壳，平躺环用更大的一圈 ink 环（几何已放大）
+    // 描边：反向外壳（几何已按 BULLET_VIS.outline 放大）
     outlineMeshes[k] = instanced(
       outlineGeos[k],
       new THREE.MeshBasicMaterial({
         color: PAL.ink,
-        side: k === "wave" ? THREE.DoubleSide : THREE.BackSide,
+        side: THREE.BackSide,
       }),
       POOL.playerBullets,
     );
@@ -398,8 +398,8 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
    */
   const SHIP_BULLET_COLOR: Record<ShipType, THREE.Color> = {
     ion: new THREE.Color(ELEMENT_COLOR.electric),
-    nova: new THREE.Color(ELEMENT_COLOR.fire),
-    pulse: new THREE.Color(ELEMENT_COLOR.ice),
+    nova: new THREE.Color(PAL.blue),
+    pulse: new THREE.Color(PAL.orange),
   };
   for (let i = 0; i < POOL.enemies; i += 1) enemyMesh.setColorAt(i, ENEMY_COLOR.drone);
   for (const k of PLAYER_BULLET_KINDS) {
@@ -667,7 +667,12 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       dummy.position.set(b.x, y, py);
       dummy.scale.setScalar(1);
       // 细长几何的长轴在局部 +Z：绕 Y 转 (π/2 - angle) 才对齐飞行方向
-      dummy.rotation.set(0, HALF_PI - b.angle, 0);
+      if (b.kind === "wave") {
+        // 火球：低速翻滚，棱面一闪一闪就是"火焰"（球体对齐无意义）
+        dummy.rotation.set(world.time * 2.4, world.time * 1.6, 0);
+      } else {
+        dummy.rotation.set(0, HALF_PI - b.angle, 0);
+      }
       dummy.updateMatrix();
       mesh.setMatrixAt(m, dummy.matrix);
       mesh.setColorAt(m, color);

@@ -27,6 +27,8 @@ export const PAL = {
   ink: "#101010",
   paper: "#FFF8E7",
   green: "#00A05A",
+  /** 玩家火球专用橙：和敌弹的红、敌机的品红都拉得开 */
+  orange: "#FF6A00",
 } as const;
 
 // ── 属性（电 / 火 / 冰）──
@@ -82,12 +84,12 @@ export const SHIP_INFO: Record<ShipType, ShipDef> = {
   },
   pulse: {
     label: "脉冲",
-    blurb: "速射细弹 · 连击节奏",
+    blurb: "摇曳火球 · 大判定",
     element: "ice",
     icon: "〰️",
     bulletCount: 1,
-    dmgMul: 2.2,
-    cdMul: 0.8,
+    dmgMul: 4.0,
+    cdMul: 1.2,
     spreadMul: 1.0,
   },
 };

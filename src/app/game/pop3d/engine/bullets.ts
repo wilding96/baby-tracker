@@ -26,6 +26,12 @@ export interface BulletDef {
   /** 存活秒数；0 = 只按出界回收 */
   life: number;
   radius: number;
+  /**
+   * 摇曳：横向速度按正弦摆（魂斗罗 F 弹那种大火球）。
+   * `amp` 是世界单位的摆幅、`freq` 是角速度——位置画成蛇形，**判定跟着位置走**，
+   * 所以不会出现"看着打中了却不算"。
+   */
+  weave?: { amp: number; freq: number };
 }
 
 const DEFS: Record<PlayerBulletKind, BulletDef> = {
@@ -34,7 +40,8 @@ const DEFS: Record<PlayerBulletKind, BulletDef> = {
   // 三把枪的**速度**也拉开：离子中速贯穿、新星低速重炮、脉冲高速细弹。
   bolt: { speed: 62, dmgMul: 1.25, pierce: 1, life: 0, radius: 0.54 },
   spread: { speed: 44, dmgMul: 0.8, pierce: 0, life: 0, radius: 0.68 },
-  wave: { speed: 78, dmgMul: 1.0, pierce: 0, life: 0, radius: 0.56 },
+  // 脉冲（三号机）：大火球 —— 大判定、慢速、左右摇曳
+  wave: { speed: 34, dmgMul: 0.8, pierce: 0, life: 0, radius: 1.05, weave: { amp: 0.95, freq: 7.5 } },
   homing: { speed: 34, dmgMul: 0.7, pierce: 0, life: 3.0, radius: 0.42 },
   mini: { speed: 38, dmgMul: 0.35, pierce: 0, life: 1.2, radius: 0.26 },
 };

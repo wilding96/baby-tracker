@@ -132,6 +132,7 @@ function makePlayerBullets(capacity: number): EntitySet<PlayerBullet> {
       element: null,
       life: 0,
       angle: 0,
+      age: 0,
       fromWing: false,
     });
   }
@@ -639,6 +640,7 @@ export function createEngine({
     b.element = mods.element;
     b.life = def.life;
     b.angle = Math.atan2(vz, vx);
+    b.age = 0;
     b.fromWing = fromWing;
     // 刚生成的子母弹与父弹位置重合，给一点隔断防止同帧自我触发
     b.hitCd = 0.05;
@@ -1229,6 +1231,7 @@ export function createEngine({
       if (!set.slots.alive[i]) continue;
       const b = set.items[i];
       if (b.hitCd > 0) b.hitCd -= dt;
+      b.age += dt;
       // 寿命回收：子母弹与追踪弹不能永久堆积
       if (b.life > 0) {
         b.life -= dt;
@@ -1248,6 +1251,10 @@ export function createEngine({
           b.vz = Math.sin(b.angle) * speed;
         }
       }
+      // 摇曳弹：横向速度按正弦摆（对方程求导即得 vy = amp·freq·cos(freq·t)），
+      // 位置自然画出蛇形，判定与视觉始终一致
+      const weave = bulletDef(b.kind).weave;
+      if (weave) b.vx = weave.amp * weave.freq * Math.cos(weave.freq * b.age);
       b.x += b.vx * dt;
       b.z += b.vz * dt;
       if (b.z < -FIELD.halfH - 3 || b.z > FIELD.halfH + 3) set.slots.release(i);

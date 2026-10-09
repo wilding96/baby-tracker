@@ -102,9 +102,6 @@ export function createEnemyGeometry(): THREE.BufferGeometry {
  * 弹型形状表：`s` 是缩放倍率，几何在创建期放大，运行时零开销。
  * 描边层用同一张表、不同倍率生成，保证"壳"永远贴着芯。
  */
-/** 冲击波环的内外径：描边层要按同一组数字放大，所以提到模块级 */
-const WAVE_RING = { inner: 0.5, outer: 0.64 } as const;
-
 const BULLET_SHAPES: Record<PlayerBulletKind, (s: number) => THREE.BufferGeometry> = {
   bolt: (s) => new THREE.BoxGeometry(0.25 * s, 0.25 * s, 2.6 * s), // 离子束：细长
   spread: (s) => {
@@ -113,12 +110,8 @@ const BULLET_SHAPES: Record<PlayerBulletKind, (s: number) => THREE.BufferGeometr
     g.scale(1, 1, 1.35);
     return g;
   },
-  wave: (s) => {
-    // 脉冲：薄壁的环（像能量波前），不做成实心块
-    const g = new THREE.RingGeometry(WAVE_RING.inner * s, WAVE_RING.outer * s, 16);
-    g.rotateX(-Math.PI / 2); // 平躺，朝上飞
-    return g;
-  },
+  // 脉冲：多面体火球（魂斗罗 F 弹）——三把枪里最大的一颗，靠自转的棱面闪动做"火焰"
+  wave: (s) => new THREE.IcosahedronGeometry(0.62 * s, 1),
   homing: (s) => {
     // 追踪弹：拉长的八面体 = 小飞弹（尾焰由 trailByKind 单独给）
     const g = new THREE.OctahedronGeometry(0.32 * s, 0);
@@ -142,15 +135,7 @@ export function createPlayerBulletGeometries(): Record<PlayerBulletKind, THREE.B
 export function createPlayerBulletOutlineGeometries(): Record<PlayerBulletKind, THREE.BufferGeometry> {
   const out = {} as Record<PlayerBulletKind, THREE.BufferGeometry>;
   for (const k of PLAYER_BULLET_KINDS) {
-    const s = BULLET_VIS.scale;
-    out[k] =
-      k === "wave"
-        ? new THREE.RingGeometry(
-            WAVE_RING.inner * s * 0.94,
-            WAVE_RING.outer * s * BULLET_VIS.outline * 1.1,
-            16,
-          ).rotateX(-Math.PI / 2)
-        : BULLET_SHAPES[k](s * BULLET_VIS.outline);
+    out[k] = BULLET_SHAPES[k](BULLET_VIS.scale * BULLET_VIS.outline);
   }
   return out;
 }

@@ -112,6 +112,8 @@ export interface PlayerBullet extends BulletMotion {
   life: number;
   /** 当前朝向（追踪弹用） */
   angle: number;
+  /** 存活时长（秒）：摇曳弹的相位基准 */
+  age: number;
   /** 是否僚机发射（僚机协同卡只认僚机的命中） */
   fromWing: boolean;
 }

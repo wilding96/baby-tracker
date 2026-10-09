@@ -29,6 +29,10 @@ export const PAL = {
   green: "#00A05A",
   /** 玩家火球专用橙：和敌弹的红、敌机的品红都拉得开 */
   orange: "#FF6A00",
+  /** 宠物道具主题的三件套配色（和敌弹红 / 敌机品红都分得开） */
+  laser: "#35E07A", // 激光笔：绿（红留给敌弹）
+  fish: "#E2901C", // 小鱼干：金棕
+  bone: "#F2DEB0", // 骨头：暖米白（靠 ink 描边读出来）
 } as const;
 
 // ── 属性（电 / 火 / 冰）──
@@ -63,30 +67,30 @@ export const SHIPS: readonly ShipType[] = ["ion", "nova", "pulse"] as const;
 
 export const SHIP_INFO: Record<ShipType, ShipDef> = {
   ion: {
-    label: "离子炮",
+    label: "激光笔",
     blurb: "贯穿单发 · 高单体",
     element: "electric",
-    icon: "🔫",
+    icon: "✨",
     bulletCount: 1,
     dmgMul: 2.6,
     cdMul: 1.15,
     spreadMul: 0.6,
   },
   nova: {
-    label: "新星",
+    label: "小鱼干",
     blurb: "小鱼干 · 一击见效",
     element: "fire",
-    icon: "💥",
+    icon: "🐟",
     bulletCount: 1,
     dmgMul: 5.0,
     cdMul: 1.45,
     spreadMul: 1.6,
   },
   pulse: {
-    label: "脉冲",
+    label: "骨头",
     blurb: "骨头飞镖 · 弹道随缘",
     element: "ice",
-    icon: "〰️",
+    icon: "🦴",
     bulletCount: 1,
     dmgMul: 4.0,
     cdMul: 1.2,

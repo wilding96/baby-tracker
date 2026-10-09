@@ -395,13 +395,13 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
     ice: new THREE.Color(ELEMENT_COLOR.ice),
   };
   /**
-   * 没拿属性卡时，按**机型**上色：三把枪的弹一眼能分开。
+   * 没拿属性卡时，按**机型**上色：三件宠物道具一眼能分开。
    * 只影响渲染，不改判定/伤害（元素的克制计算仍然只看 element 卡）。
    */
   const SHIP_BULLET_COLOR: Record<ShipType, THREE.Color> = {
-    ion: new THREE.Color(ELEMENT_COLOR.electric),
-    nova: new THREE.Color(PAL.blue),
-    pulse: new THREE.Color(PAL.orange),
+    ion: new THREE.Color(PAL.laser), // 激光笔：绿
+    nova: new THREE.Color(PAL.fish), // 小鱼干：金棕
+    pulse: new THREE.Color(PAL.bone), // 骨头：暖米白
   };
   for (let i = 0; i < POOL.enemies; i += 1) enemyMesh.setColorAt(i, ENEMY_COLOR.drone);
   for (const k of PLAYER_BULLET_KINDS) {

@@ -14,6 +14,7 @@ import type {
   ShipType,
   WaveDef,
 } from "./types";
+import type { PlayerBulletKind } from "./bullets";
 
 // ── 波普调色板（与 2D 版一致）──
 // 放在最前：下面的敌种 / 属性定义要引用它。
@@ -147,10 +148,11 @@ export const BULLET_VIS = {
   glow: 1.3,
   /** 发光强度（加法混合下 = 颜色亮度倍率） */
   glowGain: 0.7,
-  /** 每发弹写几节拖尾（0 = 关） */
-  // 默认关：常规射击不该拖着尾焰（满屏流光会盖掉打击感）。
-  // 需要时用 ?fx=trail 打开，或留给"重要内容"（追踪弹/Boss）单独用。
-  trail: 0,
+  /**
+   * 每种弹型的拖尾节数。常规射击不拖尾（满屏流光会盖掉打击感），
+   * 只有"有分量的东西"才给尾焰——比如追踪弹。
+   */
+  trailByKind: { bolt: 0, spread: 0, wave: 0, homing: 3, mini: 0 } as Record<PlayerBulletKind, number>,
   /** 相邻两节拖尾的间距（世界单位） */
   trailGap: 0.55,
   /** 每节拖尾的亮度衰减（加法混合下 = 越远越淡） */

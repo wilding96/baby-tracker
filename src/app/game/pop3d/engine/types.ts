@@ -369,6 +369,8 @@ export interface EngineOptions {
   stress?: boolean;
   /** 调试：本局从第几秒开始（跳段验证 Boss / 后期波次） */
   skipTo?: number;
+  /** 调试：三选一里藏掉属性流卡（视觉调试期用，?cards=all 恢复） */
+  hideElementCards?: boolean;
 }
 
 export interface EngineHandle {

@@ -17,6 +17,7 @@ import {
   BOSS,
   BULLET,
   BURST,
+  CARDS,
   ELEMENTS,
   ELEMENT_MOD,
   ENERGY,
@@ -227,7 +228,10 @@ export function createEngine({
   autopilot = false,
   stress = false,
   skipTo = 0,
+  hideElementCards = false,
 }: EngineOptions): EngineHandle {
+  // 视觉调试期可以把整条影响弹色的流派藏掉（候选池只影响发牌，不改任何数值）
+  const cardPool = hideElementCards ? CARDS.filter((c) => c.school !== "element") : CARDS;
   // ── 输入 ──
   const input: InputState = {
     up: false,
@@ -443,7 +447,7 @@ export function createEngine({
     }
     world.energyNeed = computeEnergyNeed();
     recomputeMods();
-    offer = rollOffer(world.cards, 3);
+    offer = rollOffer(world.cards, 3, cardPool);
     spawnPop(player.pos.x, player.pos.z - 3, WORD_LEVEL, 1.6);
     audio?.card();
     setPhase("card");

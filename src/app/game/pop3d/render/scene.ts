@@ -26,7 +26,7 @@ import {
   POOL,
   WORDS,
 } from "../engine/config";
-import type { Element, EnemyKind, Renderer, Vec2, World } from "../engine/types";
+import type { Element, EnemyKind, Renderer, ShipType, Vec2, World } from "../engine/types";
 import { PLAYER_BULLET_KINDS, bulletDef } from "../engine/bullets";
 import type { PlayerBulletKind } from "../engine/bullets";
 import { computeFraming, perspectiveDistance } from "../engine/framing";
@@ -300,7 +300,7 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       transparent: true,
       depthWrite: false,
     }),
-    Math.max(1, POOL.playerBullets * BULLET_VIS.trail),
+    Math.max(1, POOL.playerBullets * 3),
   );
   scene.add(trailMesh);
 
@@ -391,6 +391,15 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
     electric: new THREE.Color(ELEMENT_COLOR.electric),
     fire: new THREE.Color(ELEMENT_COLOR.fire),
     ice: new THREE.Color(ELEMENT_COLOR.ice),
+  };
+  /**
+   * 没拿属性卡时，按**机型**上色：三把枪的弹一眼能分开。
+   * 只影响渲染，不改判定/伤害（元素的克制计算仍然只看 element 卡）。
+   */
+  const SHIP_BULLET_COLOR: Record<ShipType, THREE.Color> = {
+    ion: new THREE.Color(ELEMENT_COLOR.electric),
+    nova: new THREE.Color(ELEMENT_COLOR.fire),
+    pulse: new THREE.Color(ELEMENT_COLOR.ice),
   };
   for (let i = 0; i < POOL.enemies; i += 1) enemyMesh.setColorAt(i, ENEMY_COLOR.drone);
   for (const k of PLAYER_BULLET_KINDS) {
@@ -550,6 +559,9 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       const mesh = wingmanMeshes[w.slot];
       if (!mesh) continue;
       mesh.visible = world.phase === "playing";
+      // 侧倾：按本帧横向位移倾斜，跟队列时"压一下机翼"，幅度刻意做小
+      const dx = w.x - mesh.position.x;
+      mesh.rotation.z = Math.max(-0.3, Math.min(0.3, -dx * 0.9));
       mesh.position.set(w.x, HEIGHT.player, rz(w.z, HEIGHT.player));
       mesh.scale.setScalar(1); // 也不做缩放脉冲：高频射击下就是持续闪
       pushShadow(w.x, w.z, 1.3);
@@ -600,13 +612,15 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
     for (const k of PLAYER_BULLET_KINDS) bulletCounts[k] = 0;
     let glowN = 0;
     let trailN = 0;
+    const shipColor = SHIP_BULLET_COLOR[world.ship];
+    const anyTrail = fx.trail;
     const pb = world.playerBullets;
     for (let i = 0; i < pb.slots.capacity; i += 1) {
       if (!pb.slots.alive[i]) continue;
       const b = pb.items[i];
       const mesh = bulletMeshes[b.kind];
       const m = bulletCounts[b.kind];
-      const color = b.element ? ELEMENT_BULLET[b.element] : PLAIN_BULLET;
+      const color = b.element ? ELEMENT_BULLET[b.element] : shipColor;
       const y = HEIGHT.bullet;
       const py = rz(b.z, y);
 
@@ -616,7 +630,8 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       const uz = b.vz / speed;
       const px = -uz; // 速度的垂直方向，给"锯齿残影"用
       const pz = ux;
-      for (let t = 0; fx.trail && t < BULLET_VIS.trail; t += 1) {
+      const trailCount = anyTrail ? BULLET_VIS.trailByKind[b.kind] : 0;
+      for (let t = 0; t < trailCount; t += 1) {
         const k2 = t + 1;
         const dim = Math.pow(BULLET_VIS.trailDim, k2) * BULLET_VIS.glowGain;
         let ox = -ux * BULLET_VIS.trailGap * k2;

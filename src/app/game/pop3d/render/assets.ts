@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { BACKGROUND, BULLET_VIS, FIELD, PAL } from "../engine/config";
 import { PLAYER_BULLET_KINDS } from "../engine/bullets";
 import type { PlayerBulletKind } from "../engine/bullets";
@@ -109,7 +110,12 @@ const BULLET_SHAPES: Record<PlayerBulletKind, (s: number) => THREE.BufferGeometr
     g.rotateX(-Math.PI / 2); // 平躺，朝上飞
     return g;
   },
-  homing: (s) => new THREE.OctahedronGeometry(0.3 * s, 0), // 追踪弹
+  homing: (s) => {
+    // 追踪弹：拉长的八面体 = 小飞弹（尾焰由 trailByKind 单独给）
+    const g = new THREE.OctahedronGeometry(0.32 * s, 0);
+    g.scale(1, 1, 1.9);
+    return g;
+  },
   mini: (s) => new THREE.OctahedronGeometry(0.18 * s, 0), // 子母弹
 };
 
@@ -175,14 +181,32 @@ export function createEnemyBulletGeometry(): THREE.BufferGeometry {
   return new THREE.SphereGeometry(0.45, 8, 6);
 }
 
-/** 僚机：玩家机的缩小版，配色改成蓝色（与玩家机区分） */
+/**
+ * 僚机：玩家机的缩小版——后掠翼 + 翼尖灯。
+ * 机身与机翼合并成一块几何，一架僚机只占 3 个 draw call（4 架 = 12），
+ * 翼尖灯是**稳态**的，不做闪烁。
+ */
 export function createWingmanMesh(): THREE.Group {
   const group = new THREE.Group();
-  const body = part(new THREE.ConeGeometry(0.5, 2.0, 4), flat(PAL.blue), 0, 0, -0.25);
-  body.rotation.x = -Math.PI / 2;
-  group.add(body);
-  const wings = part(new THREE.BoxGeometry(2.5, 0.2, 0.7), flat(PAL.cyan), 0, 0, 0.45);
-  group.add(wings);
+  const body = new THREE.ConeGeometry(0.44, 2.0, 4);
+  body.rotateX(-Math.PI / 2);
+  body.translate(0, 0, -0.2);
+  const wingL = new THREE.BoxGeometry(1.7, 0.18, 0.5);
+  wingL.rotateY(0.42);
+  wingL.translate(-0.8, 0, 0.4);
+  const wingR = new THREE.BoxGeometry(1.7, 0.18, 0.5);
+  wingR.rotateY(-0.42);
+  wingR.translate(0.8, 0, 0.4);
+  const hull = mergeGeometries([body, wingL, wingR]);
+  const hullMesh = new THREE.Mesh(hull, flat(PAL.cyan));
+  hullMesh.add(edgeLines(hull));
+  group.add(hullMesh);
+
+  const tips = mergeGeometries([
+    new THREE.BoxGeometry(0.26, 0.26, 0.26).translate(-1.45, 0.06, 0.62),
+    new THREE.BoxGeometry(0.26, 0.26, 0.26).translate(1.45, 0.06, 0.62),
+  ]);
+  group.add(new THREE.Mesh(tips, flat(PAL.yellow)));
   return group;
 }
 

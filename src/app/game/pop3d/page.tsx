@@ -164,6 +164,7 @@ export default function Pop3DGame() {
       autopilot: params.has("auto"),
       stress: params.has("stress"),
       skipTo: Number.isFinite(skip) && skip > 0 ? skip : 0,
+      hideElementCards: params.get("cards") !== "all",
       callbacks: {
         onStats: (s: FrameStats) => {
           if (fpsRef.current) fpsRef.current.textContent = String(Math.round(s.fps));

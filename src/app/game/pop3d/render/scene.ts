@@ -22,6 +22,7 @@ import {
 import type { Element, EnemyKind, Renderer, Vec2, World } from "../engine/types";
 import { computeFraming, perspectiveDistance } from "../engine/framing";
 import { compensatedZ, degToRad } from "../engine/projection";
+import { approach, cineTarget } from "../engine/rig";
 import {
   createBossMesh,
   createBurstGeometry,
@@ -43,6 +44,9 @@ function instanced(geometry: THREE.BufferGeometry, material: THREE.Material, cou
 
 /** 贴地投影容量：玩家 1 + 僚机 4（批次 3 用）+ 敌机 48 + Boss 1 + 余量 */
 const SHADOW_CAPACITY = 64;
+
+/** 运镜插值速率（约 3/s 收敛） */
+const RIG_RATE = 3;
 
 /** 拟声词预渲染成贴图（§8.8）：运行时只查表，不再碰 canvas */
 function makeWordTexture(text: string): THREE.CanvasTexture {
@@ -94,8 +98,8 @@ export function createRenderer(mount: HTMLElement): Renderer {
   /** 透视模式下的基准距离（由 fov 反推，resize 时更新） */
   let baseDistance: number = CAMERA.orthoDistance;
   /** 运镜 rig：常规战斗恒为基准值，只有 Boss 过场会改这两个值 */
-  const rigPitchDeg = CAMERA.pitchDeg;
-  const rigDistMul = 1;
+  let rigPitchDeg: number = CAMERA.pitchDeg;
+  let rigDistMul: number = 1;
 
   function placeCamera(): void {
     const p = degToRad(rigPitchDeg);
@@ -287,7 +291,22 @@ export function createRenderer(mount: HTMLElement): Renderer {
     placeCamera();
   }
 
+  let lastWorldTime = 0;
+
+  /** 运镜：常规战斗恒为基准值，只有过场窗口偏离俯视（曲线见 engine/rig.ts） */
+  function updateRig(world: World, dt: number): void {
+    const k = world.cine.active ? world.cine.t / Math.max(1e-3, world.cine.dur) : 0;
+    const target = cineTarget(world.cine.active ? world.cine.kind : null, k, CAMERA.pitchDeg);
+    rigPitchDeg = approach(rigPitchDeg, target.pitchDeg, dt, RIG_RATE);
+    rigDistMul = approach(rigDistMul, target.distMul, dt, RIG_RATE);
+    placeCamera();
+  }
+
   function render(world: World): void {
+    const dt = Math.min(0.05, Math.max(0, world.time - lastWorldTime));
+    lastWorldTime = world.time;
+    updateRig(world, dt);
+
     // ── 屏幕震动：只挪相机位置，不改朝向（正交相机下等于平移画面）──
     if (world.shake > 0) {
       camera.position.set(

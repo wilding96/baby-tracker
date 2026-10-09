@@ -167,6 +167,14 @@ export interface Boss {
   slow: number;
 }
 
+/** 运镜事件：只在无弹幕的过场窗口偏离俯视 */
+export interface Cinematic {
+  active: boolean;
+  kind: "intro" | "phase" | "down";
+  t: number;
+  dur: number;
+}
+
 export interface Burst {
   x: number;
   z: number;
@@ -227,6 +235,9 @@ export interface World {
   bursts: EntitySet<Burst>;
   pops: EntitySet<Pop>;
   boss: Boss;
+  cine: Cinematic;
+  /** 时间缩放（只有 Boss 击破的慢动作会改它） */
+  timeScale: number;
   /** 当前存活弹幕总数（HUD 用） */
   bulletCount: number;
   /** 打击感计时器 */

@@ -226,6 +226,8 @@ export function createEngine({
     bursts: makeBursts(POOL.bursts),
     pops: makePops(JUICE.popCap),
     boss,
+    cine: { active: false, kind: "intro", t: 0, dur: 0 },
+    timeScale: 1,
     bulletCount: 0,
     freeze: 0,
     shake: 0,
@@ -720,6 +722,7 @@ export function createEngine({
     // 注意用屏幕内的坐标：Boss 入场点在场地外，直接用它会把横幅甩出画面
     spawnPop(0, -FIELD.halfH + 12, WORD_WARN, 2.4);
     audio?.bossWarning();
+    playCine("intro", 2.0);
     pushHud();
   }
 
@@ -761,7 +764,11 @@ export function createEngine({
     }
 
     boss.x = Math.sin(boss.t * BOSS.swaySpeed) * BOSS.swayX;
-    if (boss.hp <= boss.maxHp * BOSS.phase2At) boss.phase = 2;
+    if (boss.phase === 1 && boss.hp <= boss.maxHp * BOSS.phase2At) {
+      boss.phase = 2;
+      playCine("phase", 0.6);
+      clear(world.enemyBullets); // 喘息窗口：清屏后过场才安全
+    }
 
     boss.fanCd -= dt;
     if (boss.fanCd <= 0) {
@@ -804,6 +811,22 @@ export function createEngine({
 
   function addShake(v: number): void {
     world.shake = Math.min(JUICE.shakeMax, world.shake + v);
+  }
+
+  function playCine(kind: "intro" | "phase" | "down", dur: number): void {
+    world.cine.active = true;
+    world.cine.kind = kind;
+    world.cine.t = 0;
+    world.cine.dur = dur;
+  }
+
+  function updateCine(dt: number): void {
+    if (!world.cine.active) return;
+    world.cine.t += dt;
+    if (world.cine.t >= world.cine.dur) {
+      world.cine.active = false;
+      world.timeScale = 1; // 慢动作结束必须还原，否则整局变慢
+    }
   }
 
   function clear<T>(set: EntitySet<T>): void {
@@ -865,6 +888,8 @@ export function createEngine({
 
   function win(): void {
     boss.active = false;
+    playCine("down", 0.4); // 0.4 游戏秒 ÷ 0.25 倍速 ≈ 1.6 秒真实时间
+    world.timeScale = 0.25;
     for (let k = 0; k < 8; k += 1) {
       spawnBurst(boss.x + rand(-6, 6), boss.z + rand(-3, 3), rand(1.4, 2.6));
     }
@@ -1112,6 +1137,8 @@ export function createEngine({
       world.freeze -= dt;
       return;
     }
+    // 运镜要在相位判断之前推进：击破后会进入 victory，否则慢动作永远不结束
+    updateCine(dt);
 
     if (world.phase !== "playing") {
       updateBursts(dt);
@@ -1182,7 +1209,7 @@ export function createEngine({
     const deltaMs = last === 0 ? 16.7 : now - last;
     last = now;
 
-    acc += Math.min(deltaMs / 1000, 0.25);
+    acc += Math.min(deltaMs / 1000, 0.25) * world.timeScale;
     let steps = 0;
     while (acc >= LOOP.step && steps < LOOP.maxSteps) {
       step(LOOP.step);
@@ -1269,6 +1296,9 @@ export function createEngine({
     world.shake = 0;
     world.muzzle = 0;
     world.warn = 0;
+    world.cine.active = false;
+    world.cine.t = 0;
+    world.timeScale = 1;
   }
 
   function newRun(nextShip: ShipType, nextMeta: MetaData): void {

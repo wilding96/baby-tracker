@@ -307,7 +307,9 @@ export const CARDS: readonly CardDef[] = [
   { id: "spread", name: "扇形弹", school: "barrage", icon: "⊹", desc: "主炮 +1 发并呈扇形散开", max: 3 },
   { id: "pierce", name: "贯穿", school: "barrage", icon: "↟", desc: "子弹可多穿透 1 个敌人", max: 3 },
   { id: "backfire", name: "后向炮", school: "barrage", icon: "⇅", desc: "同时向后发射 45% 伤害的弹", max: 1 },
-  { id: "wing", name: "侧翼僚机", school: "barrage", icon: "✈", desc: "两侧各加一门副炮", max: 2 },
+  { id: "wing", name: "侧翼僚机", school: "barrage", icon: "✈", desc: "Lv1 两架 / Lv2 四架实体僚机，继承机型弹型", max: 2 },
+  { id: "wingrate", name: "僚机超频", school: "barrage", icon: "⟫", desc: "僚机射速 +25%", max: 2 },
+  { id: "winglink", name: "僚机协同", school: "barrage", icon: "⇄", desc: "僚机命中给主武器叠增伤（每层 +4%，上限 5 层，2 秒衰减）", max: 2 },
   { id: "split", name: "分裂弹", school: "barrage", icon: "❉", desc: "主弹命中后分裂成 2 发小弹", max: 2 },
   { id: "homing", name: "追踪弹", school: "barrage", icon: "➹", desc: "每次齐射附带 N 发追踪弹", max: 2 },
   // 元素流

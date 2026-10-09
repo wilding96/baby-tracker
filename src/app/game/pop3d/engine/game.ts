@@ -86,6 +86,10 @@ interface Mods {
   homing: number;
   backfire: boolean;
   wings: number;
+  /** 僚机射速冷却乘数（层数越高越小） */
+  wingRateMul: number;
+  /** 僚机协同：命中给主武器叠增伤的层数（每层 +4%） */
+  wingLink: number;
   element: Element | null;
   chain: number;
   burn: number;
@@ -127,6 +131,7 @@ function makePlayerBullets(capacity: number): EntitySet<PlayerBullet> {
       element: null,
       life: 0,
       angle: 0,
+      fromWing: false,
     });
   }
   return { items, slots: createSlots(capacity) };
@@ -315,6 +320,8 @@ export function createEngine({
     homing: 0,
     backfire: false,
     wings: 0,
+    wingRateMul: 1,
+    wingLink: 0,
     element: null,
     chain: 0,
     burn: 0,
@@ -400,6 +407,9 @@ export function createEngine({
     mods.homing = c("homing");
     mods.backfire = c("backfire") > 0;
     mods.wings = c("wing");
+    // 射速倍率是"冷却乘数"，层数越高越小
+    mods.wingRateMul = 1 / (1 + c("wingrate") * 0.25);
+    mods.wingLink = c("winglink");
     mods.element = lastElement;
     mods.chain = c("volt");
     mods.burn = c("flame");
@@ -411,8 +421,6 @@ export function createEngine({
     mods.scoreMul = 1 + c("bounty") * 0.5;
     mods.dustMul = 1 + c("star") * 0.25;
     mods.energyMul = 1 + meta.upgrades.energy * 0.12;
-    // 僚机数量由卡层数决定：卡一变就立刻把实体补到位（选卡/开局的统一入口）
-    syncWingmen();
   }
 
   function computeEnergyNeed(): number {
@@ -461,6 +469,11 @@ export function createEngine({
       case "orbit":
         // 卡是数据、实体是状态：拿了卡就立刻把环绕弹补到位
         syncOrbs((world.cards["orbit"] ?? 0) * 2);
+        break;
+      case "wing":
+        // 卡是数据、实体是状态：拿了卡就立刻把僚机补到位
+        // （applyCardInstant 在 recomputeMods 之前调用，所以这里直接数层数）
+        syncWingmen((world.cards["wing"] ?? 0) * 2);
         break;
       default:
         break;
@@ -605,6 +618,7 @@ export function createEngine({
     vx: number,
     vz: number,
     dmgMul = 1,
+    fromWing = false,
   ): void {
     const index = world.playerBullets.slots.acquire();
     if (index < 0) return;
@@ -621,6 +635,7 @@ export function createEngine({
     b.element = mods.element;
     b.life = def.life;
     b.angle = Math.atan2(vz, vx);
+    b.fromWing = fromWing;
     // 刚生成的子母弹与父弹位置重合，给一点隔断防止同帧自我触发
     b.hitCd = 0.05;
   }
@@ -702,10 +717,10 @@ export function createEngine({
 
   // ── 僚机（实体编队，不是"多发子弹"）──
   /** 把僚机数量补/减到目标值（卡是数据，实体是状态） */
-  function syncWingmen(): void {
-    const want = Math.min(WINGMAN.max, mods.wings * 2);
+  function syncWingmen(want: number): void {
+    const target = Math.min(WINGMAN.max, want);
     let have = countAlive(world.wingmen);
-    while (have < want) {
+    while (have < target) {
       const i = world.wingmen.slots.acquire();
       if (i < 0) break;
       const w = world.wingmen.items[i];
@@ -716,7 +731,7 @@ export function createEngine({
       have += 1;
     }
     // 多出来的从最大槽位开始回收
-    while (have > want) {
+    while (have > target) {
       let maxSlot = -1;
       let maxIndex = -1;
       for (let i = 0; i < world.wingmen.slots.capacity; i += 1) {
@@ -750,8 +765,8 @@ export function createEngine({
 
       w.cd -= dt;
       if (w.cd <= 0) {
-        w.cd = mods.fireCd * WINGMAN.fireCdMul;
-        spawnPlayerBullet(kind, w.x, w.z - 1.2, 0, -def.speed, WINGMAN.dmgMul);
+        w.cd = mods.fireCd * WINGMAN.fireCdMul * mods.wingRateMul;
+        spawnPlayerBullet(kind, w.x, w.z - 1.2, 0, -def.speed, WINGMAN.dmgMul, true);
       }
     }
   }
@@ -1161,7 +1176,8 @@ export function createEngine({
   }
 
   function playerDamageMul(): number {
-    return mods.lastStand && player.hp <= player.maxHp * 0.3 ? 1.6 : 1;
+    const link = 1 + world.linkStacks * 0.04;
+    return (mods.lastStand && player.hp <= player.maxHp * 0.3 ? 1.6 : 1) * link;
   }
 
   // ── 更新 ──
@@ -1276,6 +1292,12 @@ export function createEngine({
         if (b.kind !== "mini") {
           if (b.kind === "wave") spawnSplit(b.x, b.z, b.angle, 2);
           if (mods.split > 0) spawnSplit(b.x, b.z, b.angle, mods.split * 2);
+        }
+
+        // 僚机协同：僚机的命中给主武器叠增伤（2 秒不命中就清零）
+        if (b.fromWing && mods.wingLink > 0) {
+          world.linkStacks = Math.min(5, world.linkStacks + mods.wingLink);
+          world.linkTimer = 2;
         }
 
         if (b.pierce > 0) {
@@ -1413,6 +1435,11 @@ export function createEngine({
     if (world.shake > 0) world.shake = Math.max(0, world.shake - JUICE.shakeDecay * dt);
     if (world.muzzle > 0) world.muzzle -= dt;
     if (world.warn > 0) world.warn -= dt;
+    // 僚机协同的叠层：2 秒内没有新的僚机命中就清零
+    if (world.linkTimer > 0) {
+      world.linkTimer -= dt;
+      if (world.linkTimer <= 0) world.linkStacks = 0;
+    }
 
     if (autopilot) autopilotStep(dt);
     else movePlayer(dt);

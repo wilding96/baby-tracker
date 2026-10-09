@@ -2,6 +2,11 @@
 // POP3D — 类型定义（engine 层不出现 React，也不出现 three）
 // ═══════════════════════════════════════════════════════════════════
 
+import type { PlayerBulletKind } from "./bullets";
+
+// 弹型类型只有一份定义（bullets.ts），这里转出方便引用
+export type { PlayerBulletKind } from "./bullets";
+
 /** 地面平面坐标（+X 右，+Z 下）。所有实体都活在 X/Z 平面上。 */
 export interface Vec2 {
   x: number;
@@ -83,20 +88,35 @@ export interface Player {
   cd: number;
 }
 
-export interface Bullet {
+/** 子弹共有的运动字段 */
+export interface BulletMotion {
   x: number;
   z: number;
   vx: number;
   vz: number;
   r: number;
   dmg: number;
+  /** 命中后的短暂隔断，避免穿透弹在同一敌人身上每帧重复结算 */
+  hitCd: number;
+}
+
+export interface PlayerBullet extends BulletMotion {
+  kind: PlayerBulletKind;
   /** 剩余可穿透次数 */
   pierce: number;
   /** 属性（null = 无属性，不吃克制） */
   element: Element | null;
-  /** 命中后的短暂隔断，避免穿透弹在同一敌人身上每帧重复结算 */
-  hitCd: number;
+  /** 存活剩余秒数；0 = 只按出界回收 */
+  life: number;
+  /** 当前朝向（追踪弹用） */
+  angle: number;
 }
+
+/**
+ * 敌弹：3b 再加自己的 kind，这里先只留运动字段。
+ * 用别名而不是 `interface extends`——空接口会被 lint 判成冗余声明。
+ */
+export type EnemyBullet = BulletMotion;
 
 // ── 敌机 ──
 
@@ -233,8 +253,8 @@ export interface World {
   revivesUsed: number;
   player: Player;
   input: InputState;
-  playerBullets: EntitySet<Bullet>;
-  enemyBullets: EntitySet<Bullet>;
+  playerBullets: EntitySet<PlayerBullet>;
+  enemyBullets: EntitySet<EnemyBullet>;
   enemies: EntitySet<Enemy>;
   bursts: EntitySet<Burst>;
   pops: EntitySet<Pop>;

@@ -37,11 +37,11 @@ import { createSlots } from "./pools";
 import { resolveSpawnXs } from "./waves";
 import type {
   Boss,
-  Bullet,
   CardDef,
   Element,
   Enemy,
   EnemyKind,
+  EnemyBullet,
   EntitySet,
   EngineHandle,
   EngineOptions,
@@ -49,6 +49,7 @@ import type {
   MetaData,
   Phase,
   Player,
+  PlayerBullet,
   Pop,
   ShipType,
   WaveDef,
@@ -90,10 +91,31 @@ function cloneMeta(m: MetaData): MetaData {
   return { ...m, upgrades: { ...m.upgrades } };
 }
 
-function makeBullets(capacity: number): EntitySet<Bullet> {
-  const items: Bullet[] = [];
+function makePlayerBullets(capacity: number): EntitySet<PlayerBullet> {
+  const items: PlayerBullet[] = [];
   for (let i = 0; i < capacity; i += 1) {
-    items.push({ x: 0, z: 0, vx: 0, vz: 0, r: 0, dmg: 0, pierce: 0, element: null, hitCd: 0 });
+    items.push({
+      x: 0,
+      z: 0,
+      vx: 0,
+      vz: 0,
+      r: 0,
+      dmg: 0,
+      hitCd: 0,
+      kind: "bolt",
+      pierce: 0,
+      element: null,
+      life: 0,
+      angle: 0,
+    });
+  }
+  return { items, slots: createSlots(capacity) };
+}
+
+function makeEnemyBullets(capacity: number): EntitySet<EnemyBullet> {
+  const items: EnemyBullet[] = [];
+  for (let i = 0; i < capacity; i += 1) {
+    items.push({ x: 0, z: 0, vx: 0, vz: 0, r: 0, dmg: 0, hitCd: 0 });
   }
   return { items, slots: createSlots(capacity) };
 }
@@ -227,8 +249,8 @@ export function createEngine({
     revivesUsed: 0,
     player,
     input,
-    playerBullets: makeBullets(POOL.playerBullets),
-    enemyBullets: makeBullets(POOL.enemyBullets),
+    playerBullets: makePlayerBullets(POOL.playerBullets),
+    enemyBullets: makeEnemyBullets(POOL.enemyBullets),
     enemies: makeEnemies(POOL.enemies),
     bursts: makeBursts(POOL.bursts),
     pops: makePops(JUICE.popCap),
@@ -536,8 +558,11 @@ export function createEngine({
     b.vz = vz;
     b.r = PLAYER.bulletRadius;
     b.dmg = mods.bulletDmg * dmgMul;
+    b.kind = "bolt"; // Task 3 改成按弹型取参
     b.pierce = mods.pierce;
     b.element = mods.element;
+    b.life = 0;
+    b.angle = Math.atan2(vz, vx);
     b.hitCd = 0;
   }
 
@@ -583,8 +608,6 @@ export function createEngine({
     b.vz = vz;
     b.r = BULLET.enemyRadius;
     b.dmg = dmg;
-    b.pierce = 0;
-    b.element = null;
     b.hitCd = 0;
   }
 

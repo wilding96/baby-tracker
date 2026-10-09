@@ -5,6 +5,7 @@
 
 import * as THREE from "three";
 import { BACKGROUND, FIELD, PAL } from "../engine/config";
+import type { PlayerBulletKind } from "../engine/bullets";
 
 function flat(color: string): THREE.MeshLambertMaterial {
   return new THREE.MeshLambertMaterial({ color, flatShading: true });
@@ -95,9 +96,20 @@ export function createEnemyGeometry(): THREE.BufferGeometry {
   return geometry;
 }
 
-/** 我方子弹：短横条（视觉上是曳光弹） */
-export function createPlayerBulletGeometry(): THREE.BufferGeometry {
-  return new THREE.BoxGeometry(0.3, 0.3, 1.7);
+/** 我方弹型几何：一颗子弹一种形状，"换了牌"一眼看得出来 */
+export function createPlayerBulletGeometries(): Record<PlayerBulletKind, THREE.BufferGeometry> {
+  const flatRing = (inner: number, outer: number): THREE.BufferGeometry => {
+    const g = new THREE.RingGeometry(inner, outer, 14);
+    g.rotateX(-Math.PI / 2); // 平躺，朝上飞
+    return g;
+  };
+  return {
+    bolt: new THREE.BoxGeometry(0.25, 0.25, 2.6), // 离子束：细长
+    spread: new THREE.OctahedronGeometry(0.36, 0), // 散射弹：菱形
+    wave: flatRing(0.42, 0.62), // 冲击波：环
+    homing: new THREE.OctahedronGeometry(0.3, 0), // 追踪弹
+    mini: new THREE.OctahedronGeometry(0.18, 0), // 子母弹
+  };
 }
 
 /** 敌弹：小球 */

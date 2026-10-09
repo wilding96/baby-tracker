@@ -20,6 +20,8 @@ import {
   WORDS,
 } from "../engine/config";
 import type { Element, EnemyKind, Renderer, Vec2, World } from "../engine/types";
+import { PLAYER_BULLET_KINDS } from "../engine/bullets";
+import type { PlayerBulletKind } from "../engine/bullets";
 import { computeFraming, perspectiveDistance } from "../engine/framing";
 import { compensatedZ, degToRad } from "../engine/projection";
 import { approach, cineTarget } from "../engine/rig";
@@ -30,7 +32,7 @@ import {
   createEnemyGeometry,
   createFieldBorder,
   createFieldGrid,
-  createPlayerBulletGeometry,
+  createPlayerBulletGeometries,
   createPlayerMesh,
 } from "./assets";
 
@@ -178,11 +180,20 @@ export function createRenderer(mount: HTMLElement): Renderer {
     POOL.enemies,
   );
 
-  const playerBulletMesh = instanced(
-    createPlayerBulletGeometry(),
-    new THREE.MeshBasicMaterial({ color: 0xffffff }),
-    POOL.playerBullets,
-  );
+  // 我方子弹：一颗池，按弹型分发到各自的 InstancedMesh（count=0 的不产生 draw call）
+  const bulletGeos = createPlayerBulletGeometries();
+  const bulletMeshes = {} as Record<PlayerBulletKind, THREE.InstancedMesh>;
+  const bulletCounts = {} as Record<PlayerBulletKind, number>;
+  for (const k of PLAYER_BULLET_KINDS) {
+    bulletMeshes[k] = instanced(
+      bulletGeos[k],
+      new THREE.MeshBasicMaterial({ color: 0xffffff }),
+      POOL.playerBullets,
+    );
+    bulletMeshes[k].count = 0;
+    scene.add(bulletMeshes[k]);
+    bulletCounts[k] = 0;
+  }
   const enemyBulletMesh = instanced(
     createEnemyBulletGeometry(),
     new THREE.MeshBasicMaterial({ color: PAL.red }),
@@ -193,7 +204,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
     new THREE.MeshBasicMaterial({ color: PAL.yellow }),
     POOL.bursts,
   );
-  scene.add(enemyOutline, enemyMesh, playerBulletMesh, enemyBulletMesh, burstMesh);
+  scene.add(enemyOutline, enemyMesh, enemyBulletMesh, burstMesh);
 
   // ── 贴地投影：画在地面真实坐标上，不做位置补偿（它就是"真实位置"的标记）──
   const shadowGeo = new THREE.CircleGeometry(1, 16);
@@ -240,7 +251,9 @@ export function createRenderer(mount: HTMLElement): Renderer {
     ice: new THREE.Color(ELEMENT_COLOR.ice),
   };
   for (let i = 0; i < POOL.enemies; i += 1) enemyMesh.setColorAt(i, ENEMY_COLOR.drone);
-  for (let i = 0; i < POOL.playerBullets; i += 1) playerBulletMesh.setColorAt(i, PLAIN_BULLET);
+  for (const k of PLAYER_BULLET_KINDS) {
+    for (let i = 0; i < POOL.playerBullets; i += 1) bulletMeshes[k].setColorAt(i, PLAIN_BULLET);
+  }
 
   const dummy = new THREE.Object3D();
 
@@ -259,6 +272,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
     if (shadowCount >= SHADOW_CAPACITY) return;
     dummy.position.set(x, HEIGHT.shadow, z);
     dummy.scale.setScalar(radius);
+    dummy.rotation.set(0, 0, 0); // dummy 是共用的，朝向必须显式归零
     dummy.updateMatrix();
     shadowMesh.setMatrixAt(shadowCount, dummy.matrix);
     shadowCount += 1;
@@ -350,6 +364,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
       const e = foes.items[i];
       dummy.position.set(e.x, HEIGHT.enemy, rz(e.z, HEIGHT.enemy));
       dummy.scale.setScalar(e.scale);
+      dummy.rotation.set(0, 0, 0);
       dummy.updateMatrix();
       enemyMesh.setMatrixAt(n, dummy.matrix);
       enemyMesh.setColorAt(n, e.flash > 0 ? FLASH_COLOR : ENEMY_COLOR[e.kind]);
@@ -366,22 +381,29 @@ export function createRenderer(mount: HTMLElement): Renderer {
     enemyOutline.instanceMatrix.needsUpdate = true;
     if (enemyMesh.instanceColor) enemyMesh.instanceColor.needsUpdate = true;
 
-    // 我方子弹（按属性着色）
-    n = 0;
+    // 我方子弹：按弹型分发 + 按属性着色
+    for (const k of PLAYER_BULLET_KINDS) bulletCounts[k] = 0;
     const pb = world.playerBullets;
     for (let i = 0; i < pb.slots.capacity; i += 1) {
       if (!pb.slots.alive[i]) continue;
       const b = pb.items[i];
+      const mesh = bulletMeshes[b.kind];
+      const m = bulletCounts[b.kind];
       dummy.position.set(b.x, HEIGHT.bullet, rz(b.z, HEIGHT.bullet));
       dummy.scale.setScalar(1);
+      // 细长几何的长轴在局部 +Z：绕 Y 转 (π/2 - angle) 才对齐飞行方向
+      dummy.rotation.set(0, Math.PI / 2 - b.angle, 0);
       dummy.updateMatrix();
-      playerBulletMesh.setMatrixAt(n, dummy.matrix);
-      playerBulletMesh.setColorAt(n, b.element ? ELEMENT_BULLET[b.element] : PLAIN_BULLET);
-      n += 1;
+      mesh.setMatrixAt(m, dummy.matrix);
+      mesh.setColorAt(m, b.element ? ELEMENT_BULLET[b.element] : PLAIN_BULLET);
+      bulletCounts[b.kind] = m + 1;
     }
-    playerBulletMesh.count = n;
-    playerBulletMesh.instanceMatrix.needsUpdate = true;
-    if (playerBulletMesh.instanceColor) playerBulletMesh.instanceColor.needsUpdate = true;
+    for (const k of PLAYER_BULLET_KINDS) {
+      const mesh = bulletMeshes[k];
+      mesh.count = bulletCounts[k];
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
 
     // 敌弹
     n = 0;
@@ -391,6 +413,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
       const b = eb.items[i];
       dummy.position.set(b.x, HEIGHT.ebullet, rz(b.z, HEIGHT.ebullet));
       dummy.scale.setScalar(1);
+      dummy.rotation.set(0, 0, 0);
       dummy.updateMatrix();
       enemyBulletMesh.setMatrixAt(n, dummy.matrix);
       n += 1;
@@ -407,6 +430,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
       const k = Math.sin(Math.PI * (b.t / b.life));
       dummy.position.set(b.x, HEIGHT.burst, rz(b.z, HEIGHT.burst));
       dummy.scale.setScalar(Math.max(0.001, k * BURST.maxScale * b.scale));
+      dummy.rotation.set(0, 0, 0);
       dummy.updateMatrix();
       burstMesh.setMatrixAt(n, dummy.matrix);
       n += 1;

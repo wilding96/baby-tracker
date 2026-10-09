@@ -230,6 +230,21 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
   const player = createPlayerMesh();
   scene.add(player);
 
+  // 无敌护盾环：取代"无敌期闪烁"——恒定亮度、慢速自转的 3/4 圆环，
+  // 一眼看出在无敌，但不会一闪一闪地扎眼睛。
+  const shieldRing = new THREE.Mesh(
+    new THREE.RingGeometry(1.5, 1.9, 28, 1, 0, Math.PI * 1.5).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+      color: PAL.cyan,
+      transparent: true,
+      opacity: 0.42,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  shieldRing.visible = false;
+  scene.add(shieldRing);
+
   const bossMesh = createBossMesh();
   bossMesh.group.visible = false;
   scene.add(bossMesh.group);
@@ -285,7 +300,7 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       transparent: true,
       depthWrite: false,
     }),
-    POOL.playerBullets * BULLET_VIS.trail,
+    Math.max(1, POOL.playerBullets * BULLET_VIS.trail),
   );
   scene.add(trailMesh);
 
@@ -512,13 +527,19 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       speedLineMesh.count = 0;
     }
 
-    // 玩家机（无敌帧闪烁 + 枪口闪光）
+    // 玩家机：常显、不闪烁（无敌期交给护盾环），也不做"每发缩放"（高频射击下等于持续闪）
     const p = world.player;
-    const blink = p.invuln > 0 && Math.floor(world.time * 24) % 2 === 1;
-    player.visible = world.phase === "playing" && !blink;
+    player.visible = world.phase === "playing";
     player.position.set(p.pos.x, HEIGHT.player, rz(p.pos.z, HEIGHT.player));
-    player.scale.setScalar(world.muzzle > 0 ? 1.12 : 1);
+    player.scale.setScalar(1);
     pushShadow(p.pos.x, p.pos.z, 2.6); // 玩家机翼展半宽 2.3，阴影略大一圈
+
+    // 无敌护盾环：恒定亮度 + 慢转，取代闪烁
+    shieldRing.visible = world.phase === "playing" && p.invuln > 0;
+    if (shieldRing.visible) {
+      shieldRing.position.set(p.pos.x, HEIGHT.player - 0.2, rz(p.pos.z, HEIGHT.player - 0.2));
+      shieldRing.rotation.y = world.time * 0.9;
+    }
 
     // 僚机：编队实体（数量 ≤ 4，用 Group + 贴地阴影）
     for (const m of wingmanMeshes) m.visible = false;
@@ -530,7 +551,7 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       if (!mesh) continue;
       mesh.visible = world.phase === "playing";
       mesh.position.set(w.x, HEIGHT.player, rz(w.z, HEIGHT.player));
-      mesh.scale.setScalar(w.muzzle > 0 ? 1.14 : 1); // 僚机的独立枪口闪光
+      mesh.scale.setScalar(1); // 也不做缩放脉冲：高频射击下就是持续闪
       pushShadow(w.x, w.z, 1.3);
     }
 

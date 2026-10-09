@@ -5,9 +5,11 @@
 
 import { cardDef, rollOffer } from "./cards";
 import {
+  UP_ANGLE,
   SHIP_BULLET,
   bulletDef,
   fanShotAngles,
+  homingStep,
   splitShotAngles,
 } from "./bullets";
 import type { PlayerBulletKind } from "./bullets";
@@ -21,6 +23,7 @@ import {
   ENEMY_KINDS,
   FIELD,
   FPS_SAMPLE_MS,
+  HOMING,
   JUICE,
   LOOP,
   PLAYER,
@@ -39,7 +42,7 @@ import {
   WORD_WARN,
 } from "./config";
 import { stardustFor } from "./meta";
-import { fanAngle, spiralAngle } from "./patterns";
+import { aimedAngle, fanAngle, spiralAngle } from "./patterns";
 import { createSlots } from "./pools";
 import { resolveSpawnXs } from "./waves";
 import type {
@@ -72,6 +75,7 @@ interface Mods {
   spreadAngle: number;
   pierce: number;
   split: number;
+  homing: number;
   backfire: boolean;
   wings: number;
   element: Element | null;
@@ -284,6 +288,7 @@ export function createEngine({
     spreadAngle: 0.05,
     pierce: 0,
     split: 0,
+    homing: 0,
     backfire: false,
     wings: 0,
     element: null,
@@ -368,6 +373,7 @@ export function createEngine({
     mods.bulletDmg = PLAYER.bulletDmg * info.dmgMul * metaPower / (1 + c("spread") * 0.1);
     mods.pierce = c("pierce");
     mods.split = c("split");
+    mods.homing = c("homing");
     mods.backfire = c("backfire") > 0;
     mods.wings = c("wing");
     mods.element = lastElement;
@@ -620,6 +626,20 @@ export function createEngine({
         player.pos.z - 1.8,
         Math.cos(a) * def.speed,
         Math.sin(a) * def.speed,
+      );
+    }
+
+    // 追踪弹：按卡层数附带（从机头两侧斜射出去再拐弯）
+    for (let k = 0; k < mods.homing; k += 1) {
+      const side = k % 2 === 0 ? -1 : 1;
+      const a = UP_ANGLE + side * 0.5;
+      const hdef = bulletDef("homing");
+      spawnPlayerBullet(
+        "homing",
+        player.pos.x + side * 1.2,
+        player.pos.z - 1.2,
+        Math.cos(a) * hdef.speed,
+        Math.sin(a) * hdef.speed,
       );
     }
 
@@ -1000,12 +1020,50 @@ export function createEngine({
   }
 
   // ── 更新 ──
+  /** 最近敌机：只返回池里的对象引用，不分配（追踪弹每帧要用） */
+  function nearestEnemy(x: number, z: number): Enemy | null {
+    const es = world.enemies;
+    let best: Enemy | null = null;
+    let bestD2 = Infinity;
+    for (let i = 0; i < es.slots.capacity; i += 1) {
+      if (!es.slots.alive[i]) continue;
+      const e = es.items[i];
+      const dx = e.x - x;
+      const dz = e.z - z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        best = e;
+      }
+    }
+    return best;
+  }
+
   function updatePlayerBullets(dt: number): void {
     const set = world.playerBullets;
     for (let i = 0; i < set.slots.capacity; i += 1) {
       if (!set.slots.alive[i]) continue;
       const b = set.items[i];
       if (b.hitCd > 0) b.hitCd -= dt;
+      // 寿命回收：子母弹与追踪弹不能永久堆积
+      if (b.life > 0) {
+        b.life -= dt;
+        if (b.life <= 0) {
+          set.slots.release(i);
+          continue;
+        }
+      }
+      // 追踪弹：每帧朝最近的敌机转一步（比例导引）
+      if (b.kind === "homing") {
+        const target = nearestEnemy(b.x, b.z);
+        if (target) {
+          const want = aimedAngle(target.x - b.x, target.z - b.z);
+          b.angle = homingStep(b.angle, want, dt, HOMING.turnRate);
+          const speed = Math.hypot(b.vx, b.vz) || bulletDef("homing").speed;
+          b.vx = Math.cos(b.angle) * speed;
+          b.vz = Math.sin(b.angle) * speed;
+        }
+      }
       b.x += b.vx * dt;
       b.z += b.vz * dt;
       if (b.z < -FIELD.halfH - 3 || b.z > FIELD.halfH + 3) set.slots.release(i);

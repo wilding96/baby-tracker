@@ -134,6 +134,10 @@ export const PLAYER = {
 // ── 敌弹 ──
 export const BULLET = { enemyRadius: 0.5 } as const;
 
+// ── 追踪弹 ──
+/** 比例导引的最大转向速率（rad/s）：太大像锁头，太小追不上 */
+export const HOMING = { turnRate: 2.6 } as const;
+
 // ── 高度分层（世界 Y）──
 // 透视下"离地高度"就是纵深线索；但抬高会让屏幕位置偏移，
 // 因此所有实体绘制时都要走 projection.compensatedZ 补偿回判定点。
@@ -284,6 +288,7 @@ export const CARDS: readonly CardDef[] = [
   { id: "backfire", name: "后向炮", school: "barrage", icon: "⇅", desc: "同时向后发射 45% 伤害的弹", max: 1 },
   { id: "wing", name: "侧翼僚机", school: "barrage", icon: "✈", desc: "两侧各加一门副炮", max: 2 },
   { id: "split", name: "分裂弹", school: "barrage", icon: "❉", desc: "主弹命中后分裂成 2 发小弹", max: 2 },
+  { id: "homing", name: "追踪弹", school: "barrage", icon: "➹", desc: "每次齐射附带 N 发追踪弹", max: 2 },
   // 元素流
   { id: "volt", name: "电击弹", school: "element", icon: "⚡", desc: "弹附电属性；命中电击最近的敌人", max: 2 },
   { id: "flame", name: "燃烧弹", school: "element", icon: "🔥", desc: "弹附火属性；命中叠加灼烧", max: 2 },

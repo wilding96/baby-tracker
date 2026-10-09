@@ -263,8 +263,9 @@ export default function Pop3DGame() {
 
   const playing = phase === "playing";
 
+  // 画布外的留白：波普主题下用高饱和色块当"海报底"，画面才像一张卡片而不是插在暗盒里
   return (
-    <main className="fixed inset-0 z-40 select-none overflow-hidden overscroll-none bg-[#101010] font-mono">
+    <main className="fixed inset-0 z-40 select-none overflow-hidden overscroll-none bg-[#FF2D2D] font-mono">
       <div ref={mountRef} className="absolute inset-0" />
 
       {/* 炫彩卡选中演出：棱彩光晕扫过全屏（0.9 秒，然后自己消失） */}

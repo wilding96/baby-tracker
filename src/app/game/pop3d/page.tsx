@@ -50,6 +50,9 @@ export default function Pop3DGame() {
   const energyRef = useRef<HTMLDivElement | null>(null);
   const elemRef = useRef<HTMLSpanElement | null>(null);
   const reviveRef = useRef<HTMLSpanElement | null>(null);
+  const shieldRef = useRef<HTMLDivElement | null>(null);
+  const nukeRef = useRef<HTMLButtonElement | null>(null);
+  const nukeCountRef = useRef<HTMLSpanElement | null>(null);
   const bossBarRef = useRef<HTMLDivElement | null>(null);
   const bossFillRef = useRef<HTMLDivElement | null>(null);
   const bossWeakRef = useRef<HTMLSpanElement | null>(null);
@@ -62,8 +65,8 @@ export default function Pop3DGame() {
   const [stats, setStats] = useState<RunStats | null>(null);
   const [showShop, setShowShop] = useState(false);
   const [muted, setMuted] = useState(false);
-  /** 属性流卡被藏起来时（视觉调试期），机身按钮上的属性标签也一起藏掉 */
-  const [showElement, setShowElement] = useState(true);
+  /** 炫彩卡被选中时的额外演出（棱彩闪光） */
+  const [prismatic, setPrismatic] = useState<string | null>(null);
 
   // ── 音频：复用 2D 版已验证的 WebAudio 实现，这里只做适配与静音闸门 ──
   const audio = useGameAudio();
@@ -124,8 +127,6 @@ export default function Pop3DGame() {
     const savedMute = window.localStorage.getItem("pop3d_muted_v1") === "1";
     mutedRef.current = savedMute;
     setMuted(savedMute);
-    // 属性流卡默认被藏起来（视觉调试期），机身按钮上的属性标签一起藏
-    setShowElement(new URLSearchParams(window.location.search).get("cards") === "all");
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
@@ -168,7 +169,6 @@ export default function Pop3DGame() {
       autopilot: params.has("auto"),
       stress: params.has("stress"),
       skipTo: Number.isFinite(skip) && skip > 0 ? skip : 0,
-      hideElementCards: params.get("cards") !== "all",
       callbacks: {
         onStats: (s: FrameStats) => {
           if (fpsRef.current) fpsRef.current.textContent = String(Math.round(s.fps));
@@ -187,6 +187,12 @@ export default function Pop3DGame() {
           if (energyRef.current) energyRef.current.style.width = `${Math.round(h.energyPct * 100)}%`;
           if (elemRef.current) elemRef.current.textContent = h.element ? ELEMENT_ICON[h.element] : "—";
           if (reviveRef.current) reviveRef.current.textContent = h.revivesLeft > 0 ? `×${h.revivesLeft}` : "—";
+          if (shieldRef.current) {
+            const sp = h.shieldMax > 0 ? Math.max(0, Math.min(100, (h.shield / h.shieldMax) * 100)) : 0;
+            shieldRef.current.style.width = `${sp}%`;
+          }
+          if (nukeCountRef.current) nukeCountRef.current.textContent = String(h.nukes);
+          if (nukeRef.current) nukeRef.current.disabled = h.nukes <= 0;
           if (bossBarRef.current) bossBarRef.current.style.display = h.bossMaxHp > 0 ? "flex" : "none";
           if (bossFillRef.current && h.bossMaxHp > 0) {
             const pct = Math.max(0, Math.min(100, (h.bossHp / h.bossMaxHp) * 100));
@@ -259,6 +265,26 @@ export default function Pop3DGame() {
     <main className="fixed inset-0 z-40 select-none overflow-hidden overscroll-none bg-[#101010] font-mono">
       <div ref={mountRef} className="absolute inset-0" />
 
+      {/* 炫彩卡选中演出：棱彩光晕扫过全屏（0.9 秒，然后自己消失） */}
+      {prismatic && (
+        <div className="pointer-events-none absolute inset-0 z-40">
+          <style>{"@keyframes prismfx{0%{opacity:0;transform:scale(.6)}25%{opacity:.95}100%{opacity:0;transform:scale(1.5)}}@keyframes prismring{0%{opacity:.9;transform:scale(.2)}100%{opacity:0;transform:scale(1.8)}}"}</style>
+          <div
+            className="absolute left-1/2 top-1/2 h-[70vmin] w-[70vmin] -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{
+              background:
+                "conic-gradient(from 0deg,#FF2D2D,#FFD400,#00A05A,#00C2FF,#E5007E,#FF2D2D)",
+              mixBlendMode: "screen",
+              animation: "prismfx 0.9s ease-out forwards",
+            }}
+          />
+          <div
+            className="absolute left-1/2 top-1/2 h-[40vmin] w-[40vmin] -translate-x-1/2 -translate-y-1/2 rounded-full border-[10px] border-[#FFF8E7]"
+            style={{ animation: "prismring 0.9s ease-out forwards" }}
+          />
+        </div>
+      )}
+
       {/* ── 顶部 HUD（游戏内常显） ── */}
       {playing && (
         <>
@@ -267,6 +293,12 @@ export default function Pop3DGame() {
               <span className="text-[10px] opacity-70">HP</span>
               <div className="h-3 w-28 overflow-hidden rounded-full border-2 border-[#101010] bg-[#FFF8E7]">
                 <div ref={hpRef} className="h-full w-full bg-[#E5007E]" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] opacity-70">SH</span>
+              <div className="h-3 w-20 overflow-hidden rounded-full border-2 border-[#101010] bg-[#FFF8E7]">
+                <div ref={shieldRef} className="h-full w-0 bg-[#00C2FF]" />
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -293,6 +325,15 @@ export default function Pop3DGame() {
             <span className="rounded-md border-2 border-[#FFF8E7] bg-[#101010] px-1.5 py-0.5">
               备用 <span ref={reviveRef} className="tabular-nums">—</span>
             </span>
+            {/* 核弹：H5 要能点，所以做成真按钮（pointer-events-auto 打开） */}
+            <button
+              ref={nukeRef}
+              type="button"
+              onClick={() => engineRef.current?.useNuke()}
+              className="pointer-events-auto rounded-md border-2 border-[#FFF8E7] bg-[#101010] px-2 py-0.5 font-mono text-[10px] text-[#FFF8E7] shadow-[2px_2px_0_#E5007E] active:translate-y-[2px] active:shadow-none disabled:opacity-40"
+            >
+              ☢ <span ref={nukeCountRef} className="tabular-nums">0</span>
+            </button>
           </div>
 
           {/* Boss 血条 */}
@@ -379,12 +420,11 @@ export default function Pop3DGame() {
                   <span className="text-lg">{info.icon}</span>
                   <span className="text-xs font-bold text-[#101010]">{info.label}</span>
                   <span className="text-[9px] font-bold text-[#101010]/70">{info.blurb}</span>
-                  {showElement && (
-                    <span className="text-[9px] text-[#101010]">
-                      {ELEMENT_ICON[info.element]}
-                      {ELEMENT_NAME[info.element]}属性
-                    </span>
-                  )}
+                  {/* 属性现在是机型自带的（不进卡池），标出来才知道自己的克制关系 */}
+                  <span className="text-[9px] text-[#101010]">
+                    {ELEMENT_ICON[info.element]}
+                    {ELEMENT_NAME[info.element]}属性
+                  </span>
                 </button>
               );
             })}
@@ -413,25 +453,46 @@ export default function Pop3DGame() {
           <p className="text-xl font-bold tracking-[3px] text-[#101010]">选择强化</p>
           <p className="text-[11px] text-[#0057FF]">构筑你的流派</p>
           <div className="flex w-full gap-2">
-            {offer.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => engineRef.current?.chooseCard(c.id)}
-                style={{ boxShadow: `0 5px 0 ${SCHOOL_COLOR[c.school]}` }}
-                className="flex flex-1 flex-col items-center gap-1 rounded-lg border-4 border-[#101010] bg-[#FFF8E7] px-1 pb-3 pt-0 active:translate-y-[3px] active:!shadow-none"
-              >
-                <span
-                  className="w-full py-0.5 text-[10px] tracking-[2px] text-[#FFF8E7]"
-                  style={{ background: SCHOOL_COLOR[c.school] }}
+            {offer.map((c) => {
+              const prisma = c.tier === "prismatic";
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    if (prisma) {
+                      setPrismatic(c.id);
+                      window.setTimeout(() => setPrismatic(null), 900);
+                    }
+                    engineRef.current?.chooseCard(c.id);
+                  }}
+                  style={{
+                    boxShadow: prisma ? "0 6px 0 #FFD400" : `0 5px 0 ${SCHOOL_COLOR[c.school]}`,
+                    background: prisma
+                      ? "linear-gradient(150deg,#FFF8E7 0%,#FFE7F6 40%,#E4F6FF 75%,#FFF8E7 100%)"
+                      : "#FFF8E7",
+                  }}
+                  className={`flex flex-1 flex-col items-center gap-1 rounded-lg border-4 border-[#101010] px-1 pb-3 pt-0 active:translate-y-[3px] active:!shadow-none ${
+                    prisma ? "ring-4 ring-[#FFD400]" : ""
+                  }`}
                 >
-                  {SCHOOL_NAME[c.school]}
-                </span>
-                <span className="text-2xl leading-tight">{c.icon}</span>
-                <span className="text-xs font-bold text-[#101010]">{c.name}</span>
-                <span className="px-0.5 text-[10px] font-bold leading-snug text-[#101010]/80">{c.desc}</span>
-              </button>
-            ))}
+                  <span
+                    className="w-full py-0.5 text-[10px] tracking-[2px] text-[#FFF8E7]"
+                    style={{
+                      background: prisma
+                        ? "linear-gradient(90deg,#FF2D2D,#FFD400,#00A05A,#00C2FF,#E5007E)"
+                        : SCHOOL_COLOR[c.school],
+                    }}
+                  >
+                    {prisma ? "炫彩 · " : ""}
+                    {SCHOOL_NAME[c.school]}
+                  </span>
+                  <span className="text-2xl leading-tight">{c.icon}</span>
+                  <span className="text-xs font-bold text-[#101010]">{c.name}</span>
+                  <span className="px-0.5 text-[10px] font-bold leading-snug text-[#101010]/80">{c.desc}</span>
+                </button>
+              );
+            })}
           </div>
         </Veil>
       )}

@@ -17,7 +17,11 @@ export interface Vec2 {
 
 export type Element = "electric" | "fire" | "ice";
 export type ShipType = "ion" | "nova" | "pulse";
-export type CardSchool = "barrage" | "element" | "survival" | "economy";
+/** 卡牌类别（v2：只留 5 类，每类分普通/炫彩） */
+export type CardSchool = "weapon" | "wing" | "shield" | "life" | "nuke";
+
+/** 卡牌档位：普通（银）/ 炫彩（棱彩）。炫彩每局只出一次，且选中时有额外演出。 */
+export type CardTier = "common" | "prismatic";
 
 export interface ShipDef {
   label: string;
@@ -35,6 +39,7 @@ export interface CardDef {
   id: string;
   name: string;
   school: CardSchool;
+  tier: CardTier;
   icon: string;
   desc: string;
   /** 同一张卡最多叠几层 */
@@ -121,6 +126,8 @@ export interface PlayerBullet extends BulletMotion {
   /** 哑铃弹：蛇形摆幅 / 角速度（每发随机） */
   wAmp: number;
   wFreq: number;
+  /** 骨头：两瓣到中心的距离（主武器强化会把它拉长） */
+  arm: number;
   /** 是否僚机发射（僚机协同卡只认僚机的命中） */
   fromWing: boolean;
 }
@@ -136,16 +143,15 @@ export type EnemyBullet = BulletMotion;
 export interface Wingman {
   /** 编队槽位（0..3），决定左右与前后 */
   slot: number;
+  /** 攻击型：独立开火；支援型：环绕在身边给盾 */
+  type: "attack" | "support";
   x: number;
   z: number;
   cd: number;
   /** 枪口闪光剩余时间（秒），只影响视觉 */
   muzzle: number;
-}
-
-export interface Orb {
-  angle: number;
-  cd: number;
+  /** 支援型给盾时的脉冲计时（>0 时渲染做一次扩散动画） */
+  pulse: number;
 }
 
 /**
@@ -159,6 +165,8 @@ export interface Beam {
   z0: number;
   z1: number;
   halfW: number;
+  /** 是否已进化（炫彩）：末端分叉 3 条细束（视觉 + 溅射） */
+  forks: boolean;
   /** 光束末端落点（打到的最靠前的敌人 z；没打到就是场地顶端） */
   tipZ: number;
 }
@@ -301,10 +309,23 @@ export interface World {
   playerBullets: EntitySet<PlayerBullet>;
   enemyBullets: EntitySet<EnemyBullet>;
   wingmen: EntitySet<Wingman>;
-  orbs: EntitySet<Orb>;
-  /** 僚机协同叠层（主武器增伤，2 秒不命中就清零） */
-  linkStacks: number;
-  linkTimer: number;
+  /** 护盾：独立资源，受伤先扣盾，盾破才掉血 */
+  shield: number;
+  shieldMax: number;
+  /** 套盾动画 / 破盾动画的计时（>0 = 正在播） */
+  shieldPulse: number;
+  shieldBreak: number;
+  /** 生命核心：本局的免死是否已用掉 */
+  hpXUsed: boolean;
+  /** 距上次受伤的时间（永续护盾用它决定回填速度） */
+  hurtTimer: number;
+  /** 核弹次数与上限（初始 0，只能靠卡获得） */
+  nukes: number;
+  nukeMax: number;
+  /** 核弹演出：从屏幕中心落下 + 光环扩散，>0 时渲染播动画 */
+  nukeFx: number;
+  /** 本局是否已经出过炫彩卡（每局只出一张） */
+  prismaticTaken: boolean;
   /** 激光笔的常驻光束（其它机型 active = false） */
   beam: Beam;
   enemies: EntitySet<Enemy>;
@@ -339,6 +360,10 @@ export interface HudState {
   level: number;
   energyPct: number; // 升级进度 0~1
   element: Element | null;
+  /** 护盾与核弹（v2 新资源，HUD 要显示） */
+  shield: number;
+  shieldMax: number;
+  nukes: number;
   revivesLeft: number;
   bossHp: number;
   bossMaxHp: number; // 0 表示当前无 Boss
@@ -397,8 +422,6 @@ export interface EngineOptions {
   stress?: boolean;
   /** 调试：本局从第几秒开始（跳段验证 Boss / 后期波次） */
   skipTo?: number;
-  /** 调试：三选一里藏掉属性流卡（视觉调试期用，?cards=all 恢复） */
-  hideElementCards?: boolean;
 }
 
 export interface EngineHandle {
@@ -409,6 +432,8 @@ export interface EngineHandle {
   newRun(ship: ShipType, meta: MetaData): void;
   toMenu(): void;
   chooseCard(id: string): void;
+  /** 释放一颗核弹 */
+  useNuke(): void;
   useRevive(): void;
   giveUp(): void;
   setPaused(v: boolean): void;

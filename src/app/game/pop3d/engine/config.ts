@@ -161,6 +161,36 @@ export const BEAM = {
   hitFxCd: 0.07,
 } as const;
 
+// ── 护盾 / 核弹（v2 新资源）──
+export const SHIELD = {
+  /** 支援僚机把护盾上限也一起顶上去，所以设一个绝对上限 */
+  maxCap: 300,
+  /** 支援僚机每次给盾的量 / 间隔 */
+  supportGain: 3,
+  supportCd: 2,
+  /** 核心升级后的给盾量 */
+  supportGainX: 6,
+  /** 套盾动画 / 破盾动画时长（秒） */
+  pulseTime: 0.35,
+  breakTime: 0.5,
+  /** 永续护盾：每秒回填比例 */
+  regenPct: 0.03,
+  regenPctOutOfCombat: 0.12,
+  regenDelay: 3,
+} as const;
+
+export const NUKE = {
+  /** 初始次数 0，上限与卡一致 */
+  max: 3,
+  damage: 800,
+  /** 演出总时长（秒）：从屏幕中心落下 + 光环扩散 */
+  fxTime: 1.15,
+  freeze: 0.25,
+  shake: 1.4,
+  /** 扩容卡的伤害/范围倍率 */
+  upgradeMul: 1.6,
+} as const;
+
 // ── 弹幕表现力（T1：尺寸/描边/拖尾；想调观感只改这里，不用碰渲染代码）──
 // 背景：720p 画布下约 10.6 像素/世界单位，原始弹体只有 2.6~13px，看着像纸屑。
 export const BULLET_VIS = {
@@ -204,6 +234,11 @@ export const FX = {
 // ── 僚机（实体编队）──
 export const WINGMAN = {
   max: 4,
+  /** 支援型上限（环绕在身边给盾，不攻击） */
+  supportMax: 2,
+  /** 支援型的环绕半径与公转角速度 */
+  supportRadius: 3.1,
+  supportSpin: 1.1,
   offsetX: 2.6,
   offsetZ: 1.2,
   follow: 10, // 跟随速率（复用 rig 的 approach）
@@ -211,7 +246,8 @@ export const WINGMAN = {
   dmgMul: 0.6,
 } as const;
 
-export const POOL_WINGMEN = 4;
+/** 攻击型 4 架 + 支援型 2 架（槽位 0..3 攻击、4..5 支援） */
+export const POOL_WINGMEN = 6;
 
 // ── 环绕护卫弹（附着物，不进子弹池）──
 export const ORBIT = {
@@ -363,49 +399,40 @@ export const STATUS = {
   chainRatio: 0.4, // 连锁闪电的伤害比例（每层）
 } as const;
 
-// ── 流派卡：16 张行为卡，分四流派（§8.1）──
+// ── 卡牌 v2：只留 5 类 × 普通/炫彩（海克斯大乱斗那种分级）──
+// 普通卡 = 小幅数值；炫彩卡 = 质变（每局只出一张，且选中时有额外演出）。
 export const CARDS: readonly CardDef[] = [
-  // 弹幕流
-  { id: "rate", name: "超频", school: "barrage", icon: "⏩", desc: "射速提升 18%", max: 3 },
-  { id: "spread", name: "扇形弹", school: "barrage", icon: "⊹", desc: "主炮 +1 发并呈扇形散开", max: 3 },
-  { id: "pierce", name: "贯穿", school: "barrage", icon: "↟", desc: "子弹可多穿透 1 个敌人", max: 3 },
-  { id: "backfire", name: "后向炮", school: "barrage", icon: "⇅", desc: "同时向后发射 45% 伤害的弹", max: 1 },
-  { id: "wing", name: "侧翼僚机", school: "barrage", icon: "✈", desc: "Lv1 两架 / Lv2 四架实体僚机，继承机型弹型", max: 2 },
-  { id: "wingrate", name: "僚机超频", school: "barrage", icon: "⟫", desc: "僚机射速 +25%", max: 2 },
-  { id: "winglink", name: "僚机协同", school: "barrage", icon: "⇄", desc: "僚机命中给主武器叠增伤（每层 +4%，上限 5 层，2 秒衰减）", max: 2 },
-  { id: "split", name: "分裂弹", school: "barrage", icon: "❉", desc: "主弹命中后分裂成 2 发小弹", max: 2 },
-  { id: "homing", name: "追踪弹", school: "barrage", icon: "➹", desc: "每次齐射附带 N 发追踪弹", max: 2 },
-  // 元素流
-  { id: "volt", name: "电击弹", school: "element", icon: "⚡", desc: "弹附电属性；命中电击最近的敌人", max: 2 },
-  { id: "flame", name: "燃烧弹", school: "element", icon: "🔥", desc: "弹附火属性；命中叠加灼烧", max: 2 },
-  { id: "frost", name: "冰缓弹", school: "element", icon: "❄", desc: "弹附冰属性；命中减速敌人 22%", max: 2 },
-  { id: "mastery", name: "属性精通", school: "element", icon: "◆", desc: "属性克制倍率 +0.5", max: 2 },
-  // 生存流
-  { id: "bulk", name: "强化装甲", school: "survival", icon: "❤", desc: "最大生命 +25，并立即回复", max: 3 },
-  { id: "leech", name: "击杀回血", school: "survival", icon: "✚", desc: "每 40 击杀回复 6 点生命", max: 2 },
-  { id: "guard", name: "受击护盾", school: "survival", icon: "🛡", desc: "受伤后无敌时间 +1.2 秒", max: 1 },
-  { id: "last", name: "背水一战", school: "survival", icon: "‼", desc: "生命低于 30% 时伤害 ×1.6", max: 1 },
-  { id: "orbit", name: "环绕护卫弹", school: "survival", icon: "◎", desc: "Lv1 两发 / Lv2 四发绕机公转，接触伤害", max: 2 },
-  // 经济流
-  { id: "flow", name: "能量回流", school: "economy", icon: "∞", desc: "升级所需能量 -14%", max: 3 },
-  { id: "bounty", name: "赏金猎人", school: "economy", icon: "★", desc: "击杀得分 +50%", max: 2 },
-  { id: "star", name: "星尘转化", school: "economy", icon: "✧", desc: "本局星尘结算 +25%", max: 2 },
+  // ── 普通卡（银）──
+  { id: "wpn", name: "主武器强化", school: "weapon", tier: "common", icon: "✚", desc: "按当前弹型强化：激光加宽 / 鱼干加伤 / 骨头加长", max: 3 },
+  { id: "wingA", name: "僚机·攻击型", school: "wing", tier: "common", icon: "✈", desc: "+2 架攻击僚机（继承机型弹型，伤害 ×0.6）", max: 2 },
+  { id: "wingS", name: "僚机·支援型", school: "wing", tier: "common", icon: "❍", desc: "+1 架支援僚机：每 2 秒给 +3 护盾", max: 2 },
+  { id: "shield", name: "能量护盾", school: "shield", tier: "common", icon: "⛨", desc: "护盾上限 +40，并立刻补满", max: 3 },
+  { id: "hp", name: "强化装甲", school: "life", tier: "common", icon: "❤", desc: "最大生命 +25，并立即回复 25", max: 3 },
+  { id: "nuke", name: "核弹补给", school: "nuke", tier: "common", icon: "☢", desc: "核弹次数 +1（上限 3）", max: 3 },
+  // ── 炫彩卡（棱彩，每局只出一张）──
+  { id: "wpnX", name: "主武器进化", school: "weapon", tier: "prismatic", icon: "✦", desc: "按弹型质变：激光分叉 / 鱼干炸鳞 / 双骨头", max: 1 },
+  { id: "wingX", name: "僚机核心升级", school: "wing", tier: "prismatic", icon: "✧", desc: "攻击僚机伤害 ×0.9；支援僚机 +6 护盾/2s；并 +1 架当前类型", max: 1 },
+  { id: "shieldX", name: "永续护盾", school: "shield", tier: "prismatic", icon: "❖", desc: "护盾上限 +80，每秒回填 3%；击穿时放一次清弹冲击波", max: 1 },
+  { id: "hpX", name: "生命核心", school: "life", tier: "prismatic", icon: "❣", desc: "最大生命 +50；每局一次致命伤改为满血 + 3 秒无敌", max: 1 },
+  { id: "nukeX", name: "核弹扩容", school: "nuke", tier: "prismatic", icon: "☢", desc: "核弹上限 +2 并立刻 +2；核弹伤害/范围 ×1.6", max: 1 },
 ] as const;
 
 export const CARD_BY_ID: Record<string, CardDef> = Object.fromEntries(CARDS.map((c) => [c.id, c]));
 
 export const SCHOOL_NAME: Record<CardSchool, string> = {
-  barrage: "弹幕流",
-  element: "元素流",
-  survival: "生存流",
-  economy: "经济流",
+  weapon: "主武器",
+  wing: "僚机",
+  shield: "护盾",
+  life: "生命",
+  nuke: "核弹",
 };
 
 export const SCHOOL_COLOR: Record<CardSchool, string> = {
-  barrage: PAL.blue,
-  element: PAL.magenta,
-  survival: PAL.red,
-  economy: PAL.yellow,
+  weapon: PAL.blue,
+  wing: PAL.cyan,
+  shield: PAL.green,
+  life: PAL.red,
+  nuke: PAL.magenta,
 };
 
 // ── 局外养成 ──

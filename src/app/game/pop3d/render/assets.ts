@@ -245,11 +245,19 @@ export function createWingmanMesh(): THREE.Group {
   return group;
 }
 
-/** 环绕护卫弹：平躺的小环 */
-export function createOrbGeometry(): THREE.BufferGeometry {
-  const g = new THREE.RingGeometry(0.34, 0.48, 12);
-  g.rotateX(-Math.PI / 2);
-  return g;
+/**
+ * 支援型僚机：环绕在身边给盾的小卫星。
+ * 一个多面体核心 + 一圈倾斜的绿环（倾斜才能看出在自转），只有 2 个 draw call。
+ */
+export function createSupportDroneMesh(): THREE.Group {
+  const group = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 0), flat(PAL.cyan));
+  core.add(edgeLines(core.geometry));
+  group.add(core);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.1, 6, 18), flat(PAL.green));
+  ring.rotation.set(-Math.PI / 2, 0, 0.55);
+  group.add(ring);
+  return group;
 }
 
 /** 爆点：低面数多面体，靠缩放做大再收回 */

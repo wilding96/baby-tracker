@@ -29,17 +29,19 @@ import {
   HOMING,
   JUICE,
   LOOP,
-  ORBIT,
+  NUKE,
   PLAYER,
   POOL,
   POOL_WINGMEN,
   RUN,
   SCORE,
+  SHIELD,
   SHIP_INFO,
   STATUS,
   WAVES,
   WEAPON_MAX_LV,
   WINGMAN,
+  WORD_BOOM,
   WORD_CLEAR,
   WORD_HURT,
   WORD_KILL_BASE,
@@ -70,7 +72,6 @@ import type {
   Player,
   PlayerBullet,
   Pop,
-  Orb,
   ShipType,
   WaveDef,
   Wingman,
@@ -85,23 +86,21 @@ interface Mods {
   bulletCount: number;
   spreadAngle: number;
   pierce: number;
-  split: number;
-  homing: number;
-  backfire: boolean;
-  /** 僚机射速冷却乘数（层数越高越小） */
-  wingRateMul: number;
-  /** 僚机协同：命中给主武器叠增伤的层数（每层 +4%） */
-  wingLink: number;
   element: Element | null;
   chain: number;
   burn: number;
   chill: number;
-  elementWeakBonus: number;
-  leech: number;
-  guardBonus: number;
-  lastStand: boolean;
-  scoreMul: number;
-  dustMul: number;
+  /** 主武器强化层数 / 是否已进化（v2 卡） */
+  wpn: number;
+  wpnX: boolean;
+  /** 僚机：攻击型 / 支援型层数与核心升级 */
+  wingA: number;
+  wingS: number;
+  wingX: boolean;
+  /** 永续护盾 / 生命核心 / 核弹扩容 */
+  shieldX: boolean;
+  hpX: boolean;
+  nukeX: boolean;
   energyMul: number;
 }
 
@@ -138,6 +137,7 @@ function makePlayerBullets(capacity: number): EntitySet<PlayerBullet> {
       drift: 0,
       wAmp: 0,
       wFreq: 0,
+      arm: 0,
       fromWing: false,
     });
   }
@@ -154,13 +154,9 @@ function makeEnemyBullets(capacity: number): EntitySet<EnemyBullet> {
 
 function makeWingmen(capacity: number): EntitySet<Wingman> {
   const items: Wingman[] = [];
-  for (let i = 0; i < capacity; i += 1) items.push({ slot: i, x: 0, z: 0, cd: 0, muzzle: 0 });
-  return { items, slots: createSlots(capacity) };
-}
-
-function makeOrbs(capacity: number): EntitySet<Orb> {
-  const items: Orb[] = [];
-  for (let i = 0; i < capacity; i += 1) items.push({ angle: 0, cd: 0 });
+  for (let i = 0; i < capacity; i += 1) {
+    items.push({ slot: i, type: "attack", x: 0, z: 0, cd: 0, muzzle: 0, pulse: 0 });
+  }
   return { items, slots: createSlots(capacity) };
 }
 
@@ -223,9 +219,6 @@ const KEY_MAP: Record<string, keyof Pick<InputState, "up" | "down" | "left" | "r
 const AUTOPILOT_CANDIDATES = 9;
 /** 拖动灵敏度：手指移动 1 像素，飞机移动 1.2 像素 */
 const DRAG_SENSITIVITY = 1.2;
-/** 击杀回血的触发间隔 */
-const LEECH_EVERY = 40;
-
 export function createEngine({
   mount,
   renderer,
@@ -234,10 +227,8 @@ export function createEngine({
   autopilot = false,
   stress = false,
   skipTo = 0,
-  hideElementCards = false,
 }: EngineOptions): EngineHandle {
-  // 视觉调试期可以把整条影响弹色的流派藏掉（候选池只影响发牌，不改任何数值）
-  const cardPool = hideElementCards ? CARDS.filter((c) => c.school !== "element") : CARDS;
+  const cardPool = CARDS;
   // ── 输入 ──
   const input: InputState = {
     up: false,
@@ -299,10 +290,17 @@ export function createEngine({
     playerBullets: makePlayerBullets(POOL.playerBullets),
     enemyBullets: makeEnemyBullets(POOL.enemyBullets),
     wingmen: makeWingmen(POOL_WINGMEN),
-    orbs: makeOrbs(ORBIT.max),
-    linkStacks: 0,
-    linkTimer: 0,
-    beam: { active: false, x: 0, z0: 0, z1: 0, halfW: BEAM.halfW, tipZ: 0 },
+    shield: 0,
+    shieldMax: 0,
+    shieldPulse: 0,
+    shieldBreak: 0,
+    hpXUsed: false,
+    hurtTimer: 0,
+    nukes: 0,
+    nukeMax: 0,
+    nukeFx: 0,
+    prismaticTaken: false,
+    beam: { active: false, x: 0, z0: 0, z1: 0, halfW: BEAM.halfW, forks: false, tipZ: 0 },
     enemies: makeEnemies(POOL.enemies),
     bursts: makeBursts(POOL.bursts),
     pops: makePops(JUICE.popCap),
@@ -318,7 +316,6 @@ export function createEngine({
 
   let meta: MetaData = cloneMeta(EMPTY_META);
   let ship: ShipType = "nova";
-  let lastElement: Element | null = null;
   let offer: CardDef[] = [];
 
   const mods: Mods = {
@@ -327,21 +324,18 @@ export function createEngine({
     bulletCount: 2,
     spreadAngle: 0.05,
     pierce: 0,
-    split: 0,
-    homing: 0,
-    backfire: false,
-    wingRateMul: 1,
-    wingLink: 0,
     element: null,
     chain: 0,
     burn: 0,
     chill: 0,
-    elementWeakBonus: 0,
-    leech: 0,
-    guardBonus: 0,
-    lastStand: false,
-    scoreMul: 1,
-    dustMul: 1,
+    wpn: 0,
+    wpnX: false,
+    wingA: 0,
+    wingS: 0,
+    wingX: false,
+    shieldX: false,
+    hpX: false,
+    nukeX: false,
     energyMul: 1,
   };
 
@@ -387,6 +381,9 @@ export function createEngine({
       level: world.level,
       energyPct: world.energyNeed > 0 ? Math.min(1, world.energy / world.energyNeed) : 0,
       element: mods.element,
+      shield: world.shield,
+      shieldMax: world.shieldMax,
+      nukes: world.nukes,
       revivesLeft: world.revivesLeft,
       bossHp: boss.active ? boss.hp : 0,
       bossMaxHp: boss.active ? boss.maxHp : 0,
@@ -408,30 +405,32 @@ export function createEngine({
     const info = SHIP_INFO[ship];
     const metaPower = 1 + meta.upgrades.power * 0.08;
 
-    mods.fireCd = (PLAYER.fireCd * info.cdMul) / (1 + c("rate") * 0.18);
-    mods.bulletCount = info.bulletCount + c("spread") + (world.weaponLv - 1);
-    // 扇形角度带机型倍率：新星是霰弹（摊得开），离子是集中火力
-    mods.spreadAngle = (0.05 + c("spread") * 0.035) * info.spreadMul;
-    // 扇形弹：弹数上去、单发下来，避免"纯数值膨胀"
-    mods.bulletDmg = PLAYER.bulletDmg * info.dmgMul * metaPower / (1 + c("spread") * 0.1);
-    mods.pierce = c("pierce");
-    mods.split = c("split");
-    mods.homing = c("homing");
-    mods.backfire = c("backfire") > 0;
-    // 射速倍率是"冷却乘数"，层数越高越小
-    mods.wingRateMul = 1 / (1 + c("wingrate") * 0.25);
-    mods.wingLink = c("winglink");
-    mods.element = lastElement;
-    mods.chain = c("volt");
-    mods.burn = c("flame");
-    mods.chill = c("frost");
-    mods.elementWeakBonus = c("mastery") * ELEMENT_MOD.masteryPer;
-    mods.leech = c("leech");
-    mods.guardBonus = c("guard") > 0 ? 1.2 : 0;
-    mods.lastStand = c("last") > 0;
-    mods.scoreMul = 1 + c("bounty") * 0.5;
-    mods.dustMul = 1 + c("star") * 0.25;
+    mods.fireCd = PLAYER.fireCd * info.cdMul;
+    mods.bulletCount = info.bulletCount + (world.weaponLv - 1);
+    // 散射角度带机型倍率：小鱼干摊得开，激光笔集中
+    mods.spreadAngle = 0.05 * info.spreadMul;
+    mods.pierce = 0;
+    mods.wpn = c("wpn");
+    mods.wpnX = c("wpnX") > 0;
+    mods.wingA = c("wingA");
+    mods.wingS = c("wingS");
+    mods.wingX = c("wingX") > 0;
+    mods.shieldX = c("shieldX") > 0;
+    mods.hpX = c("hpX") > 0;
+    mods.nukeX = c("nukeX") > 0;
+    // 主武器强化：**按当前弹型**给不同的成长（小鱼干/骨头加伤，激光笔是加宽，见 updateBeam）
+    let dmgMul = info.dmgMul * metaPower;
+    if (ship !== "ion") dmgMul *= Math.pow(1.25, mods.wpn);
+    if (mods.wpnX && ship === "pulse") dmgMul *= 0.65; // 双骨头：单根弱一点
+    mods.bulletDmg = PLAYER.bulletDmg * dmgMul;
+    // 机型自带属性：电＝连锁、火＝灼烧、冰＝减速（属性不再进卡池）
+    mods.element = info.element;
+    mods.chain = info.element === "electric" ? 1 : 0;
+    mods.burn = info.element === "fire" ? 1 : 0;
+    mods.chill = info.element === "ice" ? 1 : 0;
     mods.energyMul = 1 + meta.upgrades.energy * 0.12;
+    // 僚机编队跟着卡走（卡是数据、实体是状态；这里也覆盖开局时的清零）
+    syncWingmen();
   }
 
   function computeEnergyNeed(): number {
@@ -455,7 +454,9 @@ export function createEngine({
     }
     world.energyNeed = computeEnergyNeed();
     recomputeMods();
-    offer = rollOffer(world.cards, 3, cardPool);
+    // 炫彩卡每局只出一次（出现在它该出现的那次三选一里，跳过就没了）
+    offer = rollOffer(world.cards, 3, cardPool, { prismatic: !world.prismaticTaken });
+    if (offer.some((c) => c.tier === "prismatic")) world.prismaticTaken = true;
     spawnPop(player.pos.x, player.pos.z - 3, WORD_LEVEL, 1.6);
     audio?.card();
     setPhase("card");
@@ -464,27 +465,38 @@ export function createEngine({
 
   function applyCardInstant(id: string): void {
     switch (id) {
-      case "bulk":
+      case "hp":
         player.maxHp += 25;
         player.hp = Math.min(player.maxHp, player.hp + 25);
         break;
-      case "volt":
-        lastElement = "electric";
+      case "hpX":
+        player.maxHp += 50;
+        player.hp = Math.min(player.maxHp, player.hp + 50);
         break;
-      case "flame":
-        lastElement = "fire";
+      case "shield":
+        world.shieldMax += 40;
+        world.shield = world.shieldMax;
+        world.shieldPulse = SHIELD.pulseTime;
         break;
-      case "frost":
-        lastElement = "ice";
+      case "shieldX":
+        world.shieldMax += 80;
+        world.shield = world.shieldMax;
+        world.shieldPulse = SHIELD.pulseTime;
         break;
-      case "orbit":
-        // 卡是数据、实体是状态：拿了卡就立刻把环绕弹补到位
-        syncOrbs((world.cards["orbit"] ?? 0) * 2);
+      case "nuke":
+        world.nukeMax = Math.min(NUKE.max, world.nukeMax + 1);
+        world.nukes += 1;
         break;
-      case "wing":
+      case "nukeX":
+        world.nukeMax += 2;
+        world.nukes += 2;
+        break;
+      case "wingA":
+      case "wingS":
+      case "wingX":
         // 卡是数据、实体是状态：拿了卡就立刻把僚机补到位
-        // （applyCardInstant 在 recomputeMods 之前调用，所以这里直接数层数）
-        syncWingmen((world.cards["wing"] ?? 0) * 2);
+        // （applyCardInstant 在 recomputeMods 之前调用，所以这里按卡层数直接算）
+        syncWingmen();
         break;
       default:
         break;
@@ -630,9 +642,9 @@ export function createEngine({
     vz: number,
     dmgMul = 1,
     fromWing = false,
-  ): void {
+  ): number {
     const index = world.playerBullets.slots.acquire();
-    if (index < 0) return;
+    if (index < 0) return -1;
     const def = bulletDef(kind);
     const b = world.playerBullets.items[index];
     b.kind = kind;
@@ -651,18 +663,23 @@ export function createEngine({
     b.drift = 0;
     b.wAmp = 0;
     b.wFreq = 0;
+    b.arm = 0;
     // 哑铃弹：两瓣相位、自转方向、横漂、蛇形——全部每发随机，所以直线也会打空
     if (def.chaotic) {
       const c = def.chaotic;
+      // 主武器强化：骨头变长（判定与外观一起长）
+      b.arm = c.arm + mods.wpn * 0.15;
       b.angle = Math.random() * Math.PI * 2;
       b.spin = (Math.random() * 2 - 1) * c.spin;
-      b.drift = (Math.random() * 2 - 1) * c.drift;
+      // 强化也让横漂收敛（更好命中）
+      b.drift = (Math.random() * 2 - 1) * c.drift * Math.pow(0.85, mods.wpn);
       b.wAmp = c.amp * (0.4 + Math.random());
       b.wFreq = c.freq * (0.6 + Math.random() * 0.9);
     }
     b.fromWing = fromWing;
     // 刚生成的子母弹与父弹位置重合，给一点隔断防止同帧自我触发
     b.hitCd = 0.05;
+    return index;
   }
 
   /** 在命中点生成 n 发子母弹（冲击波溅射与分裂弹共用） */
@@ -692,6 +709,8 @@ export function createEngine({
     const kind = SHIP_BULLET[ship];
     const def = bulletDef(kind);
     const n = mods.bulletCount;
+    // 小鱼干的主武器强化是"加伤 + 提速"
+    const speed = ship === "nova" ? def.speed * Math.pow(1.08, mods.wpn) : def.speed;
     fanShotAngles(n, mods.spreadAngle, shotAngles);
     for (let k = 0; k < n; k += 1) {
       const a = shotAngles[k];
@@ -700,36 +719,21 @@ export function createEngine({
         kind,
         player.pos.x + off * PLAYER.bulletSpread * 0.9,
         player.pos.z - 1.8,
-        Math.cos(a) * def.speed,
-        Math.sin(a) * def.speed,
+        Math.cos(a) * speed,
+        Math.sin(a) * speed,
       );
     }
 
-    // 追踪弹：按卡层数附带（从机头两侧斜射出去再拐弯）
-    for (let k = 0; k < mods.homing; k += 1) {
-      const side = k % 2 === 0 ? -1 : 1;
-      const a = UP_ANGLE + side * 0.5;
-      const hdef = bulletDef("homing");
-      spawnPlayerBullet(
-        "homing",
-        player.pos.x + side * 1.2,
-        player.pos.z - 1.2,
-        Math.cos(a) * hdef.speed,
-        Math.sin(a) * hdef.speed,
-      );
-    }
-
-    // 后向炮：45% 伤害（弹型是子母弹，故按 mini 的倍率反推成总量）
-    if (mods.backfire) {
-      const back = bulletDef("mini");
-      spawnPlayerBullet(
-        "mini",
+    // 骨头进化（炫彩）：一次射出两根、相位相反 —— 命中率翻倍，单根伤害已在上面的 dmgMul 里打过折
+    if (mods.wpnX && ship === "pulse") {
+      const first = spawnPlayerBullet(
+        kind,
         player.pos.x,
-        player.pos.z + 1.6,
-        0,
-        back.speed * 0.85,
-        0.45 / back.dmgMul,
+        player.pos.z - 1.8,
+        Math.cos(UP_ANGLE) * speed,
+        Math.sin(UP_ANGLE) * speed,
       );
+      if (first >= 0) world.playerBullets.items[first].angle += Math.PI;
     }
   }
 
@@ -743,8 +747,10 @@ export function createEngine({
     const bx = player.pos.x;
     const z0 = player.pos.z - 2;
     const z1 = -FIELD.halfH - BEAM.overhang;
-    const halfW = BEAM.halfW + Math.max(0, mods.bulletCount - 1) * BEAM.halfWPerLevel;
+    // 主武器强化：激光笔的成长是**加宽**（弹数成长也加宽）；进化则末端分叉
+    const halfW = BEAM.halfW + Math.max(0, mods.bulletCount - 1) * BEAM.halfWPerLevel + mods.wpn * 0.15;
     beam.active = true;
+    beam.forks = mods.wpnX;
     beam.x = bx;
     beam.z0 = z0;
     beam.z1 = z1;
@@ -752,7 +758,8 @@ export function createEngine({
     beam.tipZ = z1;
 
     // 每秒伤害：沿用"单发伤害 ÷ 冷却"的口径，于是超频卡对光束就是 DPS 提升
-    const dps = (mods.bulletDmg * bulletDef(SHIP_BULLET.ion).dmgMul) / mods.fireCd;
+    const dps =
+      (mods.bulletDmg * bulletDef(SHIP_BULLET.ion).dmgMul * Math.pow(1.1, mods.wpn)) / mods.fireCd;
     const tickDmg = dps * BEAM.hitFxCd;
     const es = world.enemies;
     // ── 由近到远结算：默认只打"最靠前"的那一个，贯穿卡每层多穿一个目标 ──
@@ -801,7 +808,10 @@ export function createEngine({
           // 每帧都触发会很吵：光斑 / 连锁 / 分裂环统一按节流窗口走
           spawnSpark(e.x, e.z);
           if (mods.chain > 0) chainTo(e, bestIndex, tickDmg);
-          if (mods.split > 0) spawnSplit(e.x, e.z, -Math.PI / 2, mods.split * 2);
+          if (mods.wpnX) {
+            spawnSplit(e.x, e.z, -Math.PI / 2, 4); // 末端溅射环
+            forkSplash(e.x, e.z, bestIndex, tickDmg * 0.4); // 分叉：再打最近的 2 个
+          }
         }
         if (e.hp <= 0) killEnemy(e, bestIndex, true);
       } else {
@@ -814,6 +824,44 @@ export function createEngine({
       limitZ = bestZ - 0.01; // 再往上找下一个目标
     }
     if (hitAny && sparkCd <= 0) sparkCd = BEAM.hitFxCd;
+  }
+
+  /** 激光分叉：从命中点再溅射给最近的 2 个敌人（各自 ×0.4） */
+  function forkSplash(x: number, z: number, exclude: number, dmg: number): void {
+    const es = world.enemies;
+    let first = -1;
+    let firstD2 = Infinity;
+    let second = -1;
+    let secondD2 = Infinity;
+    for (let i = 0; i < es.slots.capacity; i += 1) {
+      if (i === exclude || !es.slots.alive[i]) continue;
+      const e = es.items[i];
+      const dx = e.x - x;
+      const dz = e.z - z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > 18 * 18) continue;
+      if (d2 < firstD2) {
+        secondD2 = firstD2;
+        second = first;
+        firstD2 = d2;
+        first = i;
+      } else if (d2 < secondD2) {
+        secondD2 = d2;
+        second = i;
+      }
+    }
+    if (first >= 0) {
+      const e1 = es.items[first];
+      e1.hp -= dmg;
+      e1.flash = 0.08;
+      if (e1.hp <= 0) killEnemy(e1, first, true);
+    }
+    if (second >= 0) {
+      const e2 = es.items[second];
+      e2.hp -= dmg;
+      e2.flash = 0.08;
+      if (e2.hp <= 0) killEnemy(e2, second, true);
+    }
   }
 
   function spawnEnemyBullet(x: number, z: number, vx: number, vz: number, dmg: number): void {
@@ -830,36 +878,67 @@ export function createEngine({
   }
 
   // ── 僚机（实体编队，不是"多发子弹"）──
-  /** 把僚机数量补/减到目标值（卡是数据，实体是状态） */
-  function syncWingmen(want: number): void {
-    const target = Math.min(WINGMAN.max, want);
-    let have = countAlive(world.wingmen);
-    while (have < target) {
-      const i = world.wingmen.slots.acquire();
-      if (i < 0) break;
-      const w = world.wingmen.items[i];
-      w.slot = have;
-      w.x = player.pos.x;
-      w.z = player.pos.z;
-      w.cd = 0.3;
-      have += 1;
+  /**
+   * 僚机编队：攻击型占槽位 0..3、支援型占 4..5。
+   * 核心升级（wingX）会给"当前更多的那一类"再加一架。
+   * 卡是数据、实体是状态——所以这里直接数卡层数，不依赖 mods 的更新时间。
+   */
+  function syncWingmen(): void {
+    const core = (world.cards["wingX"] ?? 0) > 0;
+    let attack = Math.min(WINGMAN.max, (world.cards["wingA"] ?? 0) * 2);
+    let support = Math.min(WINGMAN.supportMax, world.cards["wingS"] ?? 0);
+    if (core) {
+      if (attack >= support) attack = Math.min(WINGMAN.max, attack + 1);
+      else support = Math.min(WINGMAN.supportMax, support + 1);
     }
+    const wantAttack = attack;
+    const wantSupport = support;
+
+    // 先统计现有编队
+    let haveAttack = 0;
+    let haveSupport = 0;
+    for (let i = 0; i < world.wingmen.slots.capacity; i += 1) {
+      if (!world.wingmen.slots.alive[i]) continue;
+      if (world.wingmen.items[i].type === "attack") haveAttack += 1;
+      else haveSupport += 1;
+    }
+    const add = (type: "attack" | "support", n: number): void => {
+      for (let k = 0; k < n; k += 1) {
+        const i = world.wingmen.slots.acquire();
+        if (i < 0) return;
+        const w = world.wingmen.items[i];
+        w.type = type;
+        w.slot = type === "attack" ? haveAttack : 4 + haveSupport;
+        w.x = player.pos.x + (type === "attack" ? -2 : 0);
+        w.z = player.pos.z;
+        w.cd = type === "attack" ? 0.3 : SHIELD.supportCd;
+        w.muzzle = 0;
+        w.pulse = 0;
+        if (type === "attack") haveAttack += 1;
+        else haveSupport += 1;
+      }
+    };
+    add("attack", Math.max(0, wantAttack - haveAttack));
+    add("support", Math.max(0, wantSupport - haveSupport));
     // 多出来的从最大槽位开始回收
-    while (have > target) {
-      let maxSlot = -1;
-      let maxIndex = -1;
+    const removeOne = (type: "attack" | "support"): boolean => {
+      let bestSlot = -1;
+      let bestIndex = -1;
       for (let i = 0; i < world.wingmen.slots.capacity; i += 1) {
         if (!world.wingmen.slots.alive[i]) continue;
-        const s = world.wingmen.items[i].slot;
-        if (s > maxSlot) {
-          maxSlot = s;
-          maxIndex = i;
+        const w = world.wingmen.items[i];
+        if (w.type !== type) continue;
+        if (w.slot > bestSlot) {
+          bestSlot = w.slot;
+          bestIndex = i;
         }
       }
-      if (maxIndex < 0) break;
-      world.wingmen.slots.release(maxIndex);
-      have -= 1;
-    }
+      if (bestIndex < 0) return false;
+      world.wingmen.slots.release(bestIndex);
+      return true;
+    };
+    for (let k = haveAttack; k > wantAttack; k -= 1) if (!removeOne("attack")) break;
+    for (let k = haveSupport; k > wantSupport; k -= 1) if (!removeOne("support")) break;
   }
 
   function updateWingmen(dt: number): void {
@@ -869,80 +948,37 @@ export function createEngine({
     for (let i = 0; i < set.slots.capacity; i += 1) {
       if (!set.slots.alive[i]) continue;
       const w = set.items[i];
-      // 编队位：内联展开 attachments.wingmanSlot（避免每帧分配）
-      const side = w.slot % 2 === 0 ? -1 : 1;
-      const row = Math.floor(w.slot / 2);
-      const tx = player.pos.x + side * (WINGMAN.offsetX + row * 1.4);
-      const tz = player.pos.z + WINGMAN.offsetZ + row * 1.0;
-      w.x = approach(w.x, tx, dt, WINGMAN.follow);
-      w.z = approach(w.z, tz, dt, WINGMAN.follow);
-
-      w.cd -= dt;
       if (w.muzzle > 0) w.muzzle -= dt;
-      if (w.cd <= 0) {
-        w.cd = mods.fireCd * WINGMAN.fireCdMul * mods.wingRateMul;
-        w.muzzle = JUICE.muzzle;
-        spawnPlayerBullet(kind, w.x, w.z - 1.2, 0, -def.speed, WINGMAN.dmgMul, true);
-      }
-    }
-  }
+      if (w.pulse > 0) w.pulse -= dt;
+      w.cd -= dt;
 
-  // ── 环绕护卫弹（附着物：绕玩家公转的接触伤害）──
-  /** 把环绕弹数量补/减到目标值（和僚机一样：卡是数据，实体是状态） */
-  function syncOrbs(want: number): void {
-    const target = Math.min(ORBIT.max, want);
-    let have = countAlive(world.orbs);
-    while (have < target) {
-      const i = world.orbs.slots.acquire();
-      if (i < 0) break;
-      const o = world.orbs.items[i];
-      o.angle = (have * Math.PI * 2) / target; // 均匀铺开，避免重叠
-      o.cd = 0;
-      have += 1;
-    }
-    while (have > target) {
-      for (let i = world.orbs.slots.capacity - 1; i >= 0; i -= 1) {
-        if (world.orbs.slots.alive[i]) {
-          world.orbs.slots.release(i);
-          have -= 1;
-          break;
+      if (w.type === "attack") {
+        // 攻击型：编队位（内联展开 attachments.wingmanSlot，避免每帧分配）
+        const side = w.slot % 2 === 0 ? -1 : 1;
+        const row = Math.floor(w.slot / 2);
+        const tx = player.pos.x + side * (WINGMAN.offsetX + row * 1.4);
+        const tz = player.pos.z + WINGMAN.offsetZ + row * 1.0;
+        w.x = approach(w.x, tx, dt, WINGMAN.follow);
+        w.z = approach(w.z, tz, dt, WINGMAN.follow);
+        if (w.cd <= 0) {
+          w.cd = mods.fireCd * WINGMAN.fireCdMul;
+          w.muzzle = JUICE.muzzle;
+          spawnPlayerBullet(kind, w.x, w.z - 1.2, 0, -def.speed, WINGMAN.dmgMul, true);
+        }
+      } else {
+        // 支援型：绕玩家慢速公转（角度由时间推出来，零状态），每 2 秒把护盾顶上去
+        const angle = (w.slot - 4) * Math.PI + world.time * WINGMAN.supportSpin;
+        w.x = player.pos.x + Math.cos(angle) * WINGMAN.supportRadius;
+        w.z = player.pos.z + Math.sin(angle) * WINGMAN.supportRadius;
+        if (w.cd <= 0) {
+          w.cd = SHIELD.supportCd;
+          const gain = mods.wingX ? SHIELD.supportGainX : SHIELD.supportGain;
+          world.shieldMax = Math.min(SHIELD.maxCap, world.shieldMax + gain);
+          world.shield = Math.min(world.shieldMax, world.shield + gain);
+          world.shieldPulse = SHIELD.pulseTime;
+          w.pulse = SHIELD.pulseTime;
         }
       }
-    }
-  }
-
-  /** 用一个圆去撞敌机；命中一台就返回 true（环绕弹的接触伤害） */
-  function hitEnemyAt(x: number, z: number, r: number, dmg: number): boolean {
-    const es = world.enemies;
-    for (let i = 0; i < es.slots.capacity; i += 1) {
-      if (!es.slots.alive[i]) continue;
-      const e = es.items[i];
-      const dx = e.x - x;
-      const dz = e.z - z;
-      const rr = e.r + r;
-      if (dx * dx + dz * dz > rr * rr) continue;
-      e.hp -= dmg * playerDamageMul();
-      e.flash = 0.08;
-      if (e.hp <= 0) killEnemy(e, i, true);
-      return true;
-    }
-    return false;
-  }
-
-  function updateOrbs(dt: number): void {
-    const set = world.orbs;
-    if (set.slots.freeCount === set.slots.capacity) return; // 一颗都没有，直接跳过
-    for (let i = 0; i < set.slots.capacity; i += 1) {
-      if (!set.slots.alive[i]) continue;
-      const o = set.items[i];
-      o.angle += ORBIT.angular * dt;
-      if (o.cd > 0) o.cd -= dt;
-
-      // 位置内联展开 orbitPos：每帧每颗都算，不能分配
-      const ox = player.pos.x + Math.cos(o.angle) * ORBIT.radius;
-      const oz = player.pos.z + Math.sin(o.angle) * ORBIT.radius;
-      if (o.cd > 0) continue;
-      if (hitEnemyAt(ox, oz, 0.55, mods.bulletDmg * ORBIT.dmgMul)) o.cd = ORBIT.dmgCd;
     }
   }
 
@@ -1200,7 +1236,7 @@ export function createEngine({
   }
 
   function endRun(won: boolean): void {
-    const stardust = stardustFor(world.score, mods.dustMul);
+    const stardust = stardustFor(world.score, 1);
     const isRecord = world.score > meta.highScore;
     audio?.stopBgm();
     setPhase(won ? "victory" : "gameover");
@@ -1250,6 +1286,43 @@ export function createEngine({
     endRun(false);
   }
 
+  /**
+   * 核弹：清空全部敌弹 + 全场伤害 + 演出（屏幕中心落下、光环扩散）。
+   * 演出交给渲染层按 world.nukeFx 播，这里只负责数值与手感。
+   */
+  function useNuke(): void {
+    if (world.phase !== "playing" || world.nukes <= 0) return;
+    world.nukes -= 1;
+    world.nukeFx = NUKE.fxTime;
+    world.freeze = Math.max(world.freeze, NUKE.freeze);
+    addShake(NUKE.shake);
+    audio?.explosion(true);
+    playCine("down", 0.25); // 借用击破的慢动作，结束会自动还原 timeScale
+
+    const mul = mods.nukeX ? NUKE.upgradeMul : 1;
+    const dmg = NUKE.damage * mul;
+    clear(world.enemyBullets);
+    const es = world.enemies;
+    for (let i = 0; i < es.slots.capacity; i += 1) {
+      if (!es.slots.alive[i]) continue;
+      const e = es.items[i];
+      e.hp -= dmg;
+      e.flash = 0.12;
+      if (e.hp <= 0) killEnemy(e, i, true);
+    }
+    if (boss.active && !boss.entering) {
+      boss.hp -= dmg * elementMulFor(mods.element, boss.weak, boss.resist);
+      boss.flash = 0.16;
+      if (boss.hp <= 0) {
+        boss.hp = 0;
+        win();
+        return;
+      }
+    }
+    spawnPop(0, 6, WORD_BOOM, 3);
+    pushHud();
+  }
+
   function win(): void {
     boss.active = false;
     playCine("down", 0.4); // 0.4 游戏秒 ÷ 0.25 倍速 ≈ 1.6 秒真实时间
@@ -1270,15 +1343,46 @@ export function createEngine({
   function damagePlayer(amount: number): void {
     if (stress) return; // 压力模式不结算玩家血量，保证长时间观测
     if (player.invuln > 0 || world.phase !== "playing") return;
-    player.hp = Math.max(0, player.hp - amount);
-    player.invuln = PLAYER.invuln + mods.guardBonus;
+    world.hurtTimer = SHIELD.regenDelay;
+
+    // 护盾先吃伤害：盾破才掉血，并放一次碎裂（永续护盾还会顺手清一圈弹）
+    let left = amount;
+    if (world.shield > 0) {
+      const absorbed = Math.min(world.shield, left);
+      world.shield -= absorbed;
+      left -= absorbed;
+      if (world.shield <= 0) {
+        world.shield = 0;
+        world.shieldBreak = SHIELD.breakTime;
+        if (mods.shieldX) clear(world.enemyBullets);
+      }
+      player.invuln = Math.max(player.invuln, 0.25); // 别让接触伤害把盾"按帧削光"
+      addShake(JUICE.shakeKill);
+      pushHud();
+      if (left <= 0) return;
+    }
+
+    player.hp = Math.max(0, player.hp - left);
+    player.invuln = PLAYER.invuln;
     world.muzzle = 0;
     addShake(JUICE.shakeHit);
     world.freeze = Math.max(world.freeze, JUICE.freezeKill);
     spawnPop(player.pos.x, player.pos.z - 2, WORD_HURT, 1.2);
     audio?.playerHit();
     pushHud();
-    if (player.hp <= 0) die();
+    if (player.hp <= 0) {
+      // 生命核心（炫彩）：每局一次"致命伤改为满血 + 3 秒无敌"
+      if (mods.hpX && !world.hpXUsed) {
+        world.hpXUsed = true;
+        player.hp = player.maxHp;
+        player.invuln = 3;
+        spawnPop(player.pos.x, player.pos.z - 3, WORD_CLEAR, 2);
+        audio?.powerUp();
+        pushHud();
+        return;
+      }
+      die();
+    }
   }
 
   function killEnemy(e: Enemy, index: number, award: boolean): void {
@@ -1293,24 +1397,21 @@ export function createEngine({
     world.enemies.slots.release(index);
     if (!award) return;
     world.kills += 1;
-    world.score += Math.round(SCORE.perKill * mods.scoreMul);
+    world.score += SCORE.perKill;
     gainEnergy(ENERGY.perKill);
-    if (mods.leech > 0 && world.kills % LEECH_EVERY === 0) {
-      player.hp = Math.min(player.maxHp, player.hp + 6 * mods.leech);
-    }
   }
 
   // ── 伤害计算 ──
   function elementMulFor(element: Element | null, weak: Element, resist: Element): number {
     if (!element) return 1;
-    if (element === weak) return ELEMENT_MOD.weak + mods.elementWeakBonus;
+    if (element === weak) return ELEMENT_MOD.weak;
     if (element === resist) return ELEMENT_MOD.resist;
     return 1;
   }
 
   function playerDamageMul(): number {
-    const link = 1 + world.linkStacks * 0.04;
-    return (mods.lastStand && player.hp <= player.maxHp * 0.3 ? 1.6 : 1) * link;
+    // 预留的"主武器增伤"总入口（v2 暂时恒为 1：所有增伤都直接进了 bulletDmg）
+    return 1;
   }
 
   // ── 更新 ──
@@ -1423,7 +1524,8 @@ export function createEngine({
         let hitZ = b.z;
         if (chaos) {
           const raw = (e.x - b.x) * ux + (e.z - b.z) * uz;
-          const t = raw > chaos.arm ? chaos.arm : raw < -chaos.arm ? -chaos.arm : raw;
+          const arm = b.arm > 0 ? b.arm : chaos.arm;
+          const t = raw > arm ? arm : raw < -arm ? -arm : raw;
           hitX = b.x + ux * t;
           hitZ = b.z + uz * t;
         }
@@ -1442,16 +1544,14 @@ export function createEngine({
 
         // 溅射：火球命中炸成两发小弹，分裂弹卡按层数追加子母弹。
         // 子母弹不再分裂——否则每命中一次都自我复制，弹幕会指数爆炸。
-        const splitBase = chaos ? -Math.PI / 2 : b.angle;
-        if (b.kind !== "mini") {
-          if (b.kind === "wave") spawnSplit(hitX, hitZ, splitBase, 2);
-          if (mods.split > 0) spawnSplit(hitX, hitZ, splitBase, mods.split * 2);
-        }
-
-        // 僚机协同：僚机的命中给主武器叠增伤（2 秒不命中就清零）
-        if (b.fromWing && mods.wingLink > 0) {
-          world.linkStacks = Math.min(5, world.linkStacks + mods.wingLink);
-          world.linkTimer = 2;
+        // 骨头命中：炸成两发小弹；小鱼干进化（炫彩）：再炸出 3 片鱼鳞
+        if (b.kind === "wave") spawnSplit(hitX, hitZ, -Math.PI / 2, 2);
+        if (mods.wpnX && b.kind === "spread") {
+          for (let k = -1; k <= 1; k += 1) {
+            const a = -Math.PI / 2 + k * 0.5;
+            const sdef = bulletDef("mini");
+            spawnPlayerBullet("mini", hitX, hitZ, Math.cos(a) * sdef.speed, Math.sin(a) * sdef.speed);
+          }
         }
 
         if (b.pierce > 0) {
@@ -1591,10 +1691,14 @@ export function createEngine({
     if (world.shake > 0) world.shake = Math.max(0, world.shake - JUICE.shakeDecay * dt);
     if (world.muzzle > 0) world.muzzle -= dt;
     if (world.warn > 0) world.warn -= dt;
-    // 僚机协同的叠层：2 秒内没有新的僚机命中就清零
-    if (world.linkTimer > 0) {
-      world.linkTimer -= dt;
-      if (world.linkTimer <= 0) world.linkStacks = 0;
+    // 护盾/核弹的表现计时 + 永续护盾的回填
+    if (world.shieldPulse > 0) world.shieldPulse -= dt;
+    if (world.shieldBreak > 0) world.shieldBreak -= dt;
+    if (world.nukeFx > 0) world.nukeFx -= dt;
+    if (world.hurtTimer > 0) world.hurtTimer -= dt;
+    if (mods.shieldX && world.shield < world.shieldMax) {
+      const rate = world.hurtTimer > 0 ? SHIELD.regenPct : SHIELD.regenPctOutOfCombat;
+      world.shield = Math.min(world.shieldMax, world.shield + world.shieldMax * rate * dt);
     }
 
     if (autopilot) autopilotStep(dt);
@@ -1603,7 +1707,6 @@ export function createEngine({
 
     firePlayer(dt);
     updateWingmen(dt);
-    updateOrbs(dt);
     updatePlayerBullets(dt);
     updateEnemyBullets(dt);
     updateEnemies(dt);
@@ -1747,7 +1850,6 @@ export function createEngine({
     clear(world.playerBullets);
     clear(world.enemyBullets);
     clear(world.wingmen);
-    clear(world.orbs);
     world.beam.active = false;
     clear(world.enemies);
     clear(world.bursts);
@@ -1760,8 +1862,16 @@ export function createEngine({
     stressAngle = 0;
     sfxKillCd = 0;
     sparkCd = 0;
-    world.linkStacks = 0;
-    world.linkTimer = 0;
+    world.shield = 0;
+    world.shieldMax = 0;
+    world.shieldPulse = 0;
+    world.shieldBreak = 0;
+    world.hpXUsed = false;
+    world.hurtTimer = 0;
+    world.nukes = 0;
+    world.nukeMax = 0;
+    world.nukeFx = 0;
+    world.prismaticTaken = false;
     world.freeze = 0;
     world.shake = 0;
     world.muzzle = 0;
@@ -1776,7 +1886,6 @@ export function createEngine({
     audio?.startBgm();
     ship = nextShip;
     meta = cloneMeta(nextMeta);
-    lastElement = null;
     offer = [];
     resetWorld();
 
@@ -1843,6 +1952,7 @@ export function createEngine({
     newRun,
     toMenu,
     chooseCard,
+    useNuke,
     useRevive,
     giveUp,
     setPaused(v: boolean) {

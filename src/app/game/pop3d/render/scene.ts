@@ -21,10 +21,13 @@ import {
   FX,
   HEIGHT,
   JUICE,
-  ORBIT,
+  NUKE,
   PAL,
   POOL,
+  POOL_WINGMEN,
+  SHIELD,
   WORDS,
+  WINGMAN,
 } from "../engine/config";
 import type { Element, EnemyKind, Renderer, ShipType, Vec2, World } from "../engine/types";
 import { PLAYER_BULLET_KINDS, bulletDef } from "../engine/bullets";
@@ -41,10 +44,10 @@ import {
   createFieldGrid,
   createGlowGeometry,
   createGlowTexture,
-  createOrbGeometry,
   createPlayerBulletGeometries,
   createPlayerBulletOutlineGeometries,
   createPlayerMesh,
+  createSupportDroneMesh,
   createTrailGeometry,
   createWingmanMesh,
 } from "./assets";
@@ -352,6 +355,73 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
   beamCore.visible = false;
   beamTip.visible = false;
   scene.add(beamOuter, beamCore, beamTip);
+
+  // 激光进化：末端分叉的两条短束（只在 wpnX 时显示）
+  const forkGeo = new THREE.BoxGeometry(1, 0.02, 1);
+  const forkMat = new THREE.MeshBasicMaterial({ color: PAL.laser });
+  const beamForkL = new THREE.Mesh(forkGeo, forkMat);
+  const beamForkR = new THREE.Mesh(forkGeo, forkMat);
+  beamForkL.visible = false;
+  beamForkR.visible = false;
+  scene.add(beamForkL, beamForkR);
+
+  // 护盾罩：跟着玩家的一层球壳（套盾时涨一圈、破盾时闪一下再消失）
+  const shieldBubble = new THREE.Mesh(
+    new THREE.SphereGeometry(2.4, 16, 12),
+    new THREE.MeshBasicMaterial({
+      color: PAL.cyan,
+      transparent: true,
+      opacity: 0.16,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  shieldBubble.visible = false;
+  scene.add(shieldBubble);
+
+  // 核弹演出：一颗砸向屏幕中心的弹 + 两圈扩散光环 + 一次白闪
+  const nukeBomb = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.2, 0),
+    new THREE.MeshBasicMaterial({ color: PAL.yellow }),
+  );
+  const nukeRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.86, 1.14, 40).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+      color: PAL.yellow,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  const nukeRing2 = new THREE.Mesh(
+    new THREE.RingGeometry(0.8, 1.2, 40).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+      color: PAL.red,
+      transparent: true,
+      opacity: 0.7,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  const nukeFlash = new THREE.Mesh(
+    createGlowGeometry(),
+    new THREE.MeshBasicMaterial({
+      map: glowTexture,
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  nukeBomb.visible = false;
+  nukeRing.visible = false;
+  nukeRing2.visible = false;
+  nukeFlash.visible = false;
+  scene.add(nukeBomb, nukeRing, nukeRing2, nukeFlash);
   const enemyBulletMesh = instanced(
     createEnemyBulletGeometry(),
     new THREE.MeshBasicMaterial({ color: PAL.red }),
@@ -364,22 +434,14 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
   );
   scene.add(enemyOutline, enemyMesh, enemyBulletMesh, burstMesh);
 
-  // 僚机：最多 4 架，直接放 Group（数量太小，不值得上 InstancedMesh）
+  // 僚机：槽位 0..3 攻击型（小飞机）、4..5 支援型（环绕卫星）。
+  // 数量太小，直接放 Group；6 架的 draw call 也远小于 60 的红线。
   const wingmanMeshes: THREE.Group[] = [];
-  for (let i = 0; i < 4; i += 1) {
-    const m = createWingmanMesh();
+  for (let i = 0; i < POOL_WINGMEN; i += 1) {
+    const m = i < WINGMAN.max ? createWingmanMesh() : createSupportDroneMesh();
     m.visible = false;
     scene.add(m);
     wingmanMeshes.push(m);
-  }
-
-  // 环绕护卫弹：最多 4 颗，同样是 Group 级数量
-  const orbMeshes: THREE.Mesh[] = [];
-  for (let i = 0; i < 4; i += 1) {
-    const m = new THREE.Mesh(createOrbGeometry(), new THREE.MeshBasicMaterial({ color: PAL.cyan }));
-    m.visible = false;
-    scene.add(m);
-    orbMeshes.push(m);
   }
 
   // ── 贴地投影：画在地面真实坐标上，不做位置补偿（它就是"真实位置"的标记）──
@@ -604,6 +666,59 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       beamTip.position.set(beam.x, HEIGHT.bullet, zb);
       beamTip.scale.setScalar(beam.halfW * 6);
       beamTip.quaternion.copy(camera.quaternion);
+
+      // 进化（炫彩）：末端分叉的两条短束
+      const forkOn = beam.forks;
+      beamForkL.visible = forkOn;
+      beamForkR.visible = forkOn;
+      if (forkOn) {
+        const forkLen = 3.2;
+        beamForkL.scale.set(beam.halfW * 0.7, 1, forkLen);
+        beamForkL.position.set(beam.x - 0.5, HEIGHT.bullet, zb - forkLen * 0.45);
+        beamForkL.rotation.set(0, 0.3, 0);
+        beamForkR.scale.set(beam.halfW * 0.7, 1, forkLen);
+        beamForkR.position.set(beam.x + 0.5, HEIGHT.bullet, zb - forkLen * 0.45);
+        beamForkR.rotation.set(0, -0.3, 0);
+      }
+    }
+
+    // 护盾罩：套盾涨一圈、破盾闪一下（都不是"闪屏"，是状态变化的一次演出）
+    const pulse = world.shieldPulse > 0 ? world.shieldPulse / SHIELD.pulseTime : 0;
+    const brk = world.shieldBreak > 0 ? world.shieldBreak / SHIELD.breakTime : 0;
+    const shieldOn = world.phase === "playing" && (world.shield > 0 || pulse > 0 || brk > 0);
+    shieldBubble.visible = shieldOn;
+    if (shieldOn) {
+      shieldBubble.position.set(p.pos.x, HEIGHT.player, rz(p.pos.z, HEIGHT.player));
+      shieldBubble.scale.setScalar(1 + pulse * 0.35 + brk * 0.5);
+      const mat = shieldBubble.material as THREE.MeshBasicMaterial;
+      const ratio = world.shieldMax > 0 ? world.shield / world.shieldMax : 0;
+      mat.opacity = world.shield > 0 ? 0.1 + 0.14 * ratio : 0.4 * brk;
+    }
+
+    // 核弹演出：前 35% 砸向屏幕中心，后 65% 光环扩散 + 白闪
+    const nukeOn = world.nukeFx > 0;
+    nukeBomb.visible = nukeOn;
+    nukeRing.visible = nukeOn;
+    nukeRing2.visible = nukeOn;
+    nukeFlash.visible = nukeOn;
+    if (nukeOn) {
+      const t = 1 - world.nukeFx / NUKE.fxTime;
+      const drop = Math.min(1, t / 0.35);
+      nukeBomb.position.set(0, 46 * (1 - drop), 0);
+      nukeBomb.rotation.set(t * 9, t * 7, 0);
+      nukeBomb.visible = drop < 1;
+      const k = Math.max(0, (t - 0.35) / 0.65);
+      const radius = 4 + k * 48;
+      nukeRing.scale.setScalar(radius);
+      nukeRing.position.set(0, HEIGHT.burst, 0);
+      (nukeRing.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k);
+      nukeRing2.scale.setScalar(radius * 0.62);
+      nukeRing2.position.set(0, HEIGHT.burst + 0.05, 0);
+      (nukeRing2.material as THREE.MeshBasicMaterial).opacity = 0.7 * (1 - k);
+      nukeFlash.position.set(0, HEIGHT.burst + 1, 0);
+      nukeFlash.scale.setScalar(30 + k * 40);
+      nukeFlash.quaternion.copy(camera.quaternion);
+      (nukeFlash.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.75 - k * 1.2);
     }
 
     // 僚机：编队实体（数量 ≤ 4，用 Group + 贴地阴影）
@@ -615,28 +730,18 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       const mesh = wingmanMeshes[w.slot];
       if (!mesh) continue;
       mesh.visible = world.phase === "playing";
-      // 侧倾：按本帧横向位移倾斜，跟队列时"压一下机翼"，幅度刻意做小
-      const dx = w.x - mesh.position.x;
-      mesh.rotation.z = Math.max(-0.3, Math.min(0.3, -dx * 0.9));
+      if (w.type === "attack") {
+        // 侧倾：按本帧横向位移倾斜，跟队列时"压一下机翼"，幅度刻意做小
+        const dx = w.x - mesh.position.x;
+        mesh.rotation.z = Math.max(-0.3, Math.min(0.3, -dx * 0.9));
+        mesh.scale.setScalar(1); // 不做缩放脉冲：高频射击下就是持续闪
+      } else {
+        // 支援型：自转 + 给盾时缓慢涨一圈（0.35 秒，不是闪）
+        mesh.rotation.y = world.time * 1.6;
+        mesh.scale.setScalar(1 + (w.pulse > 0 ? (w.pulse / SHIELD.pulseTime) * 0.25 : 0));
+      }
       mesh.position.set(w.x, HEIGHT.player, rz(w.z, HEIGHT.player));
-      mesh.scale.setScalar(1); // 也不做缩放脉冲：高频射击下就是持续闪
       pushShadow(w.x, w.z, 1.3);
-    }
-
-    // 环绕护卫弹：绕玩家公转（位置内联展开 orbitPos）
-    for (const m of orbMeshes) m.visible = false;
-    const orbs = world.orbs;
-    let orbN = 0;
-    for (let i = 0; i < orbs.slots.capacity; i += 1) {
-      if (!orbs.slots.alive[i]) continue;
-      const o = orbs.items[i];
-      const mesh = orbMeshes[orbN];
-      orbN += 1;
-      if (!mesh) break;
-      const ox = p.pos.x + Math.cos(o.angle) * ORBIT.radius;
-      const oz = p.pos.z + Math.sin(o.angle) * ORBIT.radius;
-      mesh.visible = world.phase === "playing";
-      mesh.position.set(ox, HEIGHT.bullet, rz(oz, HEIGHT.bullet));
     }
 
     // 敌机（实体 + 描边外壳）

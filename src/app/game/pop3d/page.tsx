@@ -305,16 +305,24 @@ export default function Pop3DGame() {
       {/* ── 顶部 HUD（游戏内常显） ── */}
       {playing && (
         <>
-          <div className="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-3 rounded-xl border-2 border-[#101010] bg-[#FFF8E7]/95 px-3 py-1.5 font-mono text-xs text-[#101010] shadow-[3px_3px_0_#E5007E]">
+          <div
+            className="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-3 border-4 border-[#101010] bg-[#FFF8E7] px-3 py-1.5 font-mono text-xs text-[#101010] shadow-[6px_6px_0_#101010]"
+            style={{
+              // 漫画格：面板上压一层网点
+              backgroundImage: "radial-gradient(#101010 1px, transparent 1.1px)",
+              backgroundSize: "10px 10px",
+              backgroundBlendMode: "multiply",
+            }}
+          >
             <div className="flex items-center gap-2">
               <span className="text-[10px] opacity-70">HP</span>
-              <div className="h-3 w-28 overflow-hidden rounded-full border-2 border-[#101010] bg-[#FFF8E7]">
+              <div className="h-3 w-28 overflow-hidden rounded-none border-2 border-[#101010] bg-[#FFF8E7]">
                 <div ref={hpRef} className="h-full w-full bg-[#E5007E]" />
               </div>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] opacity-70">SH</span>
-              <div className="h-3 w-20 overflow-hidden rounded-full border-2 border-[#101010] bg-[#FFF8E7]">
+              <div className="h-3 w-20 overflow-hidden rounded-none border-2 border-[#101010] bg-[#FFF8E7]">
                 <div ref={shieldRef} className="h-full w-0 bg-[#00C2FF]" />
               </div>
             </div>
@@ -330,16 +338,16 @@ export default function Pop3DGame() {
 
           {/* 等级 / 能量 / 属性 / 备用机体 */}
           <div className="pointer-events-none absolute left-1/2 top-14 flex -translate-x-1/2 items-center gap-2 font-mono text-[10px] text-[#FFF8E7]">
-            <span ref={lvRef} className="rounded-md border-2 border-[#FFF8E7] bg-[#101010] px-1.5 py-0.5">
+            <span ref={lvRef} className="rounded-none border-2 border-[#101010] bg-[#FFF8E7] px-1.5 py-0.5 text-[#101010] shadow-[3px_3px_0_#101010]">
               Lv 0
             </span>
-            <div className="h-2 w-24 overflow-hidden rounded-full border-2 border-[#FFF8E7] bg-[#101010]">
+            <div className="h-2 w-24 overflow-hidden rounded-none border-2 border-[#101010] bg-[#FFF8E7]">
               <div ref={energyRef} className="h-full w-0 bg-[#00C2FF]" />
             </div>
-            <span ref={elemRef} className="rounded-md border-2 border-[#FFF8E7] bg-[#101010] px-1.5 py-0.5">
+            <span ref={elemRef} className="rounded-none border-2 border-[#101010] bg-[#FFF8E7] px-1.5 py-0.5 text-[#101010] shadow-[3px_3px_0_#101010]">
               —
             </span>
-            <span className="rounded-md border-2 border-[#FFF8E7] bg-[#101010] px-1.5 py-0.5">
+            <span className="rounded-none border-2 border-[#101010] bg-[#FFF8E7] px-1.5 py-0.5 text-[#101010] shadow-[3px_3px_0_#101010]">
               备用 <span ref={reviveRef} className="tabular-nums">—</span>
             </span>
             {/* 核弹：H5 要能点，所以做成真按钮（pointer-events-auto 打开） */}
@@ -347,7 +355,7 @@ export default function Pop3DGame() {
               ref={nukeRef}
               type="button"
               onClick={() => engineRef.current?.useNuke()}
-              className="pointer-events-auto rounded-md border-2 border-[#FFF8E7] bg-[#101010] px-2 py-0.5 font-mono text-[10px] text-[#FFF8E7] shadow-[2px_2px_0_#E5007E] active:translate-y-[2px] active:shadow-none disabled:opacity-40"
+              className="pointer-events-auto rounded-none border-2 border-[#101010] bg-[#FFF8E7] px-2 py-0.5 font-mono text-[10px] text-[#101010] shadow-[3px_3px_0_#101010] active:translate-y-[2px] active:shadow-none disabled:opacity-40"
             >
               ☢ <span ref={nukeCountRef} className="tabular-nums">0</span>
             </button>

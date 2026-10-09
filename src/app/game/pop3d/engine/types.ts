@@ -132,11 +132,14 @@ export interface PlayerBullet extends BulletMotion {
   fromWing: boolean;
 }
 
-/**
- * 敌弹：3b 再加自己的 kind，这里先只留运动字段。
- * 用别名而不是 `interface extends`——空接口会被 lint 判成冗余声明。
- */
-export type EnemyBullet = BulletMotion;
+/** 敌弹弹型（6 种）：形状是区分它们的主要语言 */
+export type EnemyBulletKind = "ball" | "diamond" | "long" | "ring" | "spike" | "laser";
+
+export interface EnemyBullet extends BulletMotion {
+  kind: EnemyBulletKind;
+  /** 朝向（长条弹 / 激光用） */
+  angle: number;
+}
 
 // ── 附着物（跟着玩家走的实体，不进子弹池）──
 
@@ -205,6 +208,8 @@ export interface Enemy {
   hp: number;
   maxHp: number;
   cd: number; // 开火冷却剩余
+  /** 已经开了几炮（做"每三炮来一次特殊弹"的节奏） */
+  shots: number;
   flash: number; // 受击闪白剩余
   burn: number; // 灼烧剩余时间
   slow: number; // 减速剩余时间

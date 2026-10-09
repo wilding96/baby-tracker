@@ -145,6 +145,19 @@ export const PLAYER = {
 // ── 敌弹 ──
 export const BULLET = { enemyRadius: 0.5 } as const;
 
+// ── 敌弹弹型（6 种）：形状就是区分语言，颜色统一留在红/品红家族（红=敌弹）──
+export const EBULLET: Record<
+  "ball" | "diamond" | "long" | "ring" | "spike" | "laser",
+  { radius: number; color: string }
+> = {
+  ball: { radius: 0.5, color: PAL.red }, // 自机狙基础弹
+  diamond: { radius: 0.44, color: PAL.magenta }, // 散射菱形
+  long: { radius: 0.34, color: PAL.orange }, // 高速长条
+  ring: { radius: 0.4, color: PAL.red }, // 慢速环形扩散
+  spike: { radius: 0.42, color: PAL.magenta }, // 旋转尖刺
+  laser: { radius: 0.3, color: "#FF8A8A" }, // 细长光束弹
+};
+
 // ── 追踪弹 ──
 /** 比例导引的最大转向速率（rad/s）：太大像锁头，太小追不上 */
 export const HOMING = { turnRate: 2.6 } as const;

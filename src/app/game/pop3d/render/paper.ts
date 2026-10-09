@@ -5,12 +5,14 @@
 // 用法：?theme=paper
 // ═══════════════════════════════════════════════════════════════════
 
-import { FIELD, HEIGHT, PAL, POP, WORDS } from "../engine/config";
+import { EBULLET, FIELD, HEIGHT, PAL, POP, WORDS } from "../engine/config";
 import type { Renderer, World } from "../engine/types";
 
 const SPRITE_SRC = {
   player: "/game/pop3d/player.png",
   enemy: "/game/pop3d/enemy.png",
+  weaver: "/game/pop3d/weaver.png",
+  gunner: "/game/pop3d/gunner.png",
   fish: "/game/pop3d/fish.png",
 } as const;
 
@@ -72,6 +74,8 @@ export function createPaperRenderer(
   const sprites: Record<keyof typeof SPRITE_SRC, HTMLImageElement> = {
     player: new Image(),
     enemy: new Image(),
+    weaver: new Image(),
+    gunner: new Image(),
     fish: new Image(),
   };
   for (const key of Object.keys(SPRITE_SRC) as (keyof typeof SPRITE_SRC)[]) {
@@ -99,14 +103,20 @@ export function createPaperRenderer(
     x: number,
     z: number,
     h: number,
-    opts: { flash?: boolean; alpha?: number; tint?: string } = {},
+    opts: { flash?: boolean; alpha?: number; tint?: string; rot?: number } = {},
   ): void {
     if (!img.complete || img.naturalWidth === 0) return;
     const ph = len(h);
     const pw = ph * (img.naturalWidth / img.naturalHeight);
     ctx.save();
     ctx.globalAlpha = opts.alpha ?? 1;
-    if (opts.flash && "filter" in ctx) ctx.filter = "brightness(0) saturate(0)";
+    if (opts.rot) {
+      ctx.translate(sx(x), sy(z));
+      ctx.rotate(opts.rot);
+      ctx.translate(-sx(x), -sy(z));
+    }
+    // 受击 = 整只变成白剪影（漫画里的"打白"），不是变黑
+    if (opts.flash && "filter" in ctx) ctx.filter = "brightness(0) invert(1)";
     ctx.drawImage(img, sx(x) - pw / 2, sy(z) - ph / 2, pw, ph);
     ctx.filter = "none";
     if (opts.tint) {
@@ -241,11 +251,19 @@ export function createPaperRenderer(
       calls += 4;
     }
 
-    // ── 敌机：直接用亮色贴图（不再垫米白底板——那块"白底"就是以前垫的菱形）──
+    // ── 敌机：三种机型三张贴图（亮色配色，深底上不需要垫底）──
     for (let i = 0; i < world.enemies.slots.capacity; i += 1) {
       if (!world.enemies.slots.alive[i]) continue;
       const e = world.enemies.items[i];
-      sprite(sprites.enemy, e.x, e.z, e.scale * 4.4, { flash: e.flash > 0 });
+      if (e.kind === "weaver") {
+        // weaver 走正弦，按横向速度压一下机翼
+        const bank = Math.cos(e.t * e.w) * 0.22;
+        sprite(sprites.weaver, e.x, e.z, e.scale * 4.6, { flash: e.flash > 0, rot: bank });
+      } else if (e.kind === "gunner") {
+        sprite(sprites.gunner, e.x, e.z, e.scale * 4.2, { flash: e.flash > 0 });
+      } else {
+        sprite(sprites.enemy, e.x, e.z, e.scale * 4.4, { flash: e.flash > 0 });
+      }
     }
 
     // ── 我方子弹：小鱼干用贴图，其它弹型用色块（先保证辨识度）──
@@ -276,17 +294,70 @@ export function createPaperRenderer(
       }
     }
 
-    // ── 敌弹：实心黑球 + 白高光（漫画里的"实心弹"）──
+    // ── 敌弹：6 种弹型各有形状（圆 / 菱 / 长条 / 环 / 尖刺 / 光束），一色一形 ──
     for (let i = 0; i < world.enemyBullets.slots.capacity; i += 1) {
       if (!world.enemyBullets.slots.alive[i]) continue;
       const b = world.enemyBullets.items[i];
-      ctx.fillStyle = PAL.red;
-      ctx.strokeStyle = PAL.ink;
+      const def = EBULLET[b.kind];
+      const cx = sx(b.x);
+      const cy = sy(b.z);
+      const r = len(def.radius * 1.5);
+      ctx.save();
       ctx.lineWidth = Math.max(2, len(0.12));
-      ctx.beginPath();
-      ctx.arc(sx(b.x), sy(b.z), len(0.5), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      ctx.strokeStyle = PAL.ink;
+      ctx.fillStyle = def.color;
+      if (b.kind === "ball") {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else if (b.kind === "diamond") {
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - r * 1.15);
+        ctx.lineTo(cx + r, cy);
+        ctx.lineTo(cx, cy + r * 1.15);
+        ctx.lineTo(cx - r, cy);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else if (b.kind === "long") {
+        ctx.translate(cx, cy);
+        ctx.rotate(b.angle);
+        ctx.fillRect(-r * 2.4, -r * 0.4, r * 4.8, r * 0.8);
+        ctx.strokeRect(-r * 2.4, -r * 0.4, r * 4.8, r * 0.8);
+      } else if (b.kind === "ring") {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.lineWidth = Math.max(3, len(0.2));
+        ctx.strokeStyle = def.color;
+        ctx.stroke();
+        ctx.lineWidth = Math.max(2, len(0.08));
+        ctx.strokeStyle = PAL.ink;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + len(0.07), 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (b.kind === "spike") {
+        ctx.translate(cx, cy);
+        ctx.rotate(b.angle + Math.PI / 2);
+        ctx.beginPath();
+        ctx.moveTo(0, -r * 1.6);
+        ctx.lineTo(r * 0.7, r * 0.9);
+        ctx.lineTo(-r * 0.7, r * 0.9);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        // laser：细长光束弹（带白芯）
+        ctx.translate(cx, cy);
+        ctx.rotate(b.angle);
+        ctx.fillStyle = def.color;
+        ctx.fillRect(-r * 3.2, -r * 0.34, r * 6.4, r * 0.68);
+        ctx.fillStyle = PAL.paper;
+        ctx.fillRect(-r * 3.0, -r * 0.12, r * 6.0, r * 0.24);
+        ctx.strokeStyle = PAL.ink;
+        ctx.strokeRect(-r * 3.2, -r * 0.34, r * 6.4, r * 0.68);
+      }
+      ctx.restore();
       calls += 1;
     }
 

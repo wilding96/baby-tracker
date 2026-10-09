@@ -16,9 +16,9 @@ import type { PlayerBulletKind } from "./bullets";
 import {
   BEAM,
   BOSS,
-  BULLET,
   BURST,
   CARDS,
+  EBULLET,
   ELEMENTS,
   ELEMENT_MOD,
   ENERGY,
@@ -63,6 +63,7 @@ import type {
   Enemy,
   EnemyKind,
   EnemyBullet,
+  EnemyBulletKind,
   EntitySet,
   EngineHandle,
   EngineOptions,
@@ -147,7 +148,7 @@ function makePlayerBullets(capacity: number): EntitySet<PlayerBullet> {
 function makeEnemyBullets(capacity: number): EntitySet<EnemyBullet> {
   const items: EnemyBullet[] = [];
   for (let i = 0; i < capacity; i += 1) {
-    items.push({ x: 0, z: 0, vx: 0, vz: 0, r: 0, dmg: 0, hitCd: 0 });
+    items.push({ x: 0, z: 0, vx: 0, vz: 0, r: 0, dmg: 0, hitCd: 0, kind: "ball", angle: 0 });
   }
   return { items, slots: createSlots(capacity) };
 }
@@ -178,6 +179,7 @@ function makeEnemies(capacity: number): EntitySet<Enemy> {
       hp: 0,
       maxHp: 0,
       cd: 0,
+      shots: 0,
       flash: 0,
       burn: 0,
       slow: 0,
@@ -864,16 +866,25 @@ export function createEngine({
     }
   }
 
-  function spawnEnemyBullet(x: number, z: number, vx: number, vz: number, dmg: number): void {
+  function spawnEnemyBullet(
+    kind: EnemyBulletKind,
+    x: number,
+    z: number,
+    vx: number,
+    vz: number,
+    dmg: number,
+  ): void {
     const index = world.enemyBullets.slots.acquire();
     if (index < 0) return;
     const b = world.enemyBullets.items[index];
+    b.kind = kind;
     b.x = x;
     b.z = z;
     b.vx = vx;
     b.vz = vz;
-    b.r = BULLET.enemyRadius;
+    b.r = EBULLET[kind].radius;
     b.dmg = dmg;
+    b.angle = Math.atan2(vz, vx);
     b.hitCd = 0;
   }
 
@@ -1003,6 +1014,7 @@ export function createEngine({
     e.hp = def.hp * diff;
     e.maxHp = e.hp;
     e.cd = def.fireCd > 0 ? rand(0.6, 1.3) * (def.fireCd / diff) : 0;
+    e.shots = 0;
     e.flash = 0;
     e.burn = 0;
     e.slow = 0;
@@ -1032,7 +1044,39 @@ export function createEngine({
     const dz = player.pos.z - e.z;
     const len = Math.hypot(dx, dz) || 1;
     const def = ENEMY_KINDS[e.kind];
-    spawnEnemyBullet(e.x, e.z + 1.2, (dx / len) * def.bulletSpeed, (dz / len) * def.bulletSpeed, def.bulletDmg);
+    const base = Math.atan2(dz / len, dx / len);
+    const speed = def.bulletSpeed;
+    e.shots += 1;
+    if (e.kind === "gunner") {
+      if (e.shots % 3 === 0) {
+        // 每三炮来一圈环形扩散
+        for (let k = 0; k < 8; k += 1) {
+          const a = base + (k / 8) * Math.PI * 2;
+          spawnEnemyBullet("ring", e.x, e.z, Math.cos(a) * speed * 0.75, Math.sin(a) * speed * 0.75, def.bulletDmg * 0.8);
+        }
+      } else {
+        // 三向菱形散射
+        for (let k = -1; k <= 1; k += 1) {
+          const a = base + k * 0.3;
+          spawnEnemyBullet("diamond", e.x, e.z + 1.2, Math.cos(a) * speed, Math.sin(a) * speed, def.bulletDmg);
+        }
+      }
+      return;
+    }
+    if (e.kind === "weaver") {
+      // 高速长条弹（weaver 只在正弦端点开火，见 updateEnemies）
+      spawnEnemyBullet("long", e.x, e.z + 1.0, Math.cos(base) * speed * 1.7, Math.sin(base) * speed * 1.7, def.bulletDmg);
+      return;
+    }
+    if (e.shots % 3 === 0) {
+      // drone 每三炮来一次三连点射
+      for (let k = -1; k <= 1; k += 1) {
+        const a = base + k * 0.22;
+        spawnEnemyBullet("ball", e.x, e.z + 1.2, Math.cos(a) * speed, Math.sin(a) * speed, def.bulletDmg);
+      }
+    } else {
+      spawnEnemyBullet("ball", e.x, e.z + 1.2, Math.cos(base) * speed, Math.sin(base) * speed, def.bulletDmg);
+    }
   }
 
   function updateEnemies(dt: number): void {
@@ -1072,6 +1116,12 @@ export function createEngine({
           e.cd = def.fireCd / difficulty();
           fireEnemy(e);
         }
+      }
+      // weaver 没有常规射速：它在正弦摆动**到端点**时打一发高速长条弹
+      if (e.kind === "weaver" && e.w > 0 && e.z > -FIELD.halfH + 4) {
+        const s0 = Math.sin((e.t - dt) * e.w);
+        const s1 = Math.sin(e.t * e.w);
+        if (s0 * s1 < 0) fireEnemy(e);
       }
     }
   }
@@ -1113,13 +1163,13 @@ export function createEngine({
     const n = BOSS.fanCount;
     for (let k = 0; k < n; k += 1) {
       const a = fanAngle(k, n, BOSS.fanSpread, Math.PI / 2);
-      spawnEnemyBullet(boss.x, boss.z + 2, Math.cos(a) * BOSS.fanSpeed, Math.sin(a) * BOSS.fanSpeed, BOSS.fanDmg);
+      spawnEnemyBullet("spike", boss.x, boss.z + 2, Math.cos(a) * BOSS.fanSpeed, Math.sin(a) * BOSS.fanSpeed, BOSS.fanDmg);
     }
   }
 
   function fireBossSpiral(): void {
     const a = boss.spiralAngle;
-    spawnEnemyBullet(boss.x, boss.z, Math.cos(a) * BOSS.spiralSpeed, Math.sin(a) * BOSS.spiralSpeed, BOSS.spiralDmg);
+    spawnEnemyBullet("laser", boss.x, boss.z, Math.cos(a) * BOSS.spiralSpeed, Math.sin(a) * BOSS.spiralSpeed, BOSS.spiralDmg);
   }
 
   function updateBoss(dt: number): void {
@@ -1665,7 +1715,7 @@ export function createEngine({
     stressAngle += dt * 2.2;
     for (let k = 0; k < 10; k += 1) {
       const a = stressAngle + (k * Math.PI * 2) / 10;
-      spawnEnemyBullet(0, 0, Math.cos(a) * 13, Math.sin(a) * 13, 0);
+      spawnEnemyBullet("ball", 0, 0, Math.cos(a) * 13, Math.sin(a) * 13, 0);
     }
   }
 

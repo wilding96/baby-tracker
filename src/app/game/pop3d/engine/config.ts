@@ -125,9 +125,7 @@ export const PLAYER = {
   maxHp: 100,
   invuln: 1.0, // 受击后无敌时间（秒）
   fireCd: 0.13, // 自动开火冷却（秒）
-  bulletSpeed: 52,
   bulletDmg: 10,
-  bulletRadius: 0.45,
   bulletSpread: 0.55, // 多管射击的横向间距
 } as const;
 

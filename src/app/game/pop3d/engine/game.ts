@@ -85,7 +85,6 @@ interface Mods {
   split: number;
   homing: number;
   backfire: boolean;
-  wings: number;
   /** 僚机射速冷却乘数（层数越高越小） */
   wingRateMul: number;
   /** 僚机协同：命中给主武器叠增伤的层数（每层 +4%） */
@@ -319,7 +318,6 @@ export function createEngine({
     split: 0,
     homing: 0,
     backfire: false,
-    wings: 0,
     wingRateMul: 1,
     wingLink: 0,
     element: null,
@@ -406,7 +404,6 @@ export function createEngine({
     mods.split = c("split");
     mods.homing = c("homing");
     mods.backfire = c("backfire") > 0;
-    mods.wings = c("wing");
     // 射速倍率是"冷却乘数"，层数越高越小
     mods.wingRateMul = 1 / (1 + c("wingrate") * 0.25);
     mods.wingLink = c("winglink");

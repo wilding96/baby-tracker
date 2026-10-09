@@ -1,0 +1,155 @@
+<!doctype html>
+<!--
+  POP3D 风格板（代码渲染版）：?board=a|b|c
+  用法：python -m http.server 3100（在仓库根目录），然后开
+  http://localhost:3100/docs/superpowers/art/style-boards.html?board=a
+  截图：fullPage 截图，舞台固定 1080×1350（H5 竖屏比例）。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>POP3D 风格板</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #101010; font-family: "Arial Black", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .stage { width: 1080px; height: 1350px; position: relative; overflow: hidden; }
+  .board { display: none; }
+  .board.on { display: block; }
+
+  /* 通用零件 */
+  .ink { border: 6px solid #101010; }
+  .sticker { box-shadow: 10px 10px 0 #101010; }
+  .halftone { background-image: radial-gradient(#101010 1.4px, transparent 1.5px); background-size: 11px 11px; }
+  .halftone-cyan { background-image: radial-gradient(#0057FF 1.5px, transparent 1.6px); background-size: 12px 12px; }
+  .halftone-red { background-image: radial-gradient(#FF2D2D 1.6px, transparent 1.7px); background-size: 13px 13px; }
+  .title { font-size: 62px; line-height: 1; letter-spacing: 4px; }
+  .sub { font-size: 22px; font-weight: 700; letter-spacing: 2px; }
+  .cap { font-size: 20px; line-height: 1.45; font-weight: 700; }
+  .row { display: flex; gap: 12px; align-items: center; }
+  .sw { width: 74px; height: 74px; border: 6px solid #101010; }
+  .tag { font-size: 18px; padding: 4px 12px; border: 5px solid #101010; background: #FFF8E7; }
+
+  /* 迷你场景：玩家机 + 三种道具弹 + 敌机 */
+  .scene { position: absolute; left: 60px; top: 470px; width: 960px; height: 640px; overflow: hidden; }
+  .ship { position: absolute; left: 430px; top: 500px; width: 100px; height: 110px; }
+  .ship .n { position: absolute; left: 28px; top: 0; width: 44px; height: 66px; border: 6px solid #101010; }
+  .ship .w { position: absolute; left: 0; top: 56px; width: 100px; height: 26px; border: 6px solid #101010; }
+  .shot { position: absolute; border: 5px solid #101010; }
+  .beam { position: absolute; left: 472px; top: 40px; width: 36px; height: 400px; border: 6px solid #101010; }
+  .foe { position: absolute; width: 86px; height: 86px; border: 6px solid #101010; }
+  .pop { position: absolute; font-size: 46px; padding: 2px 14px; border: 6px solid #101010; transform: rotate(-8deg); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ A · 李希滕斯坦（网点 + 红黄蓝） ═══════════ -->
+<div class="board" id="a">
+  <div class="stage" style="background:#FFD400">
+    <div style="position:absolute;left:0;top:0;width:1080px;height:420px;background:#FF2D2D"></div>
+    <div class="halftone" style="position:absolute;left:0;top:0;width:1080px;height:420px;opacity:.35"></div>
+    <div class="halftone-cyan" style="position:absolute;right:-70px;bottom:-40px;width:620px;height:620px;border-radius:50%"></div>
+    <div class="sticker ink" style="position:absolute;left:60px;top:56px;background:#FFF8E7;padding:18px 26px">
+      <div class="title" style="color:#101010">A · 网点海报</div>
+      <div class="sub" style="color:#0057FF;margin-top:8px">Ben-Day 点 + 红黄蓝 + 粗黑轮廓</div>
+    </div>
+    <div class="row" style="position:absolute;left:60px;top:300px">
+      <div class="sw" style="background:#FF2D2D"></div>
+      <div class="sw" style="background:#FFD400"></div>
+      <div class="sw" style="background:#0057FF"></div>
+      <div class="sw" style="background:#101010"></div>
+      <div class="sw" style="background:#FFF8E7"></div>
+      <div class="tag">5 色封顶</div>
+    </div>
+
+    <div class="scene">
+      <div class="halftone" style="position:absolute;inset:0;background:#FFF8E7;border:6px solid #101010"></div>
+      <div class="beam" style="background:#00C2FF"></div>
+      <div class="foe" style="left:150px;top:120px;background:#E5007E;transform:rotate(45deg)"></div>
+      <div class="foe" style="left:730px;top:230px;background:#E5007E;border-radius:50%"></div>
+      <div class="foe" style="left:250px;top:330px;background:#00A05A"></div>
+      <div class="shot" style="left:430px;top:250px;width:150px;height:44px;background:#E2901C;border-radius:22px"></div>
+      <div class="shot" style="left:700px;top:120px;width:120px;height:32px;background:#D9BC7E;transform:rotate(24deg)"></div>
+      <div class="ship">
+        <div class="n" style="background:#00C2FF"></div>
+        <div class="w" style="background:#FFD400"></div>
+      </div>
+      <div class="pop" style="left:610px;top:70px;background:#FFD400;color:#101010">POW!</div>
+    </div>
+
+    <div class="sticker ink" style="position:absolute;left:60px;top:1140px;width:960px;background:#FFF8E7;padding:16px 22px">
+      <div class="cap">落地改动：场地从米色改成主色块 + 全网点；关掉 bloom；实体简化到 2~4 个色块；轮廓加粗到 6~10px 当量。</div>
+      <div class="cap" style="color:#0057FF;margin-top:6px">风险：红黄蓝高饱和在长时间游戏下容易累眼，需要把"米色"留作呼吸区。</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ B · 60 年代波普漫画（错版印刷 + 贴纸） ═══════════ -->
+<div class="board" id="b">
+  <div class="stage" style="background:#FFF8E7">
+    <div style="position:absolute;inset:24px;border:14px solid #101010"></div>
+    <div class="title" style="position:absolute;left:66px;top:60px;color:#FF2D2D;text-shadow:-6px 0 #00C2FF,6px 0 #FFD400">B · 漫画分格</div>
+    <div class="sub" style="position:absolute;left:70px;top:140px;color:#101010">粗黑分格 + 拟声词贴纸 + CMYK 错版</div>
+
+    <div class="scene" style="top:230px;height:820px">
+      <div style="position:absolute;inset:0;background:#FFF8E7;border:12px solid #101010"></div>
+      <div class="halftone-red" style="position:absolute;left:0;top:0;width:520px;height:820px;opacity:.5"></div>
+      <div style="position:absolute;left:520px;top:0;width:12px;height:820px;background:#101010"></div>
+      <!-- 错版：同一形状复制一层红/青偏移 -->
+      <div class="foe" style="left:120px;top:90px;background:#00C2FF;opacity:.85"></div>
+      <div class="foe" style="left:132px;top:82px;background:#FF2D2D;opacity:.75"></div>
+      <div class="foe" style="left:120px;top:90px;background:transparent;border-color:#101010"></div>
+      <div class="foe" style="left:640px;top:300px;background:#FFD400;border-radius:50%"></div>
+      <div class="foe" style="left:648px;top:292px;background:#E5007E;border-radius:50%;opacity:.6"></div>
+      <div class="beam" style="left:490px;top:60px;height:520px;background:#35E07A"></div>
+      <div class="shot" style="left:300px;top:420px;width:150px;height:46px;background:#E2901C;border-radius:22px"></div>
+      <div class="shot" style="left:620px;top:560px;width:130px;height:34px;background:#D9BC7E;transform:rotate(18deg)"></div>
+      <div class="ship" style="left:440px;top:640px">
+        <div class="n" style="background:#00C2FF"></div>
+        <div class="w" style="background:#FFD400"></div>
+      </div>
+      <div class="pop" style="left:70px;top:600px;background:#FF2D2D;color:#FFF8E7;text-shadow:-4px 0 #101010,4px 0 #101010">喵!</div>
+      <div class="pop" style="left:700px;top:640px;background:#FFD400;color:#101010;transform:rotate(9deg)">WHAM!</div>
+    </div>
+
+    <div class="sticker ink" style="position:absolute;left:66px;top:1120px;width:948px;background:#FFF8E7;padding:16px 22px">
+      <div class="cap">落地改动：击杀/命中瞬间用"红青双色偏移 2~3px"的复制层；拟声词贴纸加粗描边 + 随机旋转；HUD 做成漫画格贴纸。</div>
+      <div class="cap" style="color:#E5007E;margin-top:6px">最贴合现状（已有拟声词贴纸与贴纸风 HUD），改动量中等。</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ C · 丝网印刷 / 电视彩条 ═══════════ -->
+<div class="board" id="c">
+  <div class="stage" style="background:#0057FF">
+    <div style="position:absolute;left:0;top:0;width:1080px;height:180px;background:#FF2D2D"></div>
+    <div style="position:absolute;left:0;top:180px;width:1080px;height:150px;background:#FFD400"></div>
+    <div style="position:absolute;left:0;top:330px;width:1080px;height:120px;background:#00A05A"></div>
+    <div class="title" style="position:absolute;left:60px;top:520px;color:#FFF8E7;text-shadow:8px 8px 0 #101010">C · 丝网海报</div>
+    <div class="sub" style="position:absolute;left:64px;top:610px;color:#FFD400">大色带 + 单色网点 + 剪影化实体</div>
+
+    <div class="scene" style="top:660px;height:470px">
+      <div style="position:absolute;inset:0;background:#FFF8E7;border:14px solid #101010"></div>
+      <div class="halftone" style="position:absolute;left:0;bottom:0;width:960px;height:240px;opacity:.6"></div>
+      <div class="beam" style="left:470px;top:0;height:300px;background:#35E07A;border:none"></div>
+      <div class="foe" style="left:140px;top:60px;background:#101010;border:none"></div>
+      <div class="foe" style="left:760px;top:110px;background:#FF2D2D;border:none;border-radius:50%"></div>
+      <div class="shot" style="left:250px;top:250px;width:180px;height:52px;background:#E2901C;border:none;border-radius:26px"></div>
+      <div class="ship" style="left:440px;top:330px">
+        <div class="n" style="background:#00C2FF;border:none"></div>
+        <div class="w" style="background:#FFD400;border:none"></div>
+      </div>
+    </div>
+
+    <div class="sticker ink" style="position:absolute;left:60px;top:1170px;width:960px;background:#FFF8E7;padding:16px 22px">
+      <div class="cap">落地改动：背景改成分层色带（滚动换色），实体剪影化（去掉 3D 明暗，纯平 + 单色网点阴影）。</div>
+      <div class="cap" style="color:#101010;margin-top:6px">性能最省（几乎全是平面色块），但和"3D 立体感"这条既有的批次 1 目标冲突最大。</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const board = new URLSearchParams(location.search).get("board") || "a";
+  document.getElementById(board).classList.add("on");
+</script>
+</body>
+</html>

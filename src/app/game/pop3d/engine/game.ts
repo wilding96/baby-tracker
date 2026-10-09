@@ -32,7 +32,9 @@ import {
   WORD_WARN,
 } from "./config";
 import { stardustFor } from "./meta";
+import { fanAngle, spiralAngle } from "./patterns";
 import { createSlots } from "./pools";
+import { resolveSpawnXs } from "./waves";
 import type {
   Boss,
   Bullet,
@@ -612,30 +614,12 @@ export function createEngine({
     e.slow = 0;
   }
 
+  // 复用同一个数组，避免每次生成都新建（生成路径零分配）
+  const spawnXs: number[] = [];
+
   function spawnWave(w: WaveDef): void {
-    switch (w.pattern) {
-      case "line": {
-        const span = FIELD.halfW * 2 - 6;
-        for (let k = 0; k < w.count; k += 1) {
-          spawnEnemy(w.kind, -span / 2 + (span * (k + 0.5)) / w.count);
-        }
-        break;
-      }
-      case "sides": {
-        for (let k = 0; k < w.count; k += 1) {
-          spawnEnemy(w.kind, (k % 2 === 0 ? -1 : 1) * (FIELD.halfW - 4));
-        }
-        break;
-      }
-      case "column": {
-        const x = rand(-FIELD.halfW + 4, FIELD.halfW - 4);
-        for (let k = 0; k < w.count; k += 1) spawnEnemy(w.kind, x);
-        break;
-      }
-      default: {
-        for (let k = 0; k < w.count; k += 1) spawnEnemy(w.kind, rand(-FIELD.halfW + 4, FIELD.halfW - 4));
-      }
-    }
+    const n = resolveSpawnXs(w.pattern, w.count, FIELD.halfW, Math.random, spawnXs);
+    for (let k = 0; k < n; k += 1) spawnEnemy(w.kind, spawnXs[k]);
   }
 
   function updateWaves(dt: number): void {
@@ -734,7 +718,7 @@ export function createEngine({
   function fireBossFan(): void {
     const n = BOSS.fanCount;
     for (let k = 0; k < n; k += 1) {
-      const a = Math.PI / 2 + (k - (n - 1) / 2) * BOSS.fanSpread;
+      const a = fanAngle(k, n, BOSS.fanSpread, Math.PI / 2);
       spawnEnemyBullet(boss.x, boss.z + 2, Math.cos(a) * BOSS.fanSpeed, Math.sin(a) * BOSS.fanSpeed, BOSS.fanDmg);
     }
   }
@@ -784,7 +768,7 @@ export function createEngine({
       boss.spiralCd -= dt;
       if (boss.spiralCd <= 0) {
         boss.spiralCd = BOSS.spiralCd;
-        boss.spiralAngle += 0.42;
+        boss.spiralAngle = spiralAngle(boss.spiralAngle, BOSS.spiralStep);
         fireBossSpiral();
       }
     }

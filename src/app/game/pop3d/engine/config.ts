@@ -246,6 +246,7 @@ export const BOSS = {
   fanSpeed: 18,
   fanDmg: 12,
   spiralCd: 0.1, // 二阶段螺旋发射间隔
+  spiralStep: 0.42, // 螺旋每次推进的相位
   spiralSpeed: 15,
   spiralDmg: 10,
   contactDmg: 40,

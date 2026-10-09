@@ -148,6 +148,21 @@ export interface Orb {
   cd: number;
 }
 
+/**
+ * 激光笔的常驻光束：判定是"从机头到场地顶端、半宽 halfW 的竖线"，
+ * 渲染用同一组数，所以看到的束宽就是判定宽度。
+ */
+export interface Beam {
+  active: boolean;
+  x: number;
+  /** 起点 z（机头）与终点 z（场地顶端，值更小） */
+  z0: number;
+  z1: number;
+  halfW: number;
+  /** 光束末端落点（打到的最靠前的敌人 z；没打到就是场地顶端） */
+  tipZ: number;
+}
+
 // ── 敌机 ──
 
 export type EnemyKind = "drone" | "weaver" | "gunner";
@@ -290,6 +305,8 @@ export interface World {
   /** 僚机协同叠层（主武器增伤，2 秒不命中就清零） */
   linkStacks: number;
   linkTimer: number;
+  /** 激光笔的常驻光束（其它机型 active = false） */
+  beam: Beam;
   enemies: EntitySet<Enemy>;
   bursts: EntitySet<Burst>;
   pops: EntitySet<Pop>;

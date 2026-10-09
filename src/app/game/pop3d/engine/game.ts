@@ -14,6 +14,7 @@ import {
 } from "./bullets";
 import type { PlayerBulletKind } from "./bullets";
 import {
+  BEAM,
   BOSS,
   BULLET,
   BURST,
@@ -301,6 +302,7 @@ export function createEngine({
     orbs: makeOrbs(ORBIT.max),
     linkStacks: 0,
     linkTimer: 0,
+    beam: { active: false, x: 0, z0: 0, z1: 0, halfW: BEAM.halfW, tipZ: 0 },
     enemies: makeEnemies(POOL.enemies),
     bursts: makeBursts(POOL.bursts),
     pops: makePops(JUICE.popCap),
@@ -674,11 +676,17 @@ export function createEngine({
   }
 
   function firePlayer(dt: number): void {
+    // 1 号机不发射子弹，而是一道常驻光束（判定与渲染共用 world.beam 里的那组数）
+    if (ship === "ion") {
+      updateBeam(dt);
+      return;
+    }
     player.cd -= dt;
     if (player.cd > 0) return;
     player.cd = mods.fireCd;
     world.muzzle = JUICE.muzzle;
-    audio?.shoot(ship === "ion" ? 0 : ship === "pulse" ? 1 : 2);
+    // ion 在上面已经 return（常驻光束不走"每次开火"这条路），这里只有 nova / pulse
+    audio?.shoot(ship === "pulse" ? 1 : 2);
 
     // 主炮：弹型由机型决定，扇形角度由 patterns 的几何公式给出
     const kind = SHIP_BULLET[ship];
@@ -722,6 +730,67 @@ export function createEngine({
         back.speed * 0.85,
         0.45 / back.dmgMul,
       );
+    }
+  }
+
+  /**
+   * 激光笔：从机头到场地顶端的一道常驻光束。
+   * 判定 = 一条竖线（x = 玩家 x，z ∈ [z1, z0]）加半宽 halfW，和渲染是同一组数；
+   * 伤害按 DPS × dt 连续结算，升级只加宽（弹数成长 → 束宽）。
+   */
+  function updateBeam(dt: number): void {
+    const beam = world.beam;
+    const bx = player.pos.x;
+    const z0 = player.pos.z - 2;
+    const z1 = -FIELD.halfH - BEAM.overhang;
+    const halfW = BEAM.halfW + Math.max(0, mods.bulletCount - 1) * BEAM.halfWPerLevel;
+    beam.active = true;
+    beam.x = bx;
+    beam.z0 = z0;
+    beam.z1 = z1;
+    beam.halfW = halfW;
+    beam.tipZ = z1;
+
+    // 每秒伤害：沿用"单发伤害 ÷ 冷却"的口径，于是超频卡对光束就是 DPS 提升
+    const dps = (mods.bulletDmg * bulletDef(SHIP_BULLET.ion).dmgMul) / mods.fireCd;
+    const tickDmg = dps * BEAM.hitFxCd;
+    const es = world.enemies;
+    let landed = false;
+    for (let i = 0; i < es.slots.capacity; i += 1) {
+      if (!es.slots.alive[i]) continue;
+      const e = es.items[i];
+      if (Math.abs(e.x - bx) > e.r + halfW) continue;
+      if (e.z < z1 - e.r || e.z > z0 + e.r) continue;
+
+      e.hp -= dps * dt * playerDamageMul();
+      e.flash = 0.08;
+      landed = true;
+      if (e.z > beam.tipZ) beam.tipZ = e.z; // 光斑落在"最靠前"的那个敌人身上
+      if (sparkCd <= 0) {
+        // 每帧都触发会很吵：光斑 / 连锁 / 分裂环统一按节流窗口走
+        spawnSpark(e.x, e.z);
+        if (mods.chain > 0) chainTo(e, i, tickDmg);
+        if (mods.split > 0) spawnSplit(e.x, e.z, -Math.PI / 2, mods.split * 2);
+      }
+      if (e.hp <= 0) killEnemy(e, i, true);
+    }
+    if (landed && sparkCd <= 0) sparkCd = BEAM.hitFxCd;
+
+    if (
+      boss.active &&
+      !boss.entering &&
+      Math.abs(boss.x - bx) <= BOSS.radius + halfW &&
+      boss.z >= z1 - BOSS.radius &&
+      boss.z <= z0 + BOSS.radius
+    ) {
+      const mul = elementMulFor(mods.element, boss.weak, boss.resist) * playerDamageMul();
+      boss.hp -= dps * dt * mul;
+      boss.flash = 0.08;
+      if (sparkCd <= 0) sparkCd = BEAM.hitFxCd;
+      if (boss.hp <= 0) {
+        boss.hp = 0;
+        win();
+      }
     }
   }
 
@@ -1657,6 +1726,7 @@ export function createEngine({
     clear(world.enemyBullets);
     clear(world.wingmen);
     clear(world.orbs);
+    world.beam.active = false;
     clear(world.enemies);
     clear(world.bursts);
     clear(world.pops);

@@ -320,6 +320,43 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
     POOL.playerBullets,
   );
   scene.add(glowMesh);
+
+  // 激光笔：一道常驻光束（外晕 + 白芯）+ 末端落点光斑，共 3 个 draw call。
+  // 束宽直接用 world.beam.halfW —— 和判定是同一个数。
+  const beamOuter = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 0.02, 1),
+    new THREE.MeshBasicMaterial({
+      color: PAL.laser,
+      transparent: true,
+      opacity: 0.45,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  const beamCore = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 0.02, 1),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  const beamTip = new THREE.Mesh(
+    createGlowGeometry(),
+    new THREE.MeshBasicMaterial({
+      map: glowTexture,
+      color: PAL.laser,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  beamOuter.visible = false;
+  beamCore.visible = false;
+  beamTip.visible = false;
+  scene.add(beamOuter, beamCore, beamTip);
   const enemyBulletMesh = instanced(
     createEnemyBulletGeometry(),
     new THREE.MeshBasicMaterial({ color: PAL.red }),
@@ -550,6 +587,27 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
     if (shieldRing.visible) {
       shieldRing.position.set(p.pos.x, HEIGHT.player - 0.2, rz(p.pos.z, HEIGHT.player - 0.2));
       shieldRing.rotation.y = world.time * 0.9;
+    }
+
+    // 激光笔：常驻光束（判定与外观共用 halfW / z0 / z1）
+    const beam = world.beam;
+    const beamOn = world.phase === "playing" && beam.active && world.ship === "ion";
+    beamOuter.visible = beamOn;
+    beamCore.visible = beamOn;
+    beamTip.visible = beamOn;
+    if (beamOn) {
+      // 光柱是沿 z 的细长盒；两端都走投影补偿，才和敌人（同样补偿过）对齐
+      const za = rz(beam.z0, HEIGHT.bullet);
+      const zb = rz(beam.z1, HEIGHT.bullet);
+      const len = Math.abs(zb - za);
+      const cz = (za + zb) / 2;
+      beamOuter.scale.set(beam.halfW * 3, 1, len);
+      beamOuter.position.set(beam.x, HEIGHT.bullet, cz);
+      beamCore.scale.set(beam.halfW * 1.1, 1, len);
+      beamCore.position.set(beam.x, HEIGHT.bullet + 0.01, cz);
+      beamTip.position.set(beam.x, HEIGHT.bullet, rz(beam.tipZ, HEIGHT.bullet));
+      beamTip.scale.setScalar(beam.halfW * 5);
+      beamTip.quaternion.copy(camera.quaternion);
     }
 
     // 僚机：编队实体（数量 ≤ 4，用 Group + 贴地阴影）

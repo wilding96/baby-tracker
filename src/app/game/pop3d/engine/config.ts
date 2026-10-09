@@ -68,7 +68,7 @@ export const SHIPS: readonly ShipType[] = ["ion", "nova", "pulse"] as const;
 export const SHIP_INFO: Record<ShipType, ShipDef> = {
   ion: {
     label: "激光笔",
-    blurb: "贯穿单发 · 高单体",
+    blurb: "常驻光束 · 只加宽加强",
     element: "electric",
     icon: "✨",
     bulletCount: 1,
@@ -148,6 +148,18 @@ export const BULLET = { enemyRadius: 0.5 } as const;
 // ── 追踪弹 ──
 /** 比例导引的最大转向速率（rad/s）：太大像锁头，太小追不上 */
 export const HOMING = { turnRate: 2.6 } as const;
+
+// ── 激光笔（1 号机）：一道常驻光束，升级只加宽/加强 ──
+export const BEAM = {
+  /** Lv1 的半宽（世界单位）；束宽 = 2×halfW，判定与外观共用 */
+  halfW: 0.5,
+  /** 弹数成长（扇形弹 + 主武器等级）每多 1 发，光束加宽的半宽增量 */
+  halfWPerLevel: 0.2,
+  /** 光束最长画到场地顶端再往上一点，视觉上"打到屏幕外" */
+  overhang: 2,
+  /** 命中光斑 / 连锁 / 分裂环的触发间隔（光束是每帧结算，必须有节流） */
+  hitFxCd: 0.07,
+} as const;
 
 // ── 弹幕表现力（T1：尺寸/描边/拖尾；想调观感只改这里，不用碰渲染代码）──
 // 背景：720p 画布下约 10.6 像素/世界单位，原始弹体只有 2.6~13px，看着像纸屑。

@@ -62,6 +62,8 @@ export default function Pop3DGame() {
   const [stats, setStats] = useState<RunStats | null>(null);
   const [showShop, setShowShop] = useState(false);
   const [muted, setMuted] = useState(false);
+  /** 属性流卡被藏起来时（视觉调试期），机身按钮上的属性标签也一起藏掉 */
+  const [showElement, setShowElement] = useState(true);
 
   // ── 音频：复用 2D 版已验证的 WebAudio 实现，这里只做适配与静音闸门 ──
   const audio = useGameAudio();
@@ -122,6 +124,8 @@ export default function Pop3DGame() {
     const savedMute = window.localStorage.getItem("pop3d_muted_v1") === "1";
     mutedRef.current = savedMute;
     setMuted(savedMute);
+    // 属性流卡默认被藏起来（视觉调试期），机身按钮上的属性标签一起藏
+    setShowElement(new URLSearchParams(window.location.search).get("cards") === "all");
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
@@ -375,10 +379,12 @@ export default function Pop3DGame() {
                   <span className="text-lg">{info.icon}</span>
                   <span className="text-xs font-bold text-[#101010]">{info.label}</span>
                   <span className="text-[9px] font-bold text-[#101010]/70">{info.blurb}</span>
-                  <span className="text-[9px] text-[#101010]">
-                    {ELEMENT_ICON[info.element]}
-                    {ELEMENT_NAME[info.element]}属性
-                  </span>
+                  {showElement && (
+                    <span className="text-[9px] text-[#101010]">
+                      {ELEMENT_ICON[info.element]}
+                      {ELEMENT_NAME[info.element]}属性
+                    </span>
+                  )}
                 </button>
               );
             })}

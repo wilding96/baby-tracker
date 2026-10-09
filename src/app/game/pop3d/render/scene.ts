@@ -317,7 +317,7 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       transparent: true,
       depthWrite: false,
     }),
-    POOL.playerBullets * 2, // 哑铃弹的辉光是每瓣一个，容量翻倍
+    POOL.playerBullets,
   );
   scene.add(glowMesh);
   const enemyBulletMesh = instanced(
@@ -682,22 +682,17 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
         outlineMeshes[b.kind].setMatrixAt(m, dummy.matrix);
       }
 
-      // 辉光贴片：面向相机。哑铃弹两瓣各来一个，光晕落在球上而不是连杆上
-      if (fx.glow) {
-        const lobes = chaos ? 2 : 1;
-        const glowR = bulletDef(b.kind).radius * 2 * BULLET_VIS.glow * (chaos ? 1.7 : 1);
-        for (let o = 0; o < lobes; o += 1) {
-          const sign = o === 0 ? 1 : -1;
-          const gx = chaos ? b.x + Math.cos(dir) * chaos.arm * sign : b.x;
-          const gz = chaos ? b.z + Math.sin(dir) * chaos.arm * sign : b.z;
-          dummy.position.set(gx, y, rz(gz, y));
-          dummy.scale.setScalar(glowR);
-          dummy.quaternion.copy(camera.quaternion);
-          dummy.updateMatrix();
-          glowMesh.setMatrixAt(glowN, dummy.matrix);
-          glowMesh.setColorAt(glowN, tmpColor.copy(color).multiplyScalar(BULLET_VIS.glowGain));
-          glowN += 1;
-        }
+      // 辉光贴片：面向相机。
+      // 骨头（chaos）**不给辉光**——它两端各一个光晕会在杆中间叠加成一块死白，
+      // 看起来就像"骨头中间有白底"。骨头靠 ink 描边 + 实色读出来。
+      if (fx.glow && !chaos) {
+        dummy.position.set(b.x, y, rz(b.z, y));
+        dummy.scale.setScalar(bulletDef(b.kind).radius * 2 * BULLET_VIS.glow);
+        dummy.quaternion.copy(camera.quaternion);
+        dummy.updateMatrix();
+        glowMesh.setMatrixAt(glowN, dummy.matrix);
+        glowMesh.setColorAt(glowN, tmpColor.copy(color).multiplyScalar(BULLET_VIS.glowGain));
+        glowN += 1;
       }
       bulletCounts[b.kind] = m + 1;
     }

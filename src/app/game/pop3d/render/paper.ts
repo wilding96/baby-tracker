@@ -241,34 +241,11 @@ export function createPaperRenderer(
       calls += 4;
     }
 
-    // ── 敌机：先给一块米白"聚光剪影"，深色贴图才不会消失在太空底里 ──
+    // ── 敌机：直接用亮色贴图（不再垫米白底板——那块"白底"就是以前垫的菱形）──
     for (let i = 0; i < world.enemies.slots.capacity; i += 1) {
       if (!world.enemies.slots.alive[i]) continue;
       const e = world.enemies.items[i];
-      const R = len(e.r * 2.1);
-      const cx = sx(e.x);
-      const cy = sy(e.z);
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - R * 1.15);
-      ctx.lineTo(cx + R, cy);
-      ctx.lineTo(cx, cy + R * 1.15);
-      ctx.lineTo(cx - R, cy);
-      ctx.closePath();
-      ctx.fillStyle = PAL.paper;
-      ctx.fill();
-      ctx.lineWidth = Math.max(2, len(0.16));
-      ctx.strokeStyle = PAL.ink;
-      ctx.stroke();
-      ctx.save();
-      ctx.clip();
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = dotOnLight;
-      ctx.fillRect(cx - R, cy - R * 1.2, R * 2, R * 2.4);
-      ctx.restore();
-      ctx.restore();
       sprite(sprites.enemy, e.x, e.z, e.scale * 4.4, { flash: e.flash > 0 });
-      calls += 2;
     }
 
     // ── 我方子弹：小鱼干用贴图，其它弹型用色块（先保证辨识度）──

@@ -173,7 +173,7 @@ export const POP = {
    * bands = 斜向色带；plain = 只留底色 + 网点。
    * 小圆点（星野/粒子）一律不用——会和子弹混。
    */
-  bg: "planet" as "planet" | "bands" | "plain",
+  bg: "bands" as "planet" | "bands" | "plain",
   /** 错版偏移（世界单位；约等于屏幕上 2~3px） */
   offset: 0.26,
   /** 套色不准的两块版：红版 + 青版 */

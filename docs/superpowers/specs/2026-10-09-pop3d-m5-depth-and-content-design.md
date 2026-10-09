@@ -308,6 +308,14 @@ weight = base            // 1.0
 5. **弹幕/波次/升级外置成数据模块**：`engine/patterns.ts`、`engine/waves.ts`、`engine/upgrades.ts`，替代 `game.ts` 里写死的生成逻辑
 6. **移动端渲染开关**：移动端关闭 `antialias`、显式声明 `alpha:false / stencil:false`、DPR 上限 2 → 1.5
 
+> **实现期修正（2026-10-09，批次 2）**：
+> - **`engine/upgrades.ts` 不创建**。该职责已由 `engine/cards.ts`（卡池 + 访问器）与
+>   `engine/offerPool.ts`（纯选取逻辑，带单测）承担，再拆一个文件只是改名。
+>   批次 3 的标签 / 权重 / 前置 / 互斥字段加在这两个文件上。
+> - **`WAVES` 波次表留在 `config.ts`**：按 §3"所有可调数值集中在 config"，
+>   `waves.ts` 只放**编队解算逻辑**（`resolveSpawnXs`），不搬数据。
+> - 已落地：`engine/patterns.ts`（弹幕几何，9 个单测）、`engine/waves.ts`（编队解算，8 个单测）。
+
 ---
 
 ## 9. 明确不做（附理由）

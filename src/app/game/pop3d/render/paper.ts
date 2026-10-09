@@ -27,7 +27,11 @@ function makeView(w: number, h: number): View {
   return { scale, ox: w / 2, oy: h / 2 };
 }
 
-export function createPaperRenderer(mount: HTMLElement): Renderer {
+export function createPaperRenderer(
+  mount: HTMLElement,
+  opts: { bg?: "planet" | "bands" | "plain" } = {},
+): Renderer {
+  const bg = opts.bg ?? POP.bg;
   const canvas = document.createElement("canvas");
   canvas.style.position = "absolute";
   canvas.style.display = "block";
@@ -63,20 +67,6 @@ export function createPaperRenderer(mount: HTMLElement): Renderer {
   const dotOnDark = makeDotTile(PAL.paper);
   const dotOnLight = makeDotTile(PAL.ink);
 
-  // 星野：一次性生成，之后每帧只画（静态，不参与逻辑）
-  const stars: { x: number; z: number; r: number; a: number }[] = [];
-  for (let i = 0; i < POP.starCount; i += 1) {
-    const seedA = Math.sin(i * 12.9898) * 43758.5453;
-    const seedB = Math.sin(i * 78.233) * 12345.6789;
-    const fx = seedA - Math.floor(seedA);
-    const fz = seedB - Math.floor(seedB);
-    stars.push({
-      x: (fx * 2 - 1) * FIELD.halfW,
-      z: (fz * 2 - 1) * FIELD.halfH,
-      r: 0.12 + ((i % 3) as number) * 0.08,
-      a: 0.35 + ((i % 4) as number) * 0.15,
-    });
-  }
 
   // ── 贴图（billboard 用的精灵）──
   const sprites: Record<keyof typeof SPRITE_SRC, HTMLImageElement> = {
@@ -181,24 +171,44 @@ export function createPaperRenderer(mount: HTMLElement): Renderer {
     ctx.beginPath();
     ctx.rect(fx0, fy0, fieldW, fieldH);
     ctx.clip();
-    // 深色底上的网点：很淡，只做"印刷味"，不抢主体
-    ctx.globalAlpha = 0.12;
+    // 深色底上的网点：很淡，只做"印刷味"，不抢主体（而且点够密，不会被当成子弹）
+    ctx.globalAlpha = 0.08;
     ctx.fillStyle = dotOnDark;
     ctx.fillRect(fx0, fy0, fieldW, fieldH);
-    // 星野：四角星（菱形）——漫画式的星星
-    for (const st of stars) {
-      const cx = sx(st.x);
-      const cy = sy(st.z);
-      const r = len(st.r);
-      ctx.globalAlpha = st.a;
-      ctx.fillStyle = PAL.paper;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - r * 3);
-      ctx.lineTo(cx + r, cy);
-      ctx.lineTo(cx, cy + r * 3);
-      ctx.lineTo(cx - r, cy);
-      ctx.closePath();
-      ctx.fill();
+
+    // 背景装饰一律用"大件"：小圆点会和子弹混（可读性红线），所以不用星野
+    if (bg === "planet") {
+      // 右上角一颗大行星 + 左下角一颗小行星：尺寸远大于任何子弹
+      const drawPlanet = (cx: number, cy: number, r: number, color: string): void => {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.lineWidth = Math.max(3, len(0.28));
+        ctx.strokeStyle = PAL.ink;
+        ctx.stroke();
+        ctx.save();
+        ctx.clip();
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = dotOnLight;
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+        ctx.restore();
+        calls += 3;
+      };
+      drawPlanet(fx0 + fieldW * 0.88, fy0 + fieldH * 0.13, Math.min(fieldW, fieldH) * 0.3, POP.spaceLift);
+      drawPlanet(fx0 + fieldW * 0.1, fy0 + fieldH * 0.94, Math.min(fieldW, fieldH) * 0.13, POP.spaceLift);
+    } else if (bg === "bands") {
+      // 斜向色带：大面积几何，最不可能被误认成子弹
+      ctx.save();
+      ctx.translate(fx0 + fieldW / 2, fy0 + fieldH / 2);
+      ctx.rotate(-0.32);
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = POP.spaceLift;
+      for (let i = -2; i <= 2; i += 2) {
+        ctx.fillRect(-fieldW, i * fieldH * 0.22 - fieldH * 0.05, fieldW * 2, fieldH * 0.1);
+      }
+      ctx.restore();
+      calls += 2;
     }
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -210,7 +220,7 @@ export function createPaperRenderer(mount: HTMLElement): Renderer {
     ctx.fillRect(fx0 - g, fy0 + fieldH, fieldW + g * 2, g);
     ctx.fillRect(fx0 - g, fy0, g, fieldH);
     ctx.fillRect(fx0 + fieldW, fy0, g, fieldH);
-    calls += 5 + stars.length;
+    calls += 5;
 
     // ── 激光笔：一道硬边绿光束（波普不需要发光，只要硬边）──
     const beam = world.beam;

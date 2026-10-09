@@ -164,7 +164,15 @@ export default function Pop3DGame() {
     // 默认仍是原来的 3D 画面，?theme=pop 是上一版贴图实验。
     const renderer =
       themeParam === "paper"
-        ? createPaperRenderer(mount)
+        ? createPaperRenderer(mount, {
+            // ?bg=planet|bands|plain 切换背景装饰（默认大行星）
+            bg:
+              params.get("bg") === "bands"
+                ? "bands"
+                : params.get("bg") === "plain"
+                  ? "plain"
+                  : "planet",
+          })
         : createRenderer(mount, {
             bloom: bloomParam === null ? undefined : bloomParam !== "0",
             fx,

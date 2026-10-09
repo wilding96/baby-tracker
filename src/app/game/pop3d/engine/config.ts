@@ -283,6 +283,7 @@ export const CARDS: readonly CardDef[] = [
   { id: "pierce", name: "贯穿", school: "barrage", icon: "↟", desc: "子弹可多穿透 1 个敌人", max: 3 },
   { id: "backfire", name: "后向炮", school: "barrage", icon: "⇅", desc: "同时向后发射 45% 伤害的弹", max: 1 },
   { id: "wing", name: "侧翼僚机", school: "barrage", icon: "✈", desc: "两侧各加一门副炮", max: 2 },
+  { id: "split", name: "分裂弹", school: "barrage", icon: "❉", desc: "主弹命中后分裂成 2 发小弹", max: 2 },
   // 元素流
   { id: "volt", name: "电击弹", school: "element", icon: "⚡", desc: "弹附电属性；命中电击最近的敌人", max: 2 },
   { id: "flame", name: "燃烧弹", school: "element", icon: "🔥", desc: "弹附火属性；命中叠加灼烧", max: 2 },

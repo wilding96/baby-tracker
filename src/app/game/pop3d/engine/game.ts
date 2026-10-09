@@ -5,6 +5,13 @@
 
 import { cardDef, rollOffer } from "./cards";
 import {
+  SHIP_BULLET,
+  bulletDef,
+  fanShotAngles,
+  splitShotAngles,
+} from "./bullets";
+import type { PlayerBulletKind } from "./bullets";
+import {
   BOSS,
   BULLET,
   BURST,
@@ -64,6 +71,7 @@ interface Mods {
   bulletCount: number;
   spreadAngle: number;
   pierce: number;
+  split: number;
   backfire: boolean;
   wings: number;
   element: Element | null;
@@ -275,6 +283,7 @@ export function createEngine({
     bulletCount: 2,
     spreadAngle: 0.05,
     pierce: 0,
+    split: 0,
     backfire: false,
     wings: 0,
     element: null,
@@ -358,6 +367,7 @@ export function createEngine({
     // 扇形弹：弹数上去、单发下来，避免"纯数值膨胀"
     mods.bulletDmg = PLAYER.bulletDmg * info.dmgMul * metaPower / (1 + c("spread") * 0.1);
     mods.pierce = c("pierce");
+    mods.split = c("split");
     mods.backfire = c("backfire") > 0;
     mods.wings = c("wing");
     mods.element = lastElement;
@@ -548,22 +558,45 @@ export function createEngine({
   }
 
   // ── 开火 ──
-  function spawnPlayerBullet(x: number, z: number, vx: number, vz: number, dmgMul = 1): void {
+  // 复用同一个数组，避免每次齐射都新建（开火路径零分配）
+  const shotAngles: number[] = [];
+  const splitAngles: number[] = [];
+
+  function spawnPlayerBullet(
+    kind: PlayerBulletKind,
+    x: number,
+    z: number,
+    vx: number,
+    vz: number,
+    dmgMul = 1,
+  ): void {
     const index = world.playerBullets.slots.acquire();
     if (index < 0) return;
+    const def = bulletDef(kind);
     const b = world.playerBullets.items[index];
+    b.kind = kind;
     b.x = x;
     b.z = z;
     b.vx = vx;
     b.vz = vz;
-    b.r = PLAYER.bulletRadius;
-    b.dmg = mods.bulletDmg * dmgMul;
-    b.kind = "bolt"; // Task 3 改成按弹型取参
-    b.pierce = mods.pierce;
+    b.r = def.radius;
+    b.dmg = mods.bulletDmg * def.dmgMul * dmgMul;
+    b.pierce = def.pierce + mods.pierce;
     b.element = mods.element;
-    b.life = 0;
+    b.life = def.life;
     b.angle = Math.atan2(vz, vx);
-    b.hitCd = 0;
+    // 刚生成的子母弹与父弹位置重合，给一点隔断防止同帧自我触发
+    b.hitCd = 0.05;
+  }
+
+  /** 在命中点生成 n 发子母弹（冲击波溅射与分裂弹共用） */
+  function spawnSplit(x: number, z: number, baseAngle: number, n: number): void {
+    const count = splitShotAngles(n, baseAngle, splitAngles);
+    const def = bulletDef("mini");
+    for (let k = 0; k < count; k += 1) {
+      const a = splitAngles[k];
+      spawnPlayerBullet("mini", x, z, Math.cos(a) * def.speed, Math.sin(a) * def.speed);
+    }
   }
 
   function firePlayer(dt: number): void {
@@ -573,28 +606,34 @@ export function createEngine({
     world.muzzle = JUICE.muzzle;
     audio?.shoot(ship === "ion" ? 0 : ship === "pulse" ? 1 : 2);
 
+    // 主炮：弹型由机型决定，扇形角度由 patterns 的几何公式给出
+    const kind = SHIP_BULLET[ship];
+    const def = bulletDef(kind);
     const n = mods.bulletCount;
+    fanShotAngles(n, mods.spreadAngle, shotAngles);
     for (let k = 0; k < n; k += 1) {
+      const a = shotAngles[k];
       const off = k - (n - 1) / 2;
-      const angle = off * mods.spreadAngle;
       spawnPlayerBullet(
+        kind,
         player.pos.x + off * PLAYER.bulletSpread * 0.9,
         player.pos.z - 1.8,
-        Math.sin(angle) * PLAYER.bulletSpeed,
-        -Math.cos(angle) * PLAYER.bulletSpeed,
+        Math.cos(a) * def.speed,
+        Math.sin(a) * def.speed,
       );
     }
 
-    // 侧翼僚机：固定两侧，垂直向上
-    for (let w = 0; w < mods.wings; w += 1) {
-      const off = 3.2 + w * 1.5;
-      spawnPlayerBullet(player.pos.x - off, player.pos.z - 0.4, 0, -PLAYER.bulletSpeed * 0.92);
-      spawnPlayerBullet(player.pos.x + off, player.pos.z - 0.4, 0, -PLAYER.bulletSpeed * 0.92);
-    }
-
-    // 后向炮：45% 伤害
+    // 后向炮：45% 伤害（弹型是子母弹，故按 mini 的倍率反推成总量）
     if (mods.backfire) {
-      spawnPlayerBullet(player.pos.x, player.pos.z + 1.6, 0, PLAYER.bulletSpeed * 0.85, 0.45);
+      const back = bulletDef("mini");
+      spawnPlayerBullet(
+        "mini",
+        player.pos.x,
+        player.pos.z + 1.6,
+        0,
+        back.speed * 0.85,
+        0.45 / back.dmgMul,
+      );
     }
   }
 
@@ -1028,6 +1067,13 @@ export function createEngine({
         if (mods.burn > 0) e.burn = STATUS.burnTime;
         if (mods.chill > 0) e.slow = STATUS.chillTime;
         if (mods.chain > 0) chainTo(e, j, dmg);
+
+        // 溅射：冲击波机型天生分裂，分裂弹卡按层数追加子母弹。
+        // 子母弹不再分裂——否则每命中一次都自我复制，弹幕会指数爆炸。
+        if (b.kind !== "mini") {
+          if (b.kind === "wave") spawnSplit(b.x, b.z, b.angle, 2);
+          if (mods.split > 0) spawnSplit(b.x, b.z, b.angle, mods.split * 2);
+        }
 
         if (b.pierce > 0) {
           b.pierce -= 1;

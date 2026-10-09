@@ -134,6 +134,22 @@ export const PLAYER = {
 // ── 敌弹 ──
 export const BULLET = { enemyRadius: 0.5 } as const;
 
+// ── 高度分层（世界 Y）──
+// 透视下"离地高度"就是纵深线索；但抬高会让屏幕位置偏移，
+// 因此所有实体绘制时都要走 projection.compensatedZ 补偿回判定点。
+// 敌弹最高（离相机最近），保证永远压在最上层 —— §5 可读性红线。
+export const HEIGHT = {
+  border: 0.02,
+  shadow: 0.04, // 贴地投影
+  burst: 0.5,
+  player: 0.8,
+  bullet: 1.0,
+  enemy: 1.3,
+  ebullet: 1.5,
+  bossCenter: 1.6, // Boss 视觉中心相对地面的高度
+  pop: 3.0, // 拟声词基准高度（之后还会向上飘）
+} as const;
+
 // ── 敌种：三种，颜色 + 缩放区分（不新增 draw call）──
 export const ENEMY_KINDS: Record<EnemyKind, EnemyKindDef> = {
   drone: {

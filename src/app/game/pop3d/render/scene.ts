@@ -11,6 +11,7 @@ import {
   ELEMENT_COLOR,
   ENEMY_KINDS,
   FIELD,
+  HEIGHT,
   JUICE,
   PAL,
   POOL,
@@ -18,7 +19,7 @@ import {
 } from "../engine/config";
 import type { Element, EnemyKind, Renderer, Vec2, World } from "../engine/types";
 import { computeFraming, perspectiveDistance } from "../engine/framing";
-import { degToRad } from "../engine/projection";
+import { compensatedZ, degToRad } from "../engine/projection";
 import {
   createBossMesh,
   createBurstGeometry,
@@ -181,6 +182,11 @@ export function createRenderer(mount: HTMLElement): Renderer {
 
   const dummy = new THREE.Object3D();
 
+  /** 绘制用 z：把"抬高 h"的实体补偿回地面判定点的像素 */
+  function rz(z: number, h: number): number {
+    return compensatedZ(z, h, degToRad(rigPitchDeg));
+  }
+
   // ── 屏幕 → 地面射线 ──
   const raycaster = new THREE.Raycaster();
   const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -235,7 +241,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
     const p = world.player;
     const blink = p.invuln > 0 && Math.floor(world.time * 24) % 2 === 1;
     player.visible = world.phase === "playing" && !blink;
-    player.position.set(p.pos.x, 0.6, p.pos.z);
+    player.position.set(p.pos.x, HEIGHT.player, rz(p.pos.z, HEIGHT.player));
     player.scale.setScalar(world.muzzle > 0 ? 1.12 : 1);
 
     // 敌机（实体 + 描边外壳）
@@ -244,7 +250,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
     for (let i = 0; i < foes.slots.capacity; i += 1) {
       if (!foes.slots.alive[i]) continue;
       const e = foes.items[i];
-      dummy.position.set(e.x, 1.1, e.z);
+      dummy.position.set(e.x, HEIGHT.enemy, rz(e.z, HEIGHT.enemy));
       dummy.scale.setScalar(e.scale);
       dummy.updateMatrix();
       enemyMesh.setMatrixAt(n, dummy.matrix);
@@ -267,7 +273,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
     for (let i = 0; i < pb.slots.capacity; i += 1) {
       if (!pb.slots.alive[i]) continue;
       const b = pb.items[i];
-      dummy.position.set(b.x, 0.9, b.z);
+      dummy.position.set(b.x, HEIGHT.bullet, rz(b.z, HEIGHT.bullet));
       dummy.scale.setScalar(1);
       dummy.updateMatrix();
       playerBulletMesh.setMatrixAt(n, dummy.matrix);
@@ -284,7 +290,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
     for (let i = 0; i < eb.slots.capacity; i += 1) {
       if (!eb.slots.alive[i]) continue;
       const b = eb.items[i];
-      dummy.position.set(b.x, 0.95, b.z);
+      dummy.position.set(b.x, HEIGHT.ebullet, rz(b.z, HEIGHT.ebullet));
       dummy.scale.setScalar(1);
       dummy.updateMatrix();
       enemyBulletMesh.setMatrixAt(n, dummy.matrix);
@@ -300,7 +306,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
       if (!bursts.slots.alive[i]) continue;
       const b = bursts.items[i];
       const k = Math.sin(Math.PI * (b.t / b.life));
-      dummy.position.set(b.x, 1.0, b.z);
+      dummy.position.set(b.x, HEIGHT.burst, rz(b.z, HEIGHT.burst));
       dummy.scale.setScalar(Math.max(0.001, k * BURST.maxScale * b.scale));
       dummy.updateMatrix();
       burstMesh.setMatrixAt(n, dummy.matrix);
@@ -326,7 +332,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
       const wid = hgt * (img.width / img.height);
       sprite.scale.set(wid, hgt, 1);
       mat.rotation = -0.12; // 轻微倾斜，像贴纸（Sprite 的旋转走材质）
-      sprite.position.set(pop.x, 2.2 + k * 2.4, pop.z);
+      sprite.position.set(pop.x, HEIGHT.pop + k * 2.4, rz(pop.z, HEIGHT.pop));
       sprite.visible = true;
       n += 1;
     }
@@ -336,7 +342,8 @@ export function createRenderer(mount: HTMLElement): Renderer {
     const boss = world.boss;
     bossMesh.group.visible = boss.active;
     if (boss.active) {
-      bossMesh.group.position.set(boss.x, 1.2, boss.z);
+      // Boss：组原点留在地面，高度由内部零件提供，补偿按视觉中心高度算
+      bossMesh.group.position.set(boss.x, 0, rz(boss.z, HEIGHT.bossCenter));
       // 入场时从小到大弹出
       const k = Math.min(1, (boss.z + FIELD.halfH + 12) / 12);
       bossMesh.group.scale.setScalar(0.55 + 0.45 * k);

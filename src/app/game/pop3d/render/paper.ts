@@ -40,13 +40,13 @@ export function createPaperRenderer(mount: HTMLElement): Renderer {
   let dpr = 1;
   let calls = 0;
 
-  // ── 网点图案：离屏画一次，之后用 createPattern 平铺（等同 3D 版的网点贴图）──
-  const dotTile = document.createElement("canvas");
-  dotTile.width = 12;
-  dotTile.height = 12;
-  {
-    const c = dotTile.getContext("2d")!;
-    c.fillStyle = "#101010";
+  // ── 网点图案：两张。深色太空底上用米白点，米白剪影上用墨点 ──
+  function makeDotTile(color: string): CanvasPattern {
+    const tile = document.createElement("canvas");
+    tile.width = 12;
+    tile.height = 12;
+    const c = tile.getContext("2d")!;
+    c.fillStyle = color;
     for (const [x, y] of [
       [6, 6],
       [0, 0],
@@ -58,8 +58,25 @@ export function createPaperRenderer(mount: HTMLElement): Renderer {
       c.arc(x, y, 1.5, 0, Math.PI * 2);
       c.fill();
     }
+    return ctx.createPattern(tile, "repeat")!;
   }
-  const dotPattern = ctx.createPattern(dotTile, "repeat")!;
+  const dotOnDark = makeDotTile(PAL.paper);
+  const dotOnLight = makeDotTile(PAL.ink);
+
+  // 星野：一次性生成，之后每帧只画（静态，不参与逻辑）
+  const stars: { x: number; z: number; r: number; a: number }[] = [];
+  for (let i = 0; i < POP.starCount; i += 1) {
+    const seedA = Math.sin(i * 12.9898) * 43758.5453;
+    const seedB = Math.sin(i * 78.233) * 12345.6789;
+    const fx = seedA - Math.floor(seedA);
+    const fz = seedB - Math.floor(seedB);
+    stars.push({
+      x: (fx * 2 - 1) * FIELD.halfW,
+      z: (fz * 2 - 1) * FIELD.halfH,
+      r: 0.12 + ((i % 3) as number) * 0.08,
+      a: 0.35 + ((i % 4) as number) * 0.15,
+    });
+  }
 
   // ── 贴图（billboard 用的精灵）──
   const sprites: Record<keyof typeof SPRITE_SRC, HTMLImageElement> = {
@@ -152,8 +169,8 @@ export function createPaperRenderer(mount: HTMLElement): Renderer {
     const h = canvas.height / dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // ── 背景：纸白 + 网点 + 老大红块 + 粗黑分格 ──
-    ctx.fillStyle = PAL.paper;
+    // ── 背景：单色太空底 + 星野 + 网点 + 纸色分格（红块撤掉了，红色太晃眼）──
+    ctx.fillStyle = POP.spaceBg;
     ctx.fillRect(0, 0, w, h);
 
     const fieldW = len(FIELD.halfW * 2);
@@ -164,25 +181,36 @@ export function createPaperRenderer(mount: HTMLElement): Renderer {
     ctx.beginPath();
     ctx.rect(fx0, fy0, fieldW, fieldH);
     ctx.clip();
-    ctx.globalAlpha = 0.5;
-    ctx.fillStyle = dotPattern;
+    // 深色底上的网点：很淡，只做"印刷味"，不抢主体
+    ctx.globalAlpha = 0.12;
+    ctx.fillStyle = dotOnDark;
     ctx.fillRect(fx0, fy0, fieldW, fieldH);
-    ctx.globalAlpha = POP.blockAlpha;
-    ctx.fillStyle = PAL.red;
-    ctx.fillRect(fx0, fy0, len(FIELD.halfW * 2 * POP.blockW), fieldH);
-    ctx.globalAlpha = 0.55;
-    ctx.fillStyle = dotPattern;
-    ctx.fillRect(fx0, fy0, len(FIELD.halfW * 2 * POP.blockW), fieldH);
+    // 星野：四角星（菱形）——漫画式的星星
+    for (const st of stars) {
+      const cx = sx(st.x);
+      const cy = sy(st.z);
+      const r = len(st.r);
+      ctx.globalAlpha = st.a;
+      ctx.fillStyle = PAL.paper;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - r * 3);
+      ctx.lineTo(cx + r, cy);
+      ctx.lineTo(cx, cy + r * 3);
+      ctx.lineTo(cx - r, cy);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
     ctx.restore();
 
-    // 粗黑分格（漫画格）
+    // 粗分格：深色太空里用米白边框，才框得住
     const g = Math.max(4, len(POP.gutter * 0.9));
-    ctx.fillStyle = PAL.ink;
+    ctx.fillStyle = PAL.paper;
     ctx.fillRect(fx0 - g, fy0 - g, fieldW + g * 2, g);
     ctx.fillRect(fx0 - g, fy0 + fieldH, fieldW + g * 2, g);
     ctx.fillRect(fx0 - g, fy0, g, fieldH);
     ctx.fillRect(fx0 + fieldW, fy0, g, fieldH);
-    calls += 5;
+    calls += 5 + stars.length;
 
     // ── 激光笔：一道硬边绿光束（波普不需要发光，只要硬边）──
     const beam = world.beam;
@@ -203,27 +231,34 @@ export function createPaperRenderer(mount: HTMLElement): Renderer {
       calls += 4;
     }
 
-    // ── 贴地阴影：网点圆盘（印刷感的阴影，不是柔和投影）──
-    for (const set of [world.enemies]) {
-      for (let i = 0; i < set.slots.capacity; i += 1) {
-        if (!set.slots.alive[i]) continue;
-        const e = set.items[i];
-        ctx.save();
-        ctx.globalAlpha = 0.35;
-        ctx.beginPath();
-        ctx.ellipse(sx(e.x) + len(0.4), sy(e.z) + len(0.5), len(e.r * 1.1), len(e.r * 0.5), 0, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.fillStyle = dotPattern;
-        ctx.fillRect(sx(e.x) - len(3), sy(e.z) - len(3), len(6), len(6));
-        ctx.restore();
-      }
-    }
-
-    // ── 敌机（贴图 + 受击白闪）──
+    // ── 敌机：先给一块米白"聚光剪影"，深色贴图才不会消失在太空底里 ──
     for (let i = 0; i < world.enemies.slots.capacity; i += 1) {
       if (!world.enemies.slots.alive[i]) continue;
       const e = world.enemies.items[i];
+      const R = len(e.r * 2.1);
+      const cx = sx(e.x);
+      const cy = sy(e.z);
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - R * 1.15);
+      ctx.lineTo(cx + R, cy);
+      ctx.lineTo(cx, cy + R * 1.15);
+      ctx.lineTo(cx - R, cy);
+      ctx.closePath();
+      ctx.fillStyle = PAL.paper;
+      ctx.fill();
+      ctx.lineWidth = Math.max(2, len(0.16));
+      ctx.strokeStyle = PAL.ink;
+      ctx.stroke();
+      ctx.save();
+      ctx.clip();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = dotOnLight;
+      ctx.fillRect(cx - R, cy - R * 1.2, R * 2, R * 2.4);
+      ctx.restore();
+      ctx.restore();
       sprite(sprites.enemy, e.x, e.z, e.scale * 4.4, { flash: e.flash > 0 });
+      calls += 2;
     }
 
     // ── 我方子弹：小鱼干用贴图，其它弹型用色块（先保证辨识度）──
@@ -295,11 +330,11 @@ export function createPaperRenderer(mount: HTMLElement): Renderer {
       sprite(sprites.player, p.pos.x, p.pos.z, 5.4, {});
       if (p.invuln > 0) {
         ctx.save();
-        ctx.globalAlpha = 0.35;
+        ctx.globalAlpha = 0.5;
         ctx.beginPath();
         ctx.arc(sx(p.pos.x), sy(p.pos.z), len(2.4), 0, Math.PI * 2);
         ctx.clip();
-        ctx.fillStyle = dotPattern;
+        ctx.fillStyle = dotOnDark;
         ctx.fillRect(sx(p.pos.x) - len(4), sy(p.pos.z) - len(4), len(8), len(8));
         ctx.restore();
         calls += 1;
@@ -321,7 +356,7 @@ export function createPaperRenderer(mount: HTMLElement): Renderer {
       ctx.beginPath();
       ctx.rect(sx(boss.x) - bw / 2, sy(boss.z) - bh / 2, bw, bh);
       ctx.clip();
-      ctx.fillStyle = dotPattern;
+      ctx.fillStyle = dotOnLight;
       ctx.fillRect(sx(boss.x) - bw / 2, sy(boss.z) - bh / 2, bw, bh);
       ctx.restore();
       ctx.fillStyle = boss.flash > 0 ? PAL.paper : PAL.yellow;

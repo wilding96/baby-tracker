@@ -139,8 +139,23 @@ export default function Pop3DGame() {
     const skip = Number(params.get("skip"));
     // ?bloom=0 / ?bloom=1 覆盖默认分级（桌面开、移动端关）
     const bloomParam = params.get("bloom");
+    // ?fx=0 关掉全部表现层（对照基线）；?fx=glow,trail,outline,lines,bloom 指定单层
+    const fxParam = params.get("fx");
+    const fx =
+      fxParam === null || fxParam === "1"
+        ? undefined
+        : fxParam === "0"
+          ? { outline: false, glow: false, trail: false, speedLines: false, bloom: false }
+          : {
+              outline: fxParam.includes("outline"),
+              glow: fxParam.includes("glow"),
+              trail: fxParam.includes("trail"),
+              speedLines: fxParam.includes("lines"),
+              bloom: fxParam.includes("bloom"),
+            };
     const renderer = createRenderer(mount, {
       bloom: bloomParam === null ? undefined : bloomParam !== "0",
+      fx,
     });
     const engine = createEngine({
       mount,

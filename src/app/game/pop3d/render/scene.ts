@@ -93,9 +93,33 @@ function makeWordTexture(text: string): THREE.CanvasTexture {
 export interface RendererOptions {
   /** 覆盖 bloom 开关（调试用：?bloom=0 / ?bloom=1） */
   bloom?: boolean;
+  /** 逐层开关（调试用：?fx=0 全关 / ?fx=glow,trail,… 指定组合） */
+  fx?: FxOptions;
+}
+
+/** 表现层各图层的开关：定位"哪一层让画面变糊/变线框"用的 */
+export interface FxOptions {
+  /** 弹体 ink 描边壳 */
+  outline?: boolean;
+  /** 外圈加法辉光贴片 */
+  glow?: boolean;
+  /** 拖尾 */
+  trail?: boolean;
+  /** 背景速度线 */
+  speedLines?: boolean;
+  /** Bloom 后处理 */
+  bloom?: boolean;
 }
 
 export function createRenderer(mount: HTMLElement, options: RendererOptions = {}): Renderer {
+  const fx = {
+    outline: true,
+    glow: true,
+    trail: true,
+    speedLines: FX.speedLines,
+    bloom: options.bloom ?? FX.bloom,
+    ...options.fx,
+  };
   // 移动端：关抗锯齿、降 DPR —— 这两项在手机 GPU 上最贵
   const isMobile =
     typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -177,7 +201,7 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
   scene.add(lanes);
 
   // ── 速度线：纵向细条持续向上扫，给"在前进"的速度感（全部只占 1 个 draw call）──
-  const SPEED_LINE_COUNT = 26;
+  const SPEED_LINE_COUNT = FX.speedLineCount;
   const speedLineSpan = FIELD.halfH * 2 + 8;
   const speedLineX: number[] = [];
   const speedLineSeed: number[] = [];
@@ -192,8 +216,13 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
     speedLineColors.push(new THREE.Color(a < 0.12 ? PAL.cyan : a < 0.2 ? PAL.red : PAL.ink));
   }
   const speedLineMesh = instanced(
-    new THREE.BoxGeometry(0.14, 0.02, 16),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, depthWrite: false }),
+    new THREE.BoxGeometry(0.12, 0.02, FX.speedLineLength),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: FX.speedLineOpacity,
+      depthWrite: false,
+    }),
     SPEED_LINE_COUNT,
   );
   scene.add(speedLineMesh);
@@ -388,7 +417,7 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
   // ── Bloom 后处理：桌面开、移动端关（?bloom=0 / ?bloom=1 可覆盖）──
   // 阈值 1.0 是这套方案的关键：只有"过曝"的加法辉光会发光，米色场地
   // （线性亮度 ≈0.94）不参与，所以背景不会糊成一片，弹芯也保持纯色。
-  const bloomOn = (options.bloom ?? FX.bloom) && !isMobile;
+  const bloomOn = fx.bloom && !isMobile;
   const composer = bloomOn ? new EffectComposer(renderer) : null;
   if (composer) {
     composer.addPass(new RenderPass(scene, camera));
@@ -466,7 +495,7 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
     shadowCount = 0;
 
     // 速度线：纯数学滚动（不改任何运行时对象、零分配）
-    if (FX.speedLines) {
+    if (fx.speedLines) {
       for (let i = 0; i < SPEED_LINE_COUNT; i += 1) {
         const zz = ((speedLineSeed[i] + world.time * speedLineSpeed[i]) % speedLineSpan) - FIELD.halfH - 4;
         dummy.position.set(speedLineX[i], HEIGHT.border, zz);
@@ -566,7 +595,7 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       const uz = b.vz / speed;
       const px = -uz; // 速度的垂直方向，给"锯齿残影"用
       const pz = ux;
-      for (let t = 0; t < BULLET_VIS.trail; t += 1) {
+      for (let t = 0; fx.trail && t < BULLET_VIS.trail; t += 1) {
         const k2 = t + 1;
         const dim = Math.pow(BULLET_VIS.trailDim, k2) * BULLET_VIS.glowGain;
         let ox = -ux * BULLET_VIS.trailGap * k2;
@@ -608,18 +637,22 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       mesh.setColorAt(m, color);
 
       // ── 描边：同矩阵，压低一点点，避免和单面环 z-fighting ──
-      dummy.position.y = y - 0.03;
-      dummy.updateMatrix();
-      outlineMeshes[b.kind].setMatrixAt(m, dummy.matrix);
+      if (fx.outline) {
+        dummy.position.y = y - 0.03;
+        dummy.updateMatrix();
+        outlineMeshes[b.kind].setMatrixAt(m, dummy.matrix);
+      }
 
       // ── 辉光贴片：面向相机，外圈光晕（bloom 就从这里亮起来）──
-      dummy.position.set(b.x, y, py);
-      dummy.scale.setScalar(bulletDef(b.kind).radius * 2 * BULLET_VIS.glow);
-      dummy.quaternion.copy(camera.quaternion);
-      dummy.updateMatrix();
-      glowMesh.setMatrixAt(glowN, dummy.matrix);
-      glowMesh.setColorAt(glowN, tmpColor.copy(color).multiplyScalar(BULLET_VIS.glowGain));
-      glowN += 1;
+      if (fx.glow) {
+        dummy.position.set(b.x, y, py);
+        dummy.scale.setScalar(bulletDef(b.kind).radius * 2 * BULLET_VIS.glow);
+        dummy.quaternion.copy(camera.quaternion);
+        dummy.updateMatrix();
+        glowMesh.setMatrixAt(glowN, dummy.matrix);
+        glowMesh.setColorAt(glowN, tmpColor.copy(color).multiplyScalar(BULLET_VIS.glowGain));
+        glowN += 1;
+      }
 
       bulletCounts[b.kind] = m + 1;
     }
@@ -629,13 +662,13 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       const outline = outlineMeshes[k];
-      outline.count = bulletCounts[k];
+      outline.count = fx.outline ? bulletCounts[k] : 0;
       outline.instanceMatrix.needsUpdate = true;
     }
-    trailMesh.count = trailN;
+    trailMesh.count = fx.trail ? trailN : 0;
     trailMesh.instanceMatrix.needsUpdate = true;
     if (trailMesh.instanceColor) trailMesh.instanceColor.needsUpdate = true;
-    glowMesh.count = glowN;
+    glowMesh.count = fx.glow ? glowN : 0;
     glowMesh.instanceMatrix.needsUpdate = true;
     if (glowMesh.instanceColor) glowMesh.instanceColor.needsUpdate = true;
 

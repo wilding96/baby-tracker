@@ -144,28 +144,32 @@ export const BULLET_VIS = {
   /** 描边壳倍率（1 = 关）：黑色的反向外壳，和玩家机/敌机同一套硬边风 */
   outline: 1.15,
   /** 发光贴片倍率（1 = 关）：加法混合的径向渐变 billboard，1 个 draw call 覆盖所有弹 */
-  glow: 1.6,
+  glow: 1.3,
   /** 发光强度（加法混合下 = 颜色亮度倍率） */
-  glowGain: 1.2,
+  glowGain: 0.7,
   /** 每发弹写几节拖尾（0 = 关） */
-  trail: 3,
+  trail: 2,
   /** 相邻两节拖尾的间距（世界单位） */
   trailGap: 0.55,
   /** 每节拖尾的亮度衰减（加法混合下 = 越远越淡） */
-  trailDim: 0.55,
+  trailDim: 0.42,
 } as const;
 
 // ── 屏幕特效总开关（性能分级：桌面开，移动端在 renderer 里强制关）──
 export const FX = {
   bloom: true,
-  bloomStrength: 0.9,
-  bloomRadius: 0.5,
+  bloomStrength: 0.6,
+  bloomRadius: 0.35,
   /**
    * 1.0 = 只让"过曝"的部分发光。米色场地线性亮度约 0.94，
    * 加法发光贴片叠出来的高光会越过 1.0 —— 于是背景不糊、弹头自己发亮。
    */
   bloomThreshold: 1.0,
   speedLines: true,
+  /** 速度线的条数 / 长度（世界单位）/ 不透明度——太密太长会像"技术预览的线框" */
+  speedLineCount: 14,
+  speedLineLength: 7,
+  speedLineOpacity: 0.1,
   hitSpark: true,
 } as const;
 

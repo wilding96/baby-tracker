@@ -22,6 +22,7 @@
 | 6 | 命中火花（复用爆点池，节流 ~33/秒） | `FX.hitSpark`、`game.ts#spawnSpark` |
 | 7 | 背景速度线（26 条，1 个 draw call） | `FX.speedLines`、`scene.ts` |
 | 8 | Bloom 后处理：桌面开、移动端关，`?bloom=0/1` 可覆盖 | `FX.bloom*`、`scene.ts` composer |
+| 9 | **逐层开关** `?fx=…`：定位"哪一层让画面变线框/变糊" | `RendererOptions.fx`、`page.tsx` |
 
 **Bloom 的关键取舍**：阈值取 `1.0`（线性亮度）。米色场地线性亮度 ≈0.94 不参与发光，
 只有加法辉光贴片叠出来的"过曝"区域会发光——于是背景不糊、弹芯保持纯色。
@@ -38,6 +39,8 @@
 | 批次 3a（改动前） | 60 | 16.7 ms | 544~552 | 15~16 |
 | 3a-FX，`?bloom=0` | 60 | 16.7 ms | 546~552 | 19~20 |
 | 3a-FX，默认（bloom 开） | 60 | 16.7 ms | 548~552 | **33** |
+| 3a-FX，`?fx=0`（全关基线） | 60 | 16.7 ms | 549 | 17 |
+| 3a-FX，`?fx=bloom`（只开后处理） | 60 | 16.7 ms | 548 | 29 |
 
 - 新增表现层固定成本 +4 draw call（描边 1 + 辉光 1 + 拖尾 1 + 速度线 1）；
   bloom 追加 ~13（5 级模糊 × 双向 + 亮度提取 + 合成）。
@@ -49,6 +52,23 @@
 - `BULLET_VIS`：`scale` / `outline` / `glow` / `glowGain` / `trail` / `trailGap` / `trailDim`
 - `FX`：`bloom` / `bloomStrength` / `bloomRadius` / `bloomThreshold` / `speedLines` / `hitSpark`
 - 运行时 A/B：`?bloom=0`（关 bloom）、`?bloom=1`（强制开，含移动端）
+- 逐层二分：`?fx=0` 全关；`?fx=outline,glow,trail,lines,bloom` 任意组合
+
+## 首轮反馈后的收紧（2026-10-09）
+
+试玩反馈"像渲染引擎未经渲染的线框图"，据此先把三层最可疑的参数调保守：
+
+| 参数 | 初值 | 现值 |
+| --- | --- | --- |
+| `BULLET_VIS.trail` | 3 | 2 |
+| `BULLET_VIS.trailDim` | 0.55 | 0.42 |
+| `BULLET_VIS.glow` / `glowGain` | 1.6 / 1.2 | 1.3 / 0.7 |
+| `FX.bloomStrength` / `bloomRadius` | 0.9 / 0.5 | 0.6 / 0.35 |
+| 速度线 条数/长度/不透明度 | 26 / 16 / 0.16 | 14 / 7 / 0.10 |
+
+下一步待人工二分：用 `?fx=…` 单层开关确认"线框感"来自哪一层
+（速度线 → 拖尾 → 描边 → 辉光 → bloom），或者 `?fx=0` 仍然线框 = **底子问题**
+（场地网格 + 满屏 ink 描边 + 平涂材质），那就要改基础美术而不是特效。
 
 ## 未验证 / 风险
 

@@ -25,6 +25,7 @@ import {
   PAL,
   POOL,
   POOL_WINGMEN,
+  POP,
   SHIELD,
   WORDS,
   WINGMAN,
@@ -44,6 +45,7 @@ import {
   createFieldGrid,
   createGlowGeometry,
   createGlowTexture,
+  createHalftoneTexture,
   createPlayerBulletGeometries,
   createPlayerBulletOutlineGeometries,
   createPlayerMesh,
@@ -98,6 +100,8 @@ export interface RendererOptions {
   bloom?: boolean;
   /** 逐层开关（调试用：?fx=0 全关 / ?fx=glow,trail,… 指定组合） */
   fx?: FxOptions;
+  /** 主题：pop（默认）= 60 年代波普漫画（错版 + 网点 + 粗黑分格）；classic = 之前的平涂 */
+  theme?: "pop" | "classic";
 }
 
 /** 表现层各图层的开关：定位"哪一层让画面变糊/变线框"用的 */
@@ -115,6 +119,7 @@ export interface FxOptions {
 }
 
 export function createRenderer(mount: HTMLElement, options: RendererOptions = {}): Renderer {
+  const isPop = (options.theme ?? "pop") === "pop";
   const fx = {
     outline: true,
     glow: true,
@@ -177,6 +182,89 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
 
   const gridNear = createFieldGrid();
   scene.add(gridNear, createFieldBorder());
+
+  // 网点贴图（波普的点阵纹理）：场地、老大红块、贴地阴影共用；块用单独一份克隆调平铺密度
+  const halftoneTex = createHalftoneTexture();
+  const blockTex = halftoneTex.clone();
+  halftoneTex.needsUpdate = true;
+  blockTex.needsUpdate = true;
+  if (isPop) {
+    halftoneTex.repeat.set((FIELD.halfW * 2) / POP.dotCell, (FIELD.halfH * 2) / POP.dotCell);
+    blockTex.repeat.set((FIELD.halfW * 2 * POP.blockW) / POP.dotCell, (FIELD.halfH * 2) / POP.dotCell);
+  }
+
+  // ── 波普主题（B 方向）：网点场地 + 老大红块 + 粗黑分格 ──
+  const fieldHalftone = new THREE.Mesh(
+    new THREE.PlaneGeometry(FIELD.halfW * 2, FIELD.halfH * 2).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+      map: halftoneTex,
+      color: PAL.paper,
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false,
+    }),
+  );
+  fieldHalftone.position.y = 0.004;
+  const redBlock = new THREE.Mesh(
+    new THREE.PlaneGeometry(FIELD.halfW * 2 * POP.blockW, FIELD.halfH * 2).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+      map: blockTex,
+      color: POP.misregRed,
+      transparent: true,
+      opacity: POP.blockAlpha,
+      depthWrite: false,
+    }),
+  );
+  redBlock.position.set(-FIELD.halfW * (1 - POP.blockW) * 0.5, 0.006, 0);
+  // 粗黑分格：四条 gutter，只占 1 个 draw call（InstancedMesh ×4）
+  const gutterGeo = new THREE.BoxGeometry(1, 0.04, 1);
+  const gutterMesh = instanced(
+    gutterGeo,
+    new THREE.MeshBasicMaterial({ color: PAL.ink }),
+    4,
+  );
+  const gw = FIELD.halfW * 2;
+  const gh = FIELD.halfH * 2;
+  const gutters: [number, number, number, number][] = [
+    [0, -FIELD.halfH, gw + POP.gutter * 2, POP.gutter],
+    [0, FIELD.halfH, gw + POP.gutter * 2, POP.gutter],
+    [-FIELD.halfW, 0, POP.gutter, gh + POP.gutter * 2],
+    [FIELD.halfW, 0, POP.gutter, gh + POP.gutter * 2],
+  ];
+  if (isPop) {
+    const gutterDummy = new THREE.Object3D();
+    for (let i = 0; i < gutters.length; i += 1) {
+      const [gx, gz, sx, sz] = gutters[i];
+      gutterDummy.position.set(gx, 0.03, gz);
+      gutterDummy.scale.set(sx, 1, sz);
+      gutterDummy.updateMatrix();
+      gutterMesh.setMatrixAt(i, gutterDummy.matrix);
+    }
+    gutterMesh.count = 4;
+    gutterMesh.instanceMatrix.needsUpdate = true;
+    scene.add(fieldHalftone, redBlock, gutterMesh);
+  } else {
+    gutterMesh.count = 0;
+  }
+
+  // 错版层：红版 / 青版各偏移 POP.offset（玩家的整机剪影 + 敌机外壳 + Boss 舰体）
+  const ghostMatRed = new THREE.MeshBasicMaterial({ color: POP.misregRed });
+  const ghostMatCyan = new THREE.MeshBasicMaterial({ color: POP.misregCyan });
+  const playerGhostGeo = new THREE.BoxGeometry(3.9, 0.16, 3.4);
+  const playerGhostR = new THREE.Mesh(playerGhostGeo, ghostMatRed);
+  const playerGhostC = new THREE.Mesh(playerGhostGeo, ghostMatCyan);
+  const enemyGhostR = instanced(createEnemyGeometry(), ghostMatRed, POOL.enemies);
+  const enemyGhostC = instanced(createEnemyGeometry(), ghostMatCyan, POOL.enemies);
+  const bossGhostGeo = new THREE.BoxGeometry(19, 0.3, 4.2);
+  const bossGhostR = new THREE.Mesh(bossGhostGeo, ghostMatRed);
+  const bossGhostC = new THREE.Mesh(bossGhostGeo, ghostMatCyan);
+  if (isPop) {
+    playerGhostR.visible = false;
+    playerGhostC.visible = false;
+    bossGhostR.visible = false;
+    bossGhostC.visible = false;
+    scene.add(playerGhostR, playerGhostC, enemyGhostR, enemyGhostC, bossGhostR, bossGhostC);
+  }
 
   // 远层网格：更淡、更慢，做视差
   const gridFar = new THREE.GridHelper(
@@ -449,12 +537,11 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
   shadowGeo.rotateX(-Math.PI / 2); // 平躺在地面
   const shadowMesh = instanced(
     shadowGeo,
-    new THREE.MeshBasicMaterial({
-      color: PAL.ink,
-      transparent: true,
-      opacity: 0.18,
-      depthWrite: false,
-    }),
+    new THREE.MeshBasicMaterial(
+      isPop
+        ? { map: halftoneTex, color: PAL.ink, transparent: true, opacity: 0.3, depthWrite: false }
+        : { color: PAL.ink, transparent: true, opacity: 0.18, depthWrite: false },
+    ),
     SHADOW_CAPACITY,
   );
   scene.add(shadowMesh);
@@ -638,6 +725,16 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
     player.position.set(p.pos.x, HEIGHT.player, rz(p.pos.z, HEIGHT.player));
     player.scale.setScalar(1);
     pushShadow(p.pos.x, p.pos.z, 2.6); // 玩家机翼展半宽 2.3，阴影略大一圈
+    if (isPop) {
+      // 错版：玩家的整机剪影复制两份，向左右各偏一点 = 套色不准
+      playerGhostR.visible = player.visible;
+      playerGhostC.visible = player.visible;
+      if (player.visible) {
+        const gy = HEIGHT.player - 0.08;
+        playerGhostR.position.set(p.pos.x - POP.offset, gy, rz(p.pos.z, gy));
+        playerGhostC.position.set(p.pos.x + POP.offset, gy, rz(p.pos.z, gy));
+      }
+    }
 
     // 无敌护盾环：恒定亮度 + 慢转，取代闪烁
     shieldRing.visible = world.phase === "playing" && p.invuln > 0;
@@ -760,6 +857,17 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       dummy.scale.setScalar(e.scale * 1.16);
       dummy.updateMatrix();
       enemyOutline.setMatrixAt(n, dummy.matrix);
+      if (isPop) {
+        // 错版：红版左偏、青版右偏，各画一份同样的敌机剪影
+        const gy = HEIGHT.enemy - 0.07;
+        dummy.scale.setScalar(e.scale);
+        dummy.position.set(e.x - POP.offset, gy, rz(e.z, gy));
+        dummy.updateMatrix();
+        enemyGhostR.setMatrixAt(n, dummy.matrix);
+        dummy.position.set(e.x + POP.offset, gy, rz(e.z, gy));
+        dummy.updateMatrix();
+        enemyGhostC.setMatrixAt(n, dummy.matrix);
+      }
       pushShadow(e.x, e.z, e.r * 1.8);
       n += 1;
     }
@@ -768,6 +876,12 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
     enemyMesh.instanceMatrix.needsUpdate = true;
     enemyOutline.instanceMatrix.needsUpdate = true;
     if (enemyMesh.instanceColor) enemyMesh.instanceColor.needsUpdate = true;
+    if (isPop) {
+      enemyGhostR.count = n;
+      enemyGhostC.count = n;
+      enemyGhostR.instanceMatrix.needsUpdate = true;
+      enemyGhostC.instanceMatrix.needsUpdate = true;
+    }
 
     // 我方子弹：辉光贴片 + 拖尾 + 描边 + 弹芯（每种弹型一个 InstancedMesh，count=0 不产生 draw call）
     for (const k of PLAYER_BULLET_KINDS) bulletCounts[k] = 0;
@@ -938,6 +1052,15 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       bossMesh.group.scale.setScalar(0.55 + 0.45 * k);
       bossMesh.core.material.color.copy(boss.flash > 0 ? FLASH_COLOR : CORE_COLOR);
       pushShadow(boss.x, boss.z, BOSS.radius * 1.2);
+    }
+    if (isPop) {
+      bossGhostR.visible = boss.active;
+      bossGhostC.visible = boss.active;
+      if (boss.active) {
+        const gy = 1.4;
+        bossGhostR.position.set(boss.x - POP.offset, gy, rz(boss.z, HEIGHT.bossCenter));
+        bossGhostC.position.set(boss.x + POP.offset, gy, rz(boss.z, HEIGHT.bossCenter));
+      }
     }
 
     shadowMesh.count = shadowCount;

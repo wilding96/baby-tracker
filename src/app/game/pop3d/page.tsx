@@ -161,6 +161,8 @@ export default function Pop3DGame() {
     const renderer = createRenderer(mount, {
       bloom: bloomParam === null ? undefined : bloomParam !== "0",
       fx,
+      // 主题：默认波普漫画（B 方向），?theme=classic 回退到之前的平涂波普
+      theme: params.get("theme") === "classic" ? "classic" : "pop",
     });
     const engine = createEngine({
       mount,

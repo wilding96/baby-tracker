@@ -162,6 +162,23 @@ export const BEAM = {
 } as const;
 
 // ── 护盾 / 核弹（v2 新资源）──
+// ── 主题：pop = 60 年代波普漫画（错版印刷 + 网点 + 粗黑分格）；classic = 之前的平涂波普 ──
+export const POP = {
+  /** 错版偏移（世界单位；约等于屏幕上 2~3px） */
+  offset: 0.26,
+  /** 套色不准的两块版：红版 + 青版 */
+  misregRed: "#FF2D2D",
+  misregCyan: "#00C2FF",
+  /** 网点：点半径（像素）与一个点占多少世界单位 */
+  dotRadius: 2.4,
+  dotCell: 2.4,
+  /** 场地里的老大红块：占场地宽度比例 + 不透明度 */
+  blockW: 0.58,
+  blockAlpha: 0.92,
+  /** 粗黑分格边框的厚度（世界单位） */
+  gutter: 0.62,
+} as const;
+
 export const SHIELD = {
   /** 支援僚机把护盾上限也一起顶上去，所以设一个绝对上限 */
   maxCap: 300,
@@ -215,7 +232,8 @@ export const BULLET_VIS = {
 
 // ── 屏幕特效总开关（性能分级：桌面开，移动端在 renderer 里强制关）──
 export const FX = {
-  bloom: true,
+  // 波普主题下**默认关**：泛光会把硬边糊掉，而波普要的就是硬边（?bloom=1 可强行打开）
+  bloom: false,
   bloomStrength: 0.6,
   bloomRadius: 0.35,
   /**

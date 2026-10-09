@@ -5,7 +5,7 @@
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { BACKGROUND, BULLET_VIS, FIELD, PAL } from "../engine/config";
+import { BACKGROUND, BULLET_VIS, FIELD, PAL, POP } from "../engine/config";
 import { PLAYER_BULLET_KINDS, bulletDef } from "../engine/bullets";
 import type { PlayerBulletKind } from "../engine/bullets";
 
@@ -209,6 +209,37 @@ export function createGlowTexture(): THREE.CanvasTexture {
 /** 发光贴片的载体：单位平面，实例缩放决定大小，朝向每帧抄相机 */
 export function createGlowGeometry(): THREE.BufferGeometry {
   return new THREE.PlaneGeometry(1, 1);
+}
+
+/**
+ * Ben-Day 网点贴图（波普的招牌纹理）：一个点 + 四角补点，平铺后是无缝规则点阵。
+ * 场地、大色块、贴地阴影都用它，运行时零成本。
+ */
+export function createHalftoneTexture(): THREE.CanvasTexture {
+  const size = 32;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = "#101010";
+  const r = POP.dotRadius;
+  for (const [cx, cy] of [
+    [size / 2, size / 2],
+    [0, 0],
+    [size, 0],
+    [0, size],
+    [size, size],
+  ]) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 /** 敌弹：小球 */

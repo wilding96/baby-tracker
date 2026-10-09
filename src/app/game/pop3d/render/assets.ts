@@ -104,14 +104,10 @@ export function createEnemyGeometry(): THREE.BufferGeometry {
  */
 const BULLET_SHAPES: Record<PlayerBulletKind, (s: number) => THREE.BufferGeometry> = {
   bolt: (s) => new THREE.BoxGeometry(0.25 * s, 0.25 * s, 2.6 * s), // 离子束：细长
-  spread: (s) => {
-    // 新星：粗短的"子弹头"——三把枪里最胖的一颗，和脉冲的薄环一眼分开
-    const g = new THREE.OctahedronGeometry(0.5 * s, 0);
-    g.scale(1, 1, 1.35);
-    return g;
-  },
-  // 脉冲：长哑铃（两瓣小球 + 中间连杆），见 dumbbellGeometry
-  wave: (s) => dumbbellGeometry(s),
+  // 新星：小鱼干（扁长鱼身 + 尾鳍）
+  spread: (s) => fishGeometry(s),
+  // 脉冲：骨头（细杆 + 两端各两颗疙瘩，就是"长哑铃"）
+  wave: (s) => boneGeometry(s),
   homing: (s) => {
     // 追踪弹：拉长的八面体 = 小飞弹（尾焰由 trailByKind 单独给）
     const g = new THREE.OctahedronGeometry(0.32 * s, 0);
@@ -122,25 +118,41 @@ const BULLET_SHAPES: Record<PlayerBulletKind, (s: number) => THREE.BufferGeometr
 };
 
 /**
- * 长哑铃：两瓣小球 + 中间一根细连杆，整体沿局部 +Z 摆放（于是和其它弹共用
- * `π/2 - 朝向` 的旋转约定）。尺寸直接取 `bulletDef("wave")` 的 radius / arm——
- * 这两个数同时也是**判定**用的数，所以"看着连上了就是真连上了"。
+ * 骨头：细杆 + 两端各两颗疙瘩（卡通骨 = 长哑铃）。
+ * 整体沿局部 +Z 摆放（于是和其它弹共用 `π/2 - 朝向` 的旋转约定）；
+ * 尺寸直接取 `bulletDef("wave")` 的 radius / arm——这两个数同时也是**判定**用的数，
+ * 所以"看着连上了就是真连上了"。
  */
-function dumbbellGeometry(outlineScale: number): THREE.BufferGeometry {
+function boneGeometry(outlineScale: number): THREE.BufferGeometry {
   const def = bulletDef("wave");
   const arm = (def.chaotic?.arm ?? 1) * outlineScale;
   const r = def.radius * outlineScale;
   // 注意：Icosahedron 是非索引几何，而 Box 是索引几何，mergeGeometries 不能混，
   // 否则会返回 null（渲染时报 "reading 'id' of null"）。所以连杆要先 toNonIndexed()。
-  const rod = new THREE.BoxGeometry(r * 0.55, r * 0.55, arm * 2).toNonIndexed();
-  const merged = mergeGeometries([
-    new THREE.IcosahedronGeometry(r, 1).translate(0, 0, arm),
-    new THREE.IcosahedronGeometry(r, 1).translate(0, 0, -arm),
-    // 连杆比球细得多，才有"哑铃"而不是"胶囊"的感觉
-    rod,
-  ]);
+  const parts: THREE.BufferGeometry[] = [
+    // 骨干：比疙瘩细得多，才有"骨头"而不是"胶囊"的感觉
+    new THREE.BoxGeometry(r * 0.5, r * 0.5, arm * 2).toNonIndexed(),
+  ];
+  for (const sz of [1, -1]) {
+    for (const sx of [1, -1]) {
+      parts.push(
+        new THREE.IcosahedronGeometry(r * 0.82, 1).translate(sx * r * 0.72, 0, sz * (arm + r * 0.25)),
+      );
+    }
+  }
+  const merged = mergeGeometries(parts);
   // 兜底：万一将来属性对不上，至少还是一颗球，不要让整个场景挂掉
   return merged ?? new THREE.IcosahedronGeometry(r, 1);
+}
+
+/** 小鱼干：扁长的鱼身 + 一片尾鳍（都沿局部 +Z，尾鳍在屁股后面） */
+function fishGeometry(s: number): THREE.BufferGeometry {
+  const body = new THREE.OctahedronGeometry(0.5 * s, 0);
+  body.scale(0.85, 0.7, 1.5);
+  const tail = new THREE.OctahedronGeometry(0.3 * s, 0);
+  tail.scale(1.7, 0.55, 0.6);
+  tail.translate(0, 0, -0.62 * s);
+  return mergeGeometries([body, tail]) ?? body;
 }
 
 /** 我方弹型几何：一颗子弹一种形状，"换了牌"一眼看得出来（已放大 BULLET_VIS.scale） */

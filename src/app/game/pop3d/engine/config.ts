@@ -74,7 +74,7 @@ export const SHIP_INFO: Record<ShipType, ShipDef> = {
   },
   nova: {
     label: "新星",
-    blurb: "重炮单发 · 一击见效",
+    blurb: "小鱼干 · 一击见效",
     element: "fire",
     icon: "💥",
     bulletCount: 1,
@@ -84,7 +84,7 @@ export const SHIP_INFO: Record<ShipType, ShipDef> = {
   },
   pulse: {
     label: "脉冲",
-    blurb: "哑铃火球 · 弹道随缘",
+    blurb: "骨头飞镖 · 弹道随缘",
     element: "ice",
     icon: "〰️",
     bulletCount: 1,

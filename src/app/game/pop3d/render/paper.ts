@@ -8,11 +8,12 @@
 import { EBULLET, FIELD, HEIGHT, PAL, POP, WORDS } from "../engine/config";
 import type { Renderer, World } from "../engine/types";
 
-const SPRITE_SRC = {
+  const SPRITE_SRC = {
   player: "/game/pop3d/player.png",
   enemy: "/game/pop3d/enemy.png",
   weaver: "/game/pop3d/weaver.png",
   gunner: "/game/pop3d/gunner.png",
+  boss: "/game/pop3d/boss.png",
   fish: "/game/pop3d/fish.png",
 } as const;
 
@@ -76,6 +77,7 @@ export function createPaperRenderer(
     enemy: new Image(),
     weaver: new Image(),
     gunner: new Image(),
+    boss: new Image(),
     fish: new Image(),
   };
   for (const key of Object.keys(SPRITE_SRC) as (keyof typeof SPRITE_SRC)[]) {
@@ -232,22 +234,71 @@ export function createPaperRenderer(
     ctx.fillRect(fx0 + fieldW, fy0, g, fieldH);
     calls += 5;
 
-    // ── 激光笔：一道硬边绿光束（波普不需要发光，只要硬边）──
+    // ── 激光笔：逗猫棒光束（绿本体 + 白芯 + 能量刻度 + 落点星芒）──
     const beam = world.beam;
     if (world.phase === "playing" && beam.active && world.ship === "ion") {
       const bw = len(beam.halfW * 2);
+      const bx = sx(beam.x);
       const y0 = sy(beam.z0);
       const y1 = sy(Math.min(beam.tipZ, beam.z0));
+      const top = Math.min(y0, y1);
+      const hgt = Math.max(1, Math.abs(y0 - y1));
+      const ink = Math.max(2, len(0.12));
       ctx.fillStyle = PAL.laser;
-      ctx.fillRect(sx(beam.x) - bw / 2, y1, bw, Math.abs(y0 - y1));
+      ctx.fillRect(bx - bw / 2, top, bw, hgt);
       ctx.strokeStyle = PAL.ink;
-      ctx.lineWidth = Math.max(2, len(0.1));
-      ctx.strokeRect(sx(beam.x) - bw / 2, y1, bw, Math.abs(y0 - y1));
+      ctx.lineWidth = ink;
+      ctx.strokeRect(bx - bw / 2, top, bw, hgt);
+      // 白芯：光束的层次
       ctx.fillStyle = PAL.paper;
+      ctx.fillRect(bx - bw * 0.16, top, bw * 0.32, hgt);
+      // 能量刻度：沿光束的小横条（印刷味的"滋滋"感）
+      ctx.fillStyle = PAL.ink;
+      const tick = Math.max(6, len(1.6));
+      ctx.globalAlpha = 0.35;
+      for (let ty = top + tick * 0.5; ty < top + hgt; ty += tick) {
+        ctx.fillRect(bx - bw * 0.5, ty, bw, Math.max(2, len(0.08)));
+      }
+      ctx.globalAlpha = 1;
+      // 落点：四角星芒 + 一圈网点（猫追的那个光点）
+      const R = Math.max(8, bw * 1.5);
+      ctx.save();
+      ctx.translate(bx, y1);
+      ctx.fillStyle = PAL.yellow;
+      ctx.strokeStyle = PAL.ink;
+      ctx.lineWidth = ink;
       ctx.beginPath();
-      ctx.arc(sx(beam.x), y1, bw * 0.9, 0, Math.PI * 2);
+      ctx.moveTo(0, -R);
+      ctx.lineTo(R * 0.28, -R * 0.28);
+      ctx.lineTo(R, 0);
+      ctx.lineTo(R * 0.28, R * 0.28);
+      ctx.lineTo(0, R);
+      ctx.lineTo(-R * 0.28, R * 0.28);
+      ctx.lineTo(-R, 0);
+      ctx.lineTo(-R * 0.28, -R * 0.28);
+      ctx.closePath();
       ctx.fill();
       ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, R * 1.5, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = dotOnLight;
+      ctx.fillRect(-R * 1.6, -R * 1.6, R * 3.2, R * 3.2);
+      ctx.restore();
+      // 进化：末端再分两条短束
+      if (beam.forks) {
+        ctx.strokeStyle = PAL.laser;
+        ctx.lineWidth = Math.max(3, bw * 0.6);
+        ctx.lineCap = "round";
+        for (const s of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(bx, y1);
+          ctx.lineTo(bx + s * len(3.2), y1 - len(3.2));
+          ctx.stroke();
+        }
+        ctx.lineCap = "butt";
+      }
       calls += 4;
     }
 
@@ -399,30 +450,28 @@ export function createPaperRenderer(
       }
     }
 
-    // ── Boss：黑舰体 + 网点 + 黄核心 ──
+    // ── Boss：贴图母舰（受击白剪影）+ 核心星芒；入场时从小到大弹出 ──
     const boss = world.boss;
     if (boss.active) {
-      const bw = len(19);
-      const bh = len(4.2);
-      ctx.fillStyle = PAL.magenta;
-      ctx.strokeStyle = PAL.ink;
-      ctx.lineWidth = Math.max(3, len(0.24));
-      ctx.fillRect(sx(boss.x) - bw / 2, sy(boss.z) - bh / 2, bw, bh);
-      ctx.strokeRect(sx(boss.x) - bw / 2, sy(boss.z) - bh / 2, bw, bh);
+      const grow = boss.entering ? Math.min(1, (boss.z + FIELD.halfH + 12) / 12) * 0.5 + 0.5 : 1;
+      sprite(sprites.boss, boss.x, boss.z, 12 * grow, { flash: boss.flash > 0 });
+      // 核心：黄星芒（阶段切换/受击时会白闪）
+      const cr = len(1.9);
       ctx.save();
-      ctx.globalAlpha = 0.45;
-      ctx.beginPath();
-      ctx.rect(sx(boss.x) - bw / 2, sy(boss.z) - bh / 2, bw, bh);
-      ctx.clip();
-      ctx.fillStyle = dotOnLight;
-      ctx.fillRect(sx(boss.x) - bw / 2, sy(boss.z) - bh / 2, bw, bh);
-      ctx.restore();
+      ctx.translate(sx(boss.x), sy(boss.z));
       ctx.fillStyle = boss.flash > 0 ? PAL.paper : PAL.yellow;
+      ctx.strokeStyle = PAL.ink;
+      ctx.lineWidth = Math.max(3, len(0.22));
       ctx.beginPath();
-      ctx.arc(sx(boss.x), sy(boss.z), len(1.8), 0, Math.PI * 2);
+      ctx.moveTo(0, -cr * 1.5);
+      ctx.lineTo(cr * 0.6, 0);
+      ctx.lineTo(0, cr * 1.5);
+      ctx.lineTo(-cr * 0.6, 0);
+      ctx.closePath();
       ctx.fill();
       ctx.stroke();
-      calls += 4;
+      ctx.restore();
+      calls += 2;
     }
 
     // ── 爆点：漫画爆炸 ──

@@ -32,9 +32,9 @@ function formatTime(seconds: number): string {
 }
 
 const btnMain =
-  "w-full rounded-xl border-2 border-[#101010] bg-[#FF2D2D] px-4 py-2 font-bold text-[#FFF8E7] shadow-[3px_3px_0_#101010] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none";
+  "w-full rounded-none border-4 border-[#101010] bg-[#FF2D2D] px-4 py-2 font-bold text-[#FFF8E7] shadow-[6px_6px_0_#101010] transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none";
 const btnGhost =
-  "w-full rounded-xl border-2 border-[#101010] bg-[#FFF8E7] px-4 py-2 text-sm font-bold text-[#101010] shadow-[3px_3px_0_#101010] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none";
+  "w-full rounded-none border-4 border-[#101010] bg-[#FFF8E7] px-4 py-2 text-sm font-bold text-[#101010] shadow-[6px_6px_0_#101010] transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none";
 
 export default function Pop3DGame() {
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -55,7 +55,8 @@ export default function Pop3DGame() {
   const nukeRef = useRef<HTMLButtonElement | null>(null);
   const nukeCountRef = useRef<HTMLSpanElement | null>(null);
   const bossBarRef = useRef<HTMLDivElement | null>(null);
-  const bossFillRef = useRef<HTMLDivElement | null>(null);
+  /** Boss 血条分 3 段，每段一个 ref */
+  const bossSegRefs = useRef<(HTMLDivElement | null)[]>([]);
   const bossWeakRef = useRef<HTMLSpanElement | null>(null);
   const warnRef = useRef<HTMLDivElement | null>(null);
 
@@ -210,9 +211,17 @@ export default function Pop3DGame() {
           if (nukeCountRef.current) nukeCountRef.current.textContent = String(h.nukes);
           if (nukeRef.current) nukeRef.current.disabled = h.nukes <= 0;
           if (bossBarRef.current) bossBarRef.current.style.display = h.bossMaxHp > 0 ? "flex" : "none";
-          if (bossFillRef.current && h.bossMaxHp > 0) {
-            const pct = Math.max(0, Math.min(100, (h.bossHp / h.bossMaxHp) * 100));
-            bossFillRef.current.style.width = `${pct}%`;
+          // 三段血条：每段填自己的比例，当前正在掉的那段高亮
+          if (h.bossMaxHp > 0) {
+            const per = h.bossMaxHp / 3;
+            for (let i = 0; i < 3; i += 1) {
+              const el = bossSegRefs.current[i];
+              if (!el) continue;
+              const seg = Math.max(0, Math.min(1, (h.bossHp - i * per) / per));
+              el.style.width = `${seg * 100}%`;
+              el.parentElement!.style.background =
+                seg > 0 && seg < 1 ? "#FFD400" : "rgba(16,16,16,0.25)";
+            }
           }
           if (bossWeakRef.current) {
             bossWeakRef.current.textContent = h.bossWeak
@@ -368,8 +377,18 @@ export default function Pop3DGame() {
             className="pointer-events-none absolute left-1/2 top-24 w-[min(70vw,420px)] -translate-x-1/2 items-center gap-2"
           >
             <span className="font-mono text-[10px] font-bold text-[#FFF8E7]">BOSS</span>
-            <div className="h-3 flex-1 overflow-hidden rounded-full border-2 border-[#FFF8E7] bg-[#101010]">
-              <div ref={bossFillRef} className="h-full w-full bg-[#FF2D2D]" />
+            {/* 血条分 3 段：当前段高亮，打完一段再进下一段（§6.3） */}
+            <div className="flex h-3 flex-1 gap-[3px] border-2 border-[#101010] bg-[#FFF8E7] p-[2px]">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-full flex-1 bg-[#101010]/25">
+                  <div
+                    ref={(el) => {
+                      bossSegRefs.current[i] = el;
+                    }}
+                    className="h-full w-full bg-[#FF2D2D]"
+                  />
+                </div>
+              ))}
             </div>
             <span ref={bossWeakRef} className="font-mono text-[10px] font-bold text-[#FFD400]" />
           </div>
@@ -440,7 +459,7 @@ export default function Pop3DGame() {
                   type="button"
                   onClick={() => setShip(s)}
                   style={{ outline: on ? "3px solid #FF2D2D" : "none", outlineOffset: "-3px" }}
-                  className="flex flex-1 flex-col items-center gap-0.5 rounded-lg border-2 border-[#101010] bg-[#FFF8E7] px-1 py-2"
+                  className="flex flex-1 flex-col items-center gap-0.5 rounded-none border-4 border-[#101010] bg-[#FFF8E7] shadow-[5px_5px_0_#101010] px-1 py-2"
                 >
                   <span className="text-lg">{info.icon}</span>
                   <span className="text-xs font-bold text-[#101010]">{info.label}</span>
@@ -497,7 +516,7 @@ export default function Pop3DGame() {
                       ? "linear-gradient(150deg,#FFF8E7 0%,#FFE7F6 40%,#E4F6FF 75%,#FFF8E7 100%)"
                       : "#FFF8E7",
                   }}
-                  className={`flex flex-1 flex-col items-center gap-1 rounded-lg border-4 border-[#101010] px-1 pb-3 pt-0 active:translate-y-[3px] active:!shadow-none ${
+                  className={`flex flex-1 flex-col items-center gap-1 rounded-none border-4 border-[#101010] px-1 pb-3 pt-0 active:translate-y-[3px] active:!shadow-none ${
                     prisma ? "ring-4 ring-[#FFD400]" : ""
                   }`}
                 >
@@ -597,7 +616,15 @@ export default function Pop3DGame() {
 
 function Veil({ children }: { children: React.ReactNode }) {
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 overflow-y-auto bg-[#FFF8E7]/95 p-4 text-center">
+    <div
+      className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 overflow-y-auto border-[10px] border-[#101010] bg-[#FFF8E7] p-4 text-center"
+      style={{
+        // 漫画格：菜单/三选一也用网点纸，和战场同源
+        backgroundImage: "radial-gradient(#101010 1px, transparent 1.1px)",
+        backgroundSize: "12px 12px",
+        backgroundBlendMode: "multiply",
+      }}
+    >
       {children}
     </div>
   );

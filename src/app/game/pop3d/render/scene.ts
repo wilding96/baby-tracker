@@ -76,8 +76,16 @@ function makeWordTexture(text: string): THREE.CanvasTexture {
 }
 
 export function createRenderer(mount: HTMLElement): Renderer {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // §5.5
+  // 移动端：关抗锯齿、降 DPR —— 这两项在手机 GPU 上最贵
+  const isMobile =
+    typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  const renderer = new THREE.WebGLRenderer({
+    antialias: !isMobile,
+    alpha: false,
+    stencil: false,
+    powerPreference: "high-performance",
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2)); // §5.5
   const canvas = renderer.domElement;
   canvas.style.position = "absolute";
   canvas.style.display = "block";

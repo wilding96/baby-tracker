@@ -65,6 +65,10 @@ export interface InputState {
   /** 指针是否在画布内（在则跟随指针世界坐标） */
   pointerActive: boolean;
   pointer: Vec2;
+  /** 相对拖动：按下瞬间的指针世界坐标与玩家位置 */
+  dragActive: boolean;
+  dragPointer: Vec2;
+  dragPlayer: Vec2;
 }
 
 export interface Player {

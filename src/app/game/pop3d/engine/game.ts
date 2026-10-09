@@ -153,6 +153,8 @@ const KEY_MAP: Record<string, keyof Pick<InputState, "up" | "down" | "left" | "r
 
 /** 调试驾驶员的候选横坐标数量（越大越会躲，也越费 CPU，仅调试路径使用） */
 const AUTOPILOT_CANDIDATES = 9;
+/** 拖动灵敏度：手指移动 1 像素，飞机移动 1.2 像素 */
+const DRAG_SENSITIVITY = 1.2;
 /** 击杀回血的触发间隔 */
 const LEECH_EVERY = 40;
 
@@ -173,6 +175,9 @@ export function createEngine({
     right: false,
     pointerActive: false,
     pointer: { x: 0, z: 0 },
+    dragActive: false,
+    dragPointer: { x: 0, z: 0 },
+    dragPlayer: { x: 0, z: 0 },
   };
 
   const player: Player = {
@@ -1244,15 +1249,29 @@ export function createEngine({
     input[key] = false;
   }
 
-  function onPointerMove(e: PointerEvent): void {
+  function onPointerDown(e: PointerEvent): void {
     const p = renderer.pointerToWorld(e.clientX, e.clientY);
     if (!p) return;
-    input.pointer.x = p.x;
-    input.pointer.z = p.z;
+    input.dragActive = true;
+    input.dragPointer.x = p.x;
+    input.dragPointer.z = p.z;
+    input.dragPlayer.x = player.pos.x;
+    input.dragPlayer.z = player.pos.z;
+    renderer.element.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: PointerEvent): void {
+    // 相对拖动：飞机不跟到手指底下，而是按位移量走（手指不会盖住自己）
+    if (!input.dragActive) return;
+    const p = renderer.pointerToWorld(e.clientX, e.clientY);
+    if (!p) return;
+    input.pointer.x = input.dragPlayer.x + (p.x - input.dragPointer.x) * DRAG_SENSITIVITY;
+    input.pointer.z = input.dragPlayer.z + (p.z - input.dragPointer.z) * DRAG_SENSITIVITY;
     input.pointerActive = true;
   }
 
-  function onPointerLeave(): void {
+  function onPointerEnd(): void {
+    input.dragActive = false;
     input.pointerActive = false;
   }
 
@@ -1265,8 +1284,10 @@ export function createEngine({
   function attach(): void {
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
+    renderer.element.addEventListener("pointerdown", onPointerDown);
     renderer.element.addEventListener("pointermove", onPointerMove);
-    renderer.element.addEventListener("pointerleave", onPointerLeave);
+    renderer.element.addEventListener("pointerup", onPointerEnd);
+    renderer.element.addEventListener("pointercancel", onPointerEnd);
     resizeObserver.observe(mount);
     renderer.resize(mount.clientWidth, mount.clientHeight);
   }
@@ -1274,8 +1295,10 @@ export function createEngine({
   function detach(): void {
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
+    renderer.element.removeEventListener("pointerdown", onPointerDown);
     renderer.element.removeEventListener("pointermove", onPointerMove);
-    renderer.element.removeEventListener("pointerleave", onPointerLeave);
+    renderer.element.removeEventListener("pointerup", onPointerEnd);
+    renderer.element.removeEventListener("pointercancel", onPointerEnd);
     resizeObserver.disconnect();
   }
 

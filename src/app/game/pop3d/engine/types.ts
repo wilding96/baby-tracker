@@ -128,6 +128,8 @@ export interface Wingman {
   x: number;
   z: number;
   cd: number;
+  /** 枪口闪光剩余时间（秒），只影响视觉 */
+  muzzle: number;
 }
 
 export interface Orb {

@@ -22,6 +22,7 @@ import {
   ENERGY,
   ENEMY_KINDS,
   FIELD,
+  FX,
   FPS_SAMPLE_MS,
   HOMING,
   JUICE,
@@ -146,7 +147,7 @@ function makeEnemyBullets(capacity: number): EntitySet<EnemyBullet> {
 
 function makeWingmen(capacity: number): EntitySet<Wingman> {
   const items: Wingman[] = [];
-  for (let i = 0; i < capacity; i += 1) items.push({ slot: i, x: 0, z: 0, cd: 0 });
+  for (let i = 0; i < capacity; i += 1) items.push({ slot: i, x: 0, z: 0, cd: 0, muzzle: 0 });
   return { items, slots: createSlots(capacity) };
 }
 
@@ -342,6 +343,7 @@ export function createEngine({
   let bossSpawned = false;
   let stressAngle = 0;
   let sfxKillCd = 0; // 击杀音效节流：密集波次下不能每杀都响
+  let sparkCd = 0; // 命中火花节流
 
   // ── 循环状态 ──
   let raf = 0;
@@ -761,8 +763,10 @@ export function createEngine({
       w.z = approach(w.z, tz, dt, WINGMAN.follow);
 
       w.cd -= dt;
+      if (w.muzzle > 0) w.muzzle -= dt;
       if (w.cd <= 0) {
         w.cd = mods.fireCd * WINGMAN.fireCdMul * mods.wingRateMul;
+        w.muzzle = JUICE.muzzle;
         spawnPlayerBullet(kind, w.x, w.z - 1.2, 0, -def.speed, WINGMAN.dmgMul, true);
       }
     }
@@ -1025,6 +1029,23 @@ export function createEngine({
     b.scale = scale;
   }
 
+  /**
+   * 命中火花：复用爆点池（短命 + 小），节流到 ~33发/秒，
+   * 免得满屏弹幕时把池子占满、把真正的爆炸挤掉。
+   */
+  function spawnSpark(x: number, z: number): void {
+    if (!FX.hitSpark || sparkCd > 0) return;
+    const index = world.bursts.slots.acquire();
+    if (index < 0) return;
+    sparkCd = 0.03;
+    const b = world.bursts.items[index];
+    b.x = x;
+    b.z = z;
+    b.t = 0;
+    b.life = BURST.life * 0.35;
+    b.scale = 0.5;
+  }
+
   function spawnPop(x: number, z: number, word: number, scale: number): void {
     const index = world.pops.slots.acquire();
     if (index < 0) return;
@@ -1280,6 +1301,7 @@ export function createEngine({
         const dmg = b.dmg * playerDamageMul();
         e.hp -= dmg;
         e.flash = 0.1;
+        spawnSpark(b.x, b.z);
         if (mods.burn > 0) e.burn = STATUS.burnTime;
         if (mods.chill > 0) e.slow = STATUS.chillTime;
         if (mods.chain > 0) chainTo(e, j, dmg);
@@ -1348,6 +1370,7 @@ export function createEngine({
       const mul = elementMulFor(b.element, boss.weak, boss.resist) * playerDamageMul();
       boss.hp -= b.dmg * mul;
       boss.flash = 0.08;
+      spawnSpark(b.x, b.z);
       if (mods.burn > 0) boss.burn = STATUS.burnTime;
       changed = true;
 
@@ -1429,6 +1452,7 @@ export function createEngine({
     world.time += dt;
     world.frame += 1;
     if (sfxKillCd > 0) sfxKillCd -= dt;
+    if (sparkCd > 0) sparkCd -= dt;
     if (world.shake > 0) world.shake = Math.max(0, world.shake - JUICE.shakeDecay * dt);
     if (world.muzzle > 0) world.muzzle -= dt;
     if (world.warn > 0) world.warn -= dt;
@@ -1599,6 +1623,7 @@ export function createEngine({
     boss.burn = 0;
     stressAngle = 0;
     sfxKillCd = 0;
+    sparkCd = 0;
     world.linkStacks = 0;
     world.linkTimer = 0;
     world.freeze = 0;

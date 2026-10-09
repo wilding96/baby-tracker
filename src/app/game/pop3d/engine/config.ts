@@ -136,6 +136,39 @@ export const BULLET = { enemyRadius: 0.5 } as const;
 /** 比例导引的最大转向速率（rad/s）：太大像锁头，太小追不上 */
 export const HOMING = { turnRate: 2.6 } as const;
 
+// ── 弹幕表现力（T1：尺寸/描边/拖尾；想调观感只改这里，不用碰渲染代码）──
+// 背景：720p 画布下约 10.6 像素/世界单位，原始弹体只有 2.6~13px，看着像纸屑。
+export const BULLET_VIS = {
+  /** 弹体整体放大倍率（几何在创建时放大，不产生运行时开销） */
+  scale: 1.5,
+  /** 描边壳倍率（1 = 关）：黑色的反向外壳，和玩家机/敌机同一套硬边风 */
+  outline: 1.15,
+  /** 发光贴片倍率（1 = 关）：加法混合的径向渐变 billboard，1 个 draw call 覆盖所有弹 */
+  glow: 1.6,
+  /** 发光强度（加法混合下 = 颜色亮度倍率） */
+  glowGain: 1.2,
+  /** 每发弹写几节拖尾（0 = 关） */
+  trail: 3,
+  /** 相邻两节拖尾的间距（世界单位） */
+  trailGap: 0.55,
+  /** 每节拖尾的亮度衰减（加法混合下 = 越远越淡） */
+  trailDim: 0.55,
+} as const;
+
+// ── 屏幕特效总开关（性能分级：桌面开，移动端在 renderer 里强制关）──
+export const FX = {
+  bloom: true,
+  bloomStrength: 0.9,
+  bloomRadius: 0.5,
+  /**
+   * 1.0 = 只让"过曝"的部分发光。米色场地线性亮度约 0.94，
+   * 加法发光贴片叠出来的高光会越过 1.0 —— 于是背景不糊、弹头自己发亮。
+   */
+  bloomThreshold: 1.0,
+  speedLines: true,
+  hitSpark: true,
+} as const;
+
 // ── 僚机（实体编队）──
 export const WINGMAN = {
   max: 4,

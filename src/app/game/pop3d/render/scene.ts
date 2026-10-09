@@ -17,6 +17,8 @@ import {
   WORDS,
 } from "../engine/config";
 import type { Element, EnemyKind, Renderer, Vec2, World } from "../engine/types";
+import { computeFraming, perspectiveDistance } from "../engine/framing";
+import { degToRad } from "../engine/projection";
 import {
   createBossMesh,
   createBurstGeometry,
@@ -75,17 +77,27 @@ export function createRenderer(mount: HTMLElement): Renderer {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(PAL.paper);
 
-  // ── 相机（近正交俯视，屏幕上方 = -Z）──
-  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, CAMERA.near, CAMERA.far);
-  const pitch = THREE.MathUtils.degToRad(CAMERA.pitchDeg);
-  const camBase = new THREE.Vector3(
-    0,
-    Math.cos(pitch) * CAMERA.distance,
-    Math.sin(pitch) * CAMERA.distance,
-  );
-  camera.position.copy(camBase);
+  // ── 相机（长焦弱透视俯视，屏幕上方 = -Z）──
+  const isPersp = CAMERA.mode === "persp";
+  const camera: THREE.PerspectiveCamera | THREE.OrthographicCamera = isPersp
+    ? new THREE.PerspectiveCamera(CAMERA.fovDeg, 1, CAMERA.near, CAMERA.far)
+    : new THREE.OrthographicCamera(-1, 1, 1, -1, CAMERA.near, CAMERA.far);
   camera.up.set(0, 0, -1);
-  camera.lookAt(0, 0, 0);
+
+  const camBase = new THREE.Vector3();
+  /** 透视模式下的基准距离（由 fov 反推，resize 时更新） */
+  let baseDistance: number = CAMERA.orthoDistance;
+  /** 运镜 rig：常规战斗恒为基准值，只有 Boss 过场会改这两个值 */
+  const rigPitchDeg = CAMERA.pitchDeg;
+  const rigDistMul = 1;
+
+  function placeCamera(): void {
+    const p = degToRad(rigPitchDeg);
+    const d = baseDistance * rigDistMul;
+    camBase.set(0, Math.cos(p) * d, Math.sin(p) * d);
+    camera.position.copy(camBase);
+    camera.lookAt(0, 0, 0);
+  }
 
   // ── 光照：1 方向光 + 环境光足矣（§5）──
   scene.add(new THREE.AmbientLight(0xffffff, 1.05));
@@ -176,34 +188,32 @@ export function createRenderer(mount: HTMLElement): Renderer {
   const hit = new THREE.Vector3();
 
   function resize(containerW: number, containerH: number): void {
-    const cw = Math.max(1, containerW);
-    const ch = Math.max(1, containerH);
+    const f = computeFraming(containerW, containerH, {
+      halfW: FIELD.halfW,
+      halfH: FIELD.halfH,
+      marginY: CAMERA.marginY,
+      coverX: CAMERA.coverX,
+      maxAspect: CAMERA.maxAspect,
+    });
 
-    // 画布收成竖屏板并居中：竖版场地填充画板，画板外的留白交给页面背景
-    const aspect = Math.min(cw / ch, CAMERA.maxAspect);
-    let cssW = ch * aspect;
-    let cssH = ch;
-    if (cssW > cw) {
-      cssW = cw;
-      cssH = cw / aspect;
+    canvas.style.width = `${f.cssW}px`;
+    canvas.style.height = `${f.cssH}px`;
+    canvas.style.left = `${Math.round((containerW - f.cssW) / 2)}px`;
+    canvas.style.top = `${Math.round((containerH - f.cssH) / 2)}px`;
+    renderer.setSize(f.cssW, f.cssH, false);
+
+    if (camera instanceof THREE.PerspectiveCamera) {
+      camera.aspect = f.aspect;
+      baseDistance = perspectiveDistance(f.halfViewH, CAMERA.fovDeg);
+    } else {
+      camera.left = -f.halfViewW;
+      camera.right = f.halfViewW;
+      camera.top = f.halfViewH;
+      camera.bottom = -f.halfViewH;
+      baseDistance = CAMERA.orthoDistance;
     }
-    cssW = Math.floor(cssW);
-    cssH = Math.floor(cssH);
-    canvas.style.width = `${cssW}px`;
-    canvas.style.height = `${cssH}px`;
-    canvas.style.left = `${Math.round((cw - cssW) / 2)}px`;
-    canvas.style.top = `${Math.round((ch - cssH) / 2)}px`;
-    renderer.setSize(cssW, cssH, false);
-
-    const a = cssW / cssH;
-    // 同时覆盖纵向与横向，且保持 aspect 不畸变
-    const halfViewH = Math.max(FIELD.halfH * CAMERA.marginY, (FIELD.halfW * 1.06) / a);
-    const halfViewW = halfViewH * a;
-    camera.left = -halfViewW;
-    camera.right = halfViewW;
-    camera.top = halfViewH;
-    camera.bottom = -halfViewH;
     camera.updateProjectionMatrix();
+    placeCamera();
   }
 
   function render(world: World): void {

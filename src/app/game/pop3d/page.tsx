@@ -137,7 +137,11 @@ export default function Pop3DGame() {
     // 调试开关：?auto=1 自动寻敌；?stress=1 灌满弹幕；?skip=<秒> 跳段
     const params = new URLSearchParams(window.location.search);
     const skip = Number(params.get("skip"));
-    const renderer = createRenderer(mount);
+    // ?bloom=0 / ?bloom=1 覆盖默认分级（桌面开、移动端关）
+    const bloomParam = params.get("bloom");
+    const renderer = createRenderer(mount, {
+      bloom: bloomParam === null ? undefined : bloomParam !== "0",
+    });
     const engine = createEngine({
       mount,
       renderer,

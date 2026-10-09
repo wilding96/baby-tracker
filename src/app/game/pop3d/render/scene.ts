@@ -5,14 +5,20 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import * as THREE from "three";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import {
   BACKGROUND,
   BOSS,
+  BULLET_VIS,
   BURST,
   CAMERA,
   ELEMENT_COLOR,
   ENEMY_KINDS,
   FIELD,
+  FX,
   HEIGHT,
   JUICE,
   ORBIT,
@@ -21,7 +27,7 @@ import {
   WORDS,
 } from "../engine/config";
 import type { Element, EnemyKind, Renderer, Vec2, World } from "../engine/types";
-import { PLAYER_BULLET_KINDS } from "../engine/bullets";
+import { PLAYER_BULLET_KINDS, bulletDef } from "../engine/bullets";
 import type { PlayerBulletKind } from "../engine/bullets";
 import { computeFraming, perspectiveDistance } from "../engine/framing";
 import { compensatedZ, degToRad } from "../engine/projection";
@@ -33,9 +39,13 @@ import {
   createEnemyGeometry,
   createFieldBorder,
   createFieldGrid,
+  createGlowGeometry,
+  createGlowTexture,
   createOrbGeometry,
   createPlayerBulletGeometries,
+  createPlayerBulletOutlineGeometries,
   createPlayerMesh,
+  createTrailGeometry,
   createWingmanMesh,
 } from "./assets";
 
@@ -80,7 +90,12 @@ function makeWordTexture(text: string): THREE.CanvasTexture {
   return tex;
 }
 
-export function createRenderer(mount: HTMLElement): Renderer {
+export interface RendererOptions {
+  /** 覆盖 bloom 开关（调试用：?bloom=0 / ?bloom=1） */
+  bloom?: boolean;
+}
+
+export function createRenderer(mount: HTMLElement, options: RendererOptions = {}): Renderer {
   // 移动端：关抗锯齿、降 DPR —— 这两项在手机 GPU 上最贵
   const isMobile =
     typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -161,6 +176,28 @@ export function createRenderer(mount: HTMLElement): Renderer {
   );
   scene.add(lanes);
 
+  // ── 速度线：纵向细条持续向上扫，给"在前进"的速度感（全部只占 1 个 draw call）──
+  const SPEED_LINE_COUNT = 26;
+  const speedLineSpan = FIELD.halfH * 2 + 8;
+  const speedLineX: number[] = [];
+  const speedLineSeed: number[] = [];
+  const speedLineSpeed: number[] = [];
+  const speedLineColors: THREE.Color[] = [];
+  for (let i = 0; i < SPEED_LINE_COUNT; i += 1) {
+    speedLineX.push((Math.random() * 2 - 1) * (FIELD.halfW + 6));
+    speedLineSeed.push(Math.random() * speedLineSpan);
+    speedLineSpeed.push(26 + Math.random() * 22);
+    // 大多数是极淡的墨线，少数用波普色提神
+    const a = Math.random();
+    speedLineColors.push(new THREE.Color(a < 0.12 ? PAL.cyan : a < 0.2 ? PAL.red : PAL.ink));
+  }
+  const speedLineMesh = instanced(
+    new THREE.BoxGeometry(0.14, 0.02, 16),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, depthWrite: false }),
+    SPEED_LINE_COUNT,
+  );
+  scene.add(speedLineMesh);
+
   const player = createPlayerMesh();
   scene.add(player);
 
@@ -185,7 +222,9 @@ export function createRenderer(mount: HTMLElement): Renderer {
 
   // 我方子弹：一颗池，按弹型分发到各自的 InstancedMesh（count=0 的不产生 draw call）
   const bulletGeos = createPlayerBulletGeometries();
+  const outlineGeos = createPlayerBulletOutlineGeometries();
   const bulletMeshes = {} as Record<PlayerBulletKind, THREE.InstancedMesh>;
+  const outlineMeshes = {} as Record<PlayerBulletKind, THREE.InstancedMesh>;
   const bulletCounts = {} as Record<PlayerBulletKind, number>;
   for (const k of PLAYER_BULLET_KINDS) {
     bulletMeshes[k] = instanced(
@@ -193,10 +232,48 @@ export function createRenderer(mount: HTMLElement): Renderer {
       new THREE.MeshBasicMaterial({ color: 0xffffff }),
       POOL.playerBullets,
     );
+    // 描边：实心弹用反向外壳，平躺环用更大的一圈 ink 环（几何已放大）
+    outlineMeshes[k] = instanced(
+      outlineGeos[k],
+      new THREE.MeshBasicMaterial({
+        color: PAL.ink,
+        side: k === "wave" ? THREE.DoubleSide : THREE.BackSide,
+      }),
+      POOL.playerBullets,
+    );
     bulletMeshes[k].count = 0;
-    scene.add(bulletMeshes[k]);
+    outlineMeshes[k].count = 0;
+    scene.add(outlineMeshes[k], bulletMeshes[k]);
     bulletCounts[k] = 0;
   }
+
+  // 拖尾：所有弹型共用一条 InstancedMesh（加法混合 → 越暗越淡）
+  const trailMesh = instanced(
+    createTrailGeometry(),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    }),
+    POOL.playerBullets * BULLET_VIS.trail,
+  );
+  scene.add(trailMesh);
+
+  // 发光贴片：环形渐变贴图 + 抄相机朝向，1 个 draw call 覆盖所有弹
+  const glowTexture = createGlowTexture();
+  const glowMesh = instanced(
+    createGlowGeometry(),
+    new THREE.MeshBasicMaterial({
+      map: glowTexture,
+      color: 0xffffff,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+    }),
+    POOL.playerBullets,
+  );
+  scene.add(glowMesh);
   const enemyBulletMesh = instanced(
     createEnemyBulletGeometry(),
     new THREE.MeshBasicMaterial({ color: PAL.red }),
@@ -277,6 +354,9 @@ export function createRenderer(mount: HTMLElement): Renderer {
   }
 
   const dummy = new THREE.Object3D();
+  /** 复用的临时颜色：每帧按弹型/属性算实例色，不产生分配 */
+  const tmpColor = new THREE.Color();
+  const HALF_PI = Math.PI / 2;
 
   /** 绘制用 z：把"抬高 h"的实体补偿回地面判定点的像素 */
   function rz(z: number, h: number): number {
@@ -305,6 +385,21 @@ export function createRenderer(mount: HTMLElement): Renderer {
   const ndc = new THREE.Vector2();
   const hit = new THREE.Vector3();
 
+  // ── Bloom 后处理：桌面开、移动端关（?bloom=0 / ?bloom=1 可覆盖）──
+  // 阈值 1.0 是这套方案的关键：只有"过曝"的加法辉光会发光，米色场地
+  // （线性亮度 ≈0.94）不参与，所以背景不会糊成一片，弹芯也保持纯色。
+  const bloomOn = (options.bloom ?? FX.bloom) && !isMobile;
+  const composer = bloomOn ? new EffectComposer(renderer) : null;
+  if (composer) {
+    composer.addPass(new RenderPass(scene, camera));
+    composer.addPass(
+      new UnrealBloomPass(new THREE.Vector2(256, 256), FX.bloomStrength, FX.bloomRadius, FX.bloomThreshold),
+    );
+    composer.addPass(new OutputPass());
+    // 多 pass 下 info 必须手动 reset，否则 draw call 只会统计最后一个 pass
+    renderer.info.autoReset = false;
+  }
+
   function resize(containerW: number, containerH: number): void {
     const f = computeFraming(containerW, containerH, {
       halfW: FIELD.halfW,
@@ -319,6 +414,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
     canvas.style.left = `${Math.round((containerW - f.cssW) / 2)}px`;
     canvas.style.top = `${Math.round((containerH - f.cssH) / 2)}px`;
     renderer.setSize(f.cssW, f.cssH, false);
+    composer?.setSize(f.cssW, f.cssH);
 
     if (camera instanceof THREE.PerspectiveCamera) {
       camera.aspect = f.aspect;
@@ -369,6 +465,24 @@ export function createRenderer(mount: HTMLElement): Renderer {
 
     shadowCount = 0;
 
+    // 速度线：纯数学滚动（不改任何运行时对象、零分配）
+    if (FX.speedLines) {
+      for (let i = 0; i < SPEED_LINE_COUNT; i += 1) {
+        const zz = ((speedLineSeed[i] + world.time * speedLineSpeed[i]) % speedLineSpan) - FIELD.halfH - 4;
+        dummy.position.set(speedLineX[i], HEIGHT.border, zz);
+        dummy.scale.setScalar(1);
+        dummy.rotation.set(0, 0, 0);
+        dummy.updateMatrix();
+        speedLineMesh.setMatrixAt(i, dummy.matrix);
+        speedLineMesh.setColorAt(i, speedLineColors[i]);
+      }
+      speedLineMesh.count = SPEED_LINE_COUNT;
+      speedLineMesh.instanceMatrix.needsUpdate = true;
+      if (speedLineMesh.instanceColor) speedLineMesh.instanceColor.needsUpdate = true;
+    } else {
+      speedLineMesh.count = 0;
+    }
+
     // 玩家机（无敌帧闪烁 + 枪口闪光）
     const p = world.player;
     const blink = p.invuln > 0 && Math.floor(world.time * 24) % 2 === 1;
@@ -387,6 +501,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
       if (!mesh) continue;
       mesh.visible = world.phase === "playing";
       mesh.position.set(w.x, HEIGHT.player, rz(w.z, HEIGHT.player));
+      mesh.scale.setScalar(w.muzzle > 0 ? 1.14 : 1); // 僚机的独立枪口闪光
       pushShadow(w.x, w.z, 1.3);
     }
 
@@ -431,21 +546,81 @@ export function createRenderer(mount: HTMLElement): Renderer {
     enemyOutline.instanceMatrix.needsUpdate = true;
     if (enemyMesh.instanceColor) enemyMesh.instanceColor.needsUpdate = true;
 
-    // 我方子弹：按弹型分发 + 按属性着色
+    // 我方子弹：辉光贴片 + 拖尾 + 描边 + 弹芯（每种弹型一个 InstancedMesh，count=0 不产生 draw call）
     for (const k of PLAYER_BULLET_KINDS) bulletCounts[k] = 0;
+    let glowN = 0;
+    let trailN = 0;
     const pb = world.playerBullets;
     for (let i = 0; i < pb.slots.capacity; i += 1) {
       if (!pb.slots.alive[i]) continue;
       const b = pb.items[i];
       const mesh = bulletMeshes[b.kind];
       const m = bulletCounts[b.kind];
-      dummy.position.set(b.x, HEIGHT.bullet, rz(b.z, HEIGHT.bullet));
+      const color = b.element ? ELEMENT_BULLET[b.element] : PLAIN_BULLET;
+      const y = HEIGHT.bullet;
+      const py = rz(b.z, y);
+
+      // ── 拖尾：位置由速度反推（不存历史），加法混合下"越暗 = 越淡" ──
+      const speed = Math.hypot(b.vx, b.vz) || 1;
+      const ux = b.vx / speed;
+      const uz = b.vz / speed;
+      const px = -uz; // 速度的垂直方向，给"锯齿残影"用
+      const pz = ux;
+      for (let t = 0; t < BULLET_VIS.trail; t += 1) {
+        const k2 = t + 1;
+        const dim = Math.pow(BULLET_VIS.trailDim, k2) * BULLET_VIS.glowGain;
+        let ox = -ux * BULLET_VIS.trailGap * k2;
+        let oz = -uz * BULLET_VIS.trailGap * k2;
+        let rot = HALF_PI - b.angle;
+        let sc = 1 - k2 * 0.12;
+        if (b.element === "electric") {
+          // 电：左右交替的锯齿残影
+          const side = t % 2 === 0 ? 1 : -1;
+          ox += px * side * 0.24 * k2;
+          oz += pz * side * 0.24 * k2;
+        } else if (b.element === "fire") {
+          // 火：拖得更长、衰减更慢 = 拖焰
+          const g = BULLET_VIS.trailGap * k2 * 1.6;
+          ox = -ux * g;
+          oz = -uz * g;
+          sc = 1 - k2 * 0.06;
+        } else if (b.element === "ice") {
+          // 冰：每节多转一点 = 旋转菱形
+          rot += k2 * 0.5;
+          sc *= t % 2 === 0 ? 1 : 0.7;
+        }
+        dummy.position.set(b.x + ox, y, rz(b.z + oz, y));
+        dummy.scale.set(sc, 1, sc);
+        dummy.rotation.set(0, rot, 0);
+        dummy.updateMatrix();
+        trailMesh.setMatrixAt(trailN, dummy.matrix);
+        trailMesh.setColorAt(trailN, tmpColor.copy(color).multiplyScalar(dim));
+        trailN += 1;
+      }
+
+      // ── 弹芯 ──
+      dummy.position.set(b.x, y, py);
       dummy.scale.setScalar(1);
       // 细长几何的长轴在局部 +Z：绕 Y 转 (π/2 - angle) 才对齐飞行方向
-      dummy.rotation.set(0, Math.PI / 2 - b.angle, 0);
+      dummy.rotation.set(0, HALF_PI - b.angle, 0);
       dummy.updateMatrix();
       mesh.setMatrixAt(m, dummy.matrix);
-      mesh.setColorAt(m, b.element ? ELEMENT_BULLET[b.element] : PLAIN_BULLET);
+      mesh.setColorAt(m, color);
+
+      // ── 描边：同矩阵，压低一点点，避免和单面环 z-fighting ──
+      dummy.position.y = y - 0.03;
+      dummy.updateMatrix();
+      outlineMeshes[b.kind].setMatrixAt(m, dummy.matrix);
+
+      // ── 辉光贴片：面向相机，外圈光晕（bloom 就从这里亮起来）──
+      dummy.position.set(b.x, y, py);
+      dummy.scale.setScalar(bulletDef(b.kind).radius * 2 * BULLET_VIS.glow);
+      dummy.quaternion.copy(camera.quaternion);
+      dummy.updateMatrix();
+      glowMesh.setMatrixAt(glowN, dummy.matrix);
+      glowMesh.setColorAt(glowN, tmpColor.copy(color).multiplyScalar(BULLET_VIS.glowGain));
+      glowN += 1;
+
       bulletCounts[b.kind] = m + 1;
     }
     for (const k of PLAYER_BULLET_KINDS) {
@@ -453,7 +628,16 @@ export function createRenderer(mount: HTMLElement): Renderer {
       mesh.count = bulletCounts[k];
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      const outline = outlineMeshes[k];
+      outline.count = bulletCounts[k];
+      outline.instanceMatrix.needsUpdate = true;
     }
+    trailMesh.count = trailN;
+    trailMesh.instanceMatrix.needsUpdate = true;
+    if (trailMesh.instanceColor) trailMesh.instanceColor.needsUpdate = true;
+    glowMesh.count = glowN;
+    glowMesh.instanceMatrix.needsUpdate = true;
+    if (glowMesh.instanceColor) glowMesh.instanceColor.needsUpdate = true;
 
     // 敌弹
     n = 0;
@@ -527,7 +711,12 @@ export function createRenderer(mount: HTMLElement): Renderer {
     shadowMesh.count = shadowCount;
     shadowMesh.instanceMatrix.needsUpdate = true;
 
-    renderer.render(scene, camera);
+    if (composer) {
+      renderer.info.reset();
+      composer.render();
+    } else {
+      renderer.render(scene, camera);
+    }
   }
 
   function pointerToWorld(clientX: number, clientY: number): Vec2 | null {
@@ -555,6 +744,8 @@ export function createRenderer(mount: HTMLElement): Renderer {
       else mat?.dispose();
     });
     wordTextures.forEach((t) => t.dispose());
+    glowTexture.dispose();
+    composer?.dispose();
     renderer.dispose();
     canvas.remove();
   }

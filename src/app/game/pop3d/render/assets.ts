@@ -4,7 +4,8 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import * as THREE from "three";
-import { BACKGROUND, FIELD, PAL } from "../engine/config";
+import { BACKGROUND, BULLET_VIS, FIELD, PAL } from "../engine/config";
+import { PLAYER_BULLET_KINDS } from "../engine/bullets";
 import type { PlayerBulletKind } from "../engine/bullets";
 
 function flat(color: string): THREE.MeshLambertMaterial {
@@ -96,20 +97,77 @@ export function createEnemyGeometry(): THREE.BufferGeometry {
   return geometry;
 }
 
-/** 我方弹型几何：一颗子弹一种形状，"换了牌"一眼看得出来 */
-export function createPlayerBulletGeometries(): Record<PlayerBulletKind, THREE.BufferGeometry> {
-  const flatRing = (inner: number, outer: number): THREE.BufferGeometry => {
-    const g = new THREE.RingGeometry(inner, outer, 14);
+/**
+ * 弹型形状表：`s` 是缩放倍率，几何在创建期放大，运行时零开销。
+ * 描边层用同一张表、不同倍率生成，保证"壳"永远贴着芯。
+ */
+const BULLET_SHAPES: Record<PlayerBulletKind, (s: number) => THREE.BufferGeometry> = {
+  bolt: (s) => new THREE.BoxGeometry(0.25 * s, 0.25 * s, 2.6 * s), // 离子束：细长
+  spread: (s) => new THREE.OctahedronGeometry(0.36 * s, 0), // 散射弹：菱形
+  wave: (s) => {
+    const g = new THREE.RingGeometry(0.42 * s, 0.62 * s, 16);
     g.rotateX(-Math.PI / 2); // 平躺，朝上飞
     return g;
-  };
-  return {
-    bolt: new THREE.BoxGeometry(0.25, 0.25, 2.6), // 离子束：细长
-    spread: new THREE.OctahedronGeometry(0.36, 0), // 散射弹：菱形
-    wave: flatRing(0.42, 0.62), // 冲击波：环
-    homing: new THREE.OctahedronGeometry(0.3, 0), // 追踪弹
-    mini: new THREE.OctahedronGeometry(0.18, 0), // 子母弹
-  };
+  },
+  homing: (s) => new THREE.OctahedronGeometry(0.3 * s, 0), // 追踪弹
+  mini: (s) => new THREE.OctahedronGeometry(0.18 * s, 0), // 子母弹
+};
+
+/** 我方弹型几何：一颗子弹一种形状，"换了牌"一眼看得出来（已放大 BULLET_VIS.scale） */
+export function createPlayerBulletGeometries(): Record<PlayerBulletKind, THREE.BufferGeometry> {
+  const out = {} as Record<PlayerBulletKind, THREE.BufferGeometry>;
+  for (const k of PLAYER_BULLET_KINDS) out[k] = BULLET_SHAPES[k](BULLET_VIS.scale);
+  return out;
+}
+
+/**
+ * 描边几何：实心弹用"反向外壳"（材质走 BackSide），平躺环是单面几何、
+ * 外壳看不见，所以改用一圈更大的 ink 环当粗描边。
+ */
+export function createPlayerBulletOutlineGeometries(): Record<PlayerBulletKind, THREE.BufferGeometry> {
+  const out = {} as Record<PlayerBulletKind, THREE.BufferGeometry>;
+  for (const k of PLAYER_BULLET_KINDS) {
+    const s = BULLET_VIS.scale;
+    out[k] =
+      k === "wave"
+        ? new THREE.RingGeometry(0.62 * s * 0.92, 0.62 * s * BULLET_VIS.outline * 1.1, 16).rotateX(-Math.PI / 2)
+        : BULLET_SHAPES[k](s * BULLET_VIS.outline);
+  }
+  return out;
+}
+
+/** 拖尾：一片平躺的小四边形，长边沿局部 +Z（与弹体同一套朝向约定） */
+export function createTrailGeometry(): THREE.BufferGeometry {
+  const g = new THREE.PlaneGeometry(0.34 * BULLET_VIS.scale, 0.95 * BULLET_VIS.scale);
+  g.rotateX(-Math.PI / 2);
+  return g;
+}
+
+/**
+ * 发光贴片：中心留空（弹芯本身已经很亮，贴片只做外圈光晕），
+ * 加法混合时贴图 alpha 就是强度。1 个 draw call 覆盖所有弹。
+ */
+export function createGlowTexture(): THREE.CanvasTexture {
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, "rgba(255,255,255,0)");
+  g.addColorStop(0.24, "rgba(255,255,255,0.5)");
+  g.addColorStop(0.46, "rgba(255,255,255,0.85)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** 发光贴片的载体：单位平面，实例缩放决定大小，朝向每帧抄相机 */
+export function createGlowGeometry(): THREE.BufferGeometry {
+  return new THREE.PlaneGeometry(1, 1);
 }
 
 /** 敌弹：小球 */

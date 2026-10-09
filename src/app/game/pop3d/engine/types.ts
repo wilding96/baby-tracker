@@ -27,6 +27,8 @@ export interface ShipDef {
   bulletCount: number;
   dmgMul: number;
   cdMul: number;
+  /** 扇形/散射角度的机型倍率：新星摊得开，离子更集中 */
+  spreadMul: number;
 }
 
 export interface CardDef {

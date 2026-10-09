@@ -54,35 +54,41 @@ export const ELEMENT_COLOR: Record<Element, string> = {
 export const ELEMENT_MOD = { weak: 1.9, resist: 0.45, masteryPer: 0.5 } as const;
 
 // ── 机型：决定起始属性与主炮手感 ──
+// 三把枪的初始形态都是**每发 1 枚**——多弹要靠卡（扇形弹）与主武器等级长出来，
+// 差别放在"单发有多重、射速多快、弹形多粗"上，而不是一上来就撒一把。
+// 强度口径：三者 DPS 都落在 ~210/秒（单发伤害 / 实际冷却）。
 export const SHIPS: readonly ShipType[] = ["ion", "nova", "pulse"] as const;
 
 export const SHIP_INFO: Record<ShipType, ShipDef> = {
   ion: {
     label: "离子炮",
-    blurb: "贯穿激光 · 高单体",
+    blurb: "贯穿单发 · 高单体",
     element: "electric",
     icon: "🔫",
-    bulletCount: 2,
-    dmgMul: 1.3,
+    bulletCount: 1,
+    dmgMul: 2.6,
     cdMul: 1.15,
+    spreadMul: 0.6,
   },
   nova: {
     label: "新星",
-    blurb: "散射火力 · 广覆盖",
+    blurb: "重炮单发 · 一击见效",
     element: "fire",
     icon: "💥",
-    bulletCount: 4,
-    dmgMul: 0.78,
-    cdMul: 0.95,
+    bulletCount: 1,
+    dmgMul: 5.0,
+    cdMul: 1.45,
+    spreadMul: 1.6,
   },
   pulse: {
     label: "脉冲",
-    blurb: "均衡连射 · 带节奏",
+    blurb: "速射细弹 · 连击节奏",
     element: "ice",
     icon: "〰️",
-    bulletCount: 3,
-    dmgMul: 0.95,
-    cdMul: 1.0,
+    bulletCount: 1,
+    dmgMul: 2.2,
+    cdMul: 0.8,
+    spreadMul: 1.0,
   },
 };
 

@@ -403,7 +403,8 @@ export function createEngine({
 
     mods.fireCd = (PLAYER.fireCd * info.cdMul) / (1 + c("rate") * 0.18);
     mods.bulletCount = info.bulletCount + c("spread") + (world.weaponLv - 1);
-    mods.spreadAngle = 0.05 + c("spread") * 0.035;
+    // 扇形角度带机型倍率：新星是霰弹（摊得开），离子是集中火力
+    mods.spreadAngle = (0.05 + c("spread") * 0.035) * info.spreadMul;
     // 扇形弹：弹数上去、单发下来，避免"纯数值膨胀"
     mods.bulletDmg = PLAYER.bulletDmg * info.dmgMul * metaPower / (1 + c("spread") * 0.1);
     mods.pierce = c("pierce");

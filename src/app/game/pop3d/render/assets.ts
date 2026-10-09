@@ -102,11 +102,20 @@ export function createEnemyGeometry(): THREE.BufferGeometry {
  * 弹型形状表：`s` 是缩放倍率，几何在创建期放大，运行时零开销。
  * 描边层用同一张表、不同倍率生成，保证"壳"永远贴着芯。
  */
+/** 冲击波环的内外径：描边层要按同一组数字放大，所以提到模块级 */
+const WAVE_RING = { inner: 0.5, outer: 0.64 } as const;
+
 const BULLET_SHAPES: Record<PlayerBulletKind, (s: number) => THREE.BufferGeometry> = {
   bolt: (s) => new THREE.BoxGeometry(0.25 * s, 0.25 * s, 2.6 * s), // 离子束：细长
-  spread: (s) => new THREE.OctahedronGeometry(0.36 * s, 0), // 散射弹：菱形
+  spread: (s) => {
+    // 新星：粗短的"子弹头"——三把枪里最胖的一颗，和脉冲的薄环一眼分开
+    const g = new THREE.OctahedronGeometry(0.5 * s, 0);
+    g.scale(1, 1, 1.35);
+    return g;
+  },
   wave: (s) => {
-    const g = new THREE.RingGeometry(0.42 * s, 0.62 * s, 16);
+    // 脉冲：薄壁的环（像能量波前），不做成实心块
+    const g = new THREE.RingGeometry(WAVE_RING.inner * s, WAVE_RING.outer * s, 16);
     g.rotateX(-Math.PI / 2); // 平躺，朝上飞
     return g;
   },
@@ -136,7 +145,11 @@ export function createPlayerBulletOutlineGeometries(): Record<PlayerBulletKind, 
     const s = BULLET_VIS.scale;
     out[k] =
       k === "wave"
-        ? new THREE.RingGeometry(0.62 * s * 0.92, 0.62 * s * BULLET_VIS.outline * 1.1, 16).rotateX(-Math.PI / 2)
+        ? new THREE.RingGeometry(
+            WAVE_RING.inner * s * 0.94,
+            WAVE_RING.outer * s * BULLET_VIS.outline * 1.1,
+            16,
+          ).rotateX(-Math.PI / 2)
         : BULLET_SHAPES[k](s * BULLET_VIS.outline);
   }
   return out;

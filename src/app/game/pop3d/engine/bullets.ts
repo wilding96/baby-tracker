@@ -31,9 +31,10 @@ export interface BulletDef {
 const DEFS: Record<PlayerBulletKind, BulletDef> = {
   // radius 在 BULLET_VIS.scale=1.5 之后同步放宽了 1.2 倍：
   // 弹体看起来更大，判定也要跟上，否则会出现"看着打中了却没伤害"。
+  // 三把枪的**速度**也拉开：离子中速贯穿、新星低速重炮、脉冲高速细弹。
   bolt: { speed: 62, dmgMul: 1.25, pierce: 1, life: 0, radius: 0.54 },
-  spread: { speed: 46, dmgMul: 0.8, pierce: 0, life: 0, radius: 0.5 },
-  wave: { speed: 40, dmgMul: 1.0, pierce: 0, life: 0, radius: 0.66 },
+  spread: { speed: 44, dmgMul: 0.8, pierce: 0, life: 0, radius: 0.68 },
+  wave: { speed: 78, dmgMul: 1.0, pierce: 0, life: 0, radius: 0.56 },
   homing: { speed: 34, dmgMul: 0.7, pierce: 0, life: 3.0, radius: 0.42 },
   mini: { speed: 38, dmgMul: 0.35, pierce: 0, life: 1.2, radius: 0.26 },
 };

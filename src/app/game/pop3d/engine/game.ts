@@ -1319,55 +1319,58 @@ export function createEngine({
       if (!bs.slots.alive[i]) continue;
       const b = bs.items[i];
       if (b.hitCd > 0) continue;
-      // 哑铃弹两瓣各判一次、中间是空的——所以"直线也可能打空"是真实结果
+      // 哑铃弹是一根"棍"：两瓣小球 + 连杆都算判定。
+      // 打空来自它自己的随机弹道（横漂 + 蛇形），而不是"中间有洞"。
       const chaos = bulletDef(b.kind).chaotic;
-      const lobes = chaos ? 2 : 1;
-      const dir = chaos ? b.angle + b.spin * b.age : 0;
-      let done = false;
-      for (let o = 0; o < lobes && !done; o += 1) {
-        const sign = o === 0 ? 1 : -1;
-        const bx = chaos ? b.x + Math.cos(dir) * chaos.arm * sign : b.x;
-        const bz = chaos ? b.z + Math.sin(dir) * chaos.arm * sign : b.z;
-        for (let j = 0; j < es.slots.capacity; j += 1) {
-          if (!es.slots.alive[j]) continue;
-          const e = es.items[j];
-          const dx = bx - e.x;
-          const dz = bz - e.z;
-          const rr = b.r + e.r;
-          if (dx * dx + dz * dz > rr * rr) continue;
-
-          const dmg = b.dmg * playerDamageMul();
-          e.hp -= dmg;
-          e.flash = 0.1;
-          spawnSpark(bx, bz);
-          if (mods.burn > 0) e.burn = STATUS.burnTime;
-          if (mods.chill > 0) e.slow = STATUS.chillTime;
-          if (mods.chain > 0) chainTo(e, j, dmg);
-
-          // 溅射：火球命中炸成两发小弹，分裂弹卡按层数追加子母弹。
-          // 子母弹不再分裂——否则每命中一次都自我复制，弹幕会指数爆炸。
-          const splitBase = chaos ? -Math.PI / 2 : b.angle;
-          if (b.kind !== "mini") {
-            if (b.kind === "wave") spawnSplit(bx, bz, splitBase, 2);
-            if (mods.split > 0) spawnSplit(bx, bz, splitBase, mods.split * 2);
-          }
-
-          // 僚机协同：僚机的命中给主武器叠增伤（2 秒不命中就清零）
-          if (b.fromWing && mods.wingLink > 0) {
-            world.linkStacks = Math.min(5, world.linkStacks + mods.wingLink);
-            world.linkTimer = 2;
-          }
-
-          if (b.pierce > 0) {
-            b.pierce -= 1;
-            b.hitCd = 0.06;
-          } else {
-            bs.slots.release(i);
-          }
-          if (e.hp <= 0) killEnemy(e, j, true);
-          done = true;
-          break;
+      const ux = chaos ? Math.cos(b.angle + b.spin * b.age) : 0;
+      const uz = chaos ? Math.sin(b.angle + b.spin * b.age) : 0;
+      for (let j = 0; j < es.slots.capacity; j += 1) {
+        if (!es.slots.alive[j]) continue;
+        const e = es.items[j];
+        // 棍的最近点：把敌机投影到杆上，夹在 ±arm 之间
+        let hitX = b.x;
+        let hitZ = b.z;
+        if (chaos) {
+          const raw = (e.x - b.x) * ux + (e.z - b.z) * uz;
+          const t = raw > chaos.arm ? chaos.arm : raw < -chaos.arm ? -chaos.arm : raw;
+          hitX = b.x + ux * t;
+          hitZ = b.z + uz * t;
         }
+        const dx = hitX - e.x;
+        const dz = hitZ - e.z;
+        const rr = b.r + e.r;
+        if (dx * dx + dz * dz > rr * rr) continue;
+
+        const dmg = b.dmg * playerDamageMul();
+        e.hp -= dmg;
+        e.flash = 0.1;
+        spawnSpark(hitX, hitZ);
+        if (mods.burn > 0) e.burn = STATUS.burnTime;
+        if (mods.chill > 0) e.slow = STATUS.chillTime;
+        if (mods.chain > 0) chainTo(e, j, dmg);
+
+        // 溅射：火球命中炸成两发小弹，分裂弹卡按层数追加子母弹。
+        // 子母弹不再分裂——否则每命中一次都自我复制，弹幕会指数爆炸。
+        const splitBase = chaos ? -Math.PI / 2 : b.angle;
+        if (b.kind !== "mini") {
+          if (b.kind === "wave") spawnSplit(hitX, hitZ, splitBase, 2);
+          if (mods.split > 0) spawnSplit(hitX, hitZ, splitBase, mods.split * 2);
+        }
+
+        // 僚机协同：僚机的命中给主武器叠增伤（2 秒不命中就清零）
+        if (b.fromWing && mods.wingLink > 0) {
+          world.linkStacks = Math.min(5, world.linkStacks + mods.wingLink);
+          world.linkTimer = 2;
+        }
+
+        if (b.pierce > 0) {
+          b.pierce -= 1;
+          b.hitCd = 0.06;
+        } else {
+          bs.slots.release(i);
+        }
+        if (e.hp <= 0) killEnemy(e, j, true);
+        break;
       }
     }
   }

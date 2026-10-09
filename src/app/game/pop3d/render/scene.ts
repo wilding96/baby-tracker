@@ -271,8 +271,8 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
   const outlineMeshes = {} as Record<PlayerBulletKind, THREE.InstancedMesh>;
   const bulletCounts = {} as Record<PlayerBulletKind, number>;
   for (const k of PLAYER_BULLET_KINDS) {
-    // 哑铃弹一类要写两瓣，容量翻倍
-    const capacity = bulletDef(k).chaotic ? POOL.playerBullets * 2 : POOL.playerBullets;
+    // 哑铃弹的"两瓣 + 连杆"是一块几何，所以每发只占 1 个实例
+    const capacity = POOL.playerBullets;
     bulletMeshes[k] = instanced(
       bulletGeos[k],
       new THREE.MeshBasicMaterial({ color: 0xffffff }),
@@ -317,7 +317,7 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       transparent: true,
       depthWrite: false,
     }),
-    POOL.playerBullets * 2,
+    POOL.playerBullets * 2, // 哑铃弹的辉光是每瓣一个，容量翻倍
   );
   scene.add(glowMesh);
   const enemyBulletMesh = instanced(
@@ -664,39 +664,34 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
         trailN += 1;
       }
 
-      // ── 弹体：哑铃弹写两瓣（绕中心自转），其它弹一瓣 ──
+      // ── 弹体：长轴都在局部 +Z，绕 Y 转 (π/2 - 朝向) 才对齐 ──
+      // 哑铃弹的朝向是它的自转相位；其它弹是飞行方向。
       const chaos = bulletDef(b.kind).chaotic;
-      const lobes = chaos ? 2 : 1;
-      const dir = chaos ? b.angle + b.spin * b.age : 0;
-      for (let o = 0; o < lobes; o += 1) {
-        const sign = o === 0 ? 1 : -1;
-        const lx = chaos ? b.x + Math.cos(dir) * chaos.arm * sign : b.x;
-        const lz = chaos ? b.z + Math.sin(dir) * chaos.arm * sign : b.z;
-        const idx = m + o;
-        dummy.position.set(lx, y, rz(lz, y));
-        dummy.scale.setScalar(1);
-        if (chaos) {
-          // 火球：低速翻滚，棱面闪动就是"火焰"（球体对齐无意义）
-          dummy.rotation.set(world.time * 2.4, world.time * 1.6, 0);
-        } else {
-          // 细长几何的长轴在局部 +Z：绕 Y 转 (π/2 - angle) 才对齐飞行方向
-          dummy.rotation.set(0, HALF_PI - b.angle, 0);
-        }
+      const dir = chaos ? b.angle + b.spin * b.age : b.angle;
+      dummy.position.set(b.x, y, rz(b.z, y));
+      dummy.scale.setScalar(1);
+      dummy.rotation.set(0, HALF_PI - dir, 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(m, dummy.matrix);
+      mesh.setColorAt(m, color);
+
+      // 描边：同矩阵，压低一点点
+      if (fx.outline) {
+        dummy.position.y = y - 0.03;
         dummy.updateMatrix();
-        mesh.setMatrixAt(idx, dummy.matrix);
-        mesh.setColorAt(idx, color);
+        outlineMeshes[b.kind].setMatrixAt(m, dummy.matrix);
+      }
 
-        // 描边：同矩阵，压低一点点
-        if (fx.outline) {
-          dummy.position.y = y - 0.03;
-          dummy.updateMatrix();
-          outlineMeshes[b.kind].setMatrixAt(idx, dummy.matrix);
-        }
-
-        // 辉光贴片：面向相机，外圈光晕（bloom 就从这里亮起来）
-        if (fx.glow) {
-          dummy.position.set(lx, y, rz(lz, y));
-          dummy.scale.setScalar(bulletDef(b.kind).radius * 2 * BULLET_VIS.glow);
+      // 辉光贴片：面向相机。哑铃弹两瓣各来一个，光晕落在球上而不是连杆上
+      if (fx.glow) {
+        const lobes = chaos ? 2 : 1;
+        const glowR = bulletDef(b.kind).radius * 2 * BULLET_VIS.glow * (chaos ? 1.7 : 1);
+        for (let o = 0; o < lobes; o += 1) {
+          const sign = o === 0 ? 1 : -1;
+          const gx = chaos ? b.x + Math.cos(dir) * chaos.arm * sign : b.x;
+          const gz = chaos ? b.z + Math.sin(dir) * chaos.arm * sign : b.z;
+          dummy.position.set(gx, y, rz(gz, y));
+          dummy.scale.setScalar(glowR);
           dummy.quaternion.copy(camera.quaternion);
           dummy.updateMatrix();
           glowMesh.setMatrixAt(glowN, dummy.matrix);
@@ -704,7 +699,7 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
           glowN += 1;
         }
       }
-      bulletCounts[b.kind] = m + lobes;
+      bulletCounts[b.kind] = m + 1;
     }
     for (const k of PLAYER_BULLET_KINDS) {
       const mesh = bulletMeshes[k];

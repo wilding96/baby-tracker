@@ -6,7 +6,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { BACKGROUND, BULLET_VIS, FIELD, PAL } from "../engine/config";
-import { PLAYER_BULLET_KINDS } from "../engine/bullets";
+import { PLAYER_BULLET_KINDS, bulletDef } from "../engine/bullets";
 import type { PlayerBulletKind } from "../engine/bullets";
 
 function flat(color: string): THREE.MeshLambertMaterial {
@@ -110,8 +110,8 @@ const BULLET_SHAPES: Record<PlayerBulletKind, (s: number) => THREE.BufferGeometr
     g.scale(1, 1, 1.35);
     return g;
   },
-  // 脉冲：多面体火球（魂斗罗 F 弹）——三把枪里最大的一颗，靠自转的棱面闪动做"火焰"
-  wave: (s) => new THREE.IcosahedronGeometry(0.62 * s, 1),
+  // 脉冲：长哑铃（两瓣小球 + 中间连杆），见 dumbbellGeometry
+  wave: (s) => dumbbellGeometry(s),
   homing: (s) => {
     // 追踪弹：拉长的八面体 = 小飞弹（尾焰由 trailByKind 单独给）
     const g = new THREE.OctahedronGeometry(0.32 * s, 0);
@@ -121,10 +121,35 @@ const BULLET_SHAPES: Record<PlayerBulletKind, (s: number) => THREE.BufferGeometr
   mini: (s) => new THREE.OctahedronGeometry(0.18 * s, 0), // 子母弹
 };
 
+/**
+ * 长哑铃：两瓣小球 + 中间一根细连杆，整体沿局部 +Z 摆放（于是和其它弹共用
+ * `π/2 - 朝向` 的旋转约定）。尺寸直接取 `bulletDef("wave")` 的 radius / arm——
+ * 这两个数同时也是**判定**用的数，所以"看着连上了就是真连上了"。
+ */
+function dumbbellGeometry(outlineScale: number): THREE.BufferGeometry {
+  const def = bulletDef("wave");
+  const arm = (def.chaotic?.arm ?? 1) * outlineScale;
+  const r = def.radius * outlineScale;
+  // 注意：Icosahedron 是非索引几何，而 Box 是索引几何，mergeGeometries 不能混，
+  // 否则会返回 null（渲染时报 "reading 'id' of null"）。所以连杆要先 toNonIndexed()。
+  const rod = new THREE.BoxGeometry(r * 0.55, r * 0.55, arm * 2).toNonIndexed();
+  const merged = mergeGeometries([
+    new THREE.IcosahedronGeometry(r, 1).translate(0, 0, arm),
+    new THREE.IcosahedronGeometry(r, 1).translate(0, 0, -arm),
+    // 连杆比球细得多，才有"哑铃"而不是"胶囊"的感觉
+    rod,
+  ]);
+  // 兜底：万一将来属性对不上，至少还是一颗球，不要让整个场景挂掉
+  return merged ?? new THREE.IcosahedronGeometry(r, 1);
+}
+
 /** 我方弹型几何：一颗子弹一种形状，"换了牌"一眼看得出来（已放大 BULLET_VIS.scale） */
 export function createPlayerBulletGeometries(): Record<PlayerBulletKind, THREE.BufferGeometry> {
   const out = {} as Record<PlayerBulletKind, THREE.BufferGeometry>;
-  for (const k of PLAYER_BULLET_KINDS) out[k] = BULLET_SHAPES[k](BULLET_VIS.scale);
+  for (const k of PLAYER_BULLET_KINDS) {
+    // 哑铃的尺寸就是判定尺寸，不再乘 BULLET_VIS.scale
+    out[k] = BULLET_SHAPES[k](k === "wave" ? 1 : BULLET_VIS.scale);
+  }
   return out;
 }
 
@@ -135,7 +160,7 @@ export function createPlayerBulletGeometries(): Record<PlayerBulletKind, THREE.B
 export function createPlayerBulletOutlineGeometries(): Record<PlayerBulletKind, THREE.BufferGeometry> {
   const out = {} as Record<PlayerBulletKind, THREE.BufferGeometry>;
   for (const k of PLAYER_BULLET_KINDS) {
-    out[k] = BULLET_SHAPES[k](BULLET_VIS.scale * BULLET_VIS.outline);
+    out[k] = BULLET_SHAPES[k](k === "wave" ? BULLET_VIS.outline : BULLET_VIS.scale * BULLET_VIS.outline);
   }
   return out;
 }

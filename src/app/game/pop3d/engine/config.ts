@@ -84,7 +84,7 @@ export const SHIP_INFO: Record<ShipType, ShipDef> = {
   },
   pulse: {
     label: "脉冲",
-    blurb: "摇曳火球 · 大判定",
+    blurb: "哑铃火球 · 弹道随缘",
     element: "ice",
     icon: "〰️",
     bulletCount: 1,

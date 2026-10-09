@@ -48,8 +48,10 @@ const DEFS: Record<PlayerBulletKind, BulletDef> = {
     dmgMul: 1.2,
     pierce: 0,
     life: 0,
-    radius: 0.45,
-    chaotic: { arm: 1.15, spin: 7, drift: 1.1, amp: 0.9, freq: 3.6 },
+    // radius 是"哑铃小球"的半径；和下面 chaotic.arm 一起**同时决定判定与外观**
+    // （哑铃不参与 BULLET_VIS.scale —— 判定和视觉必须用同一组数）
+    radius: 0.38,
+    chaotic: { arm: 1.05, spin: 7, drift: 1.1, amp: 0.9, freq: 3.6 },
   },
   homing: { speed: 34, dmgMul: 0.7, pierce: 0, life: 3.0, radius: 0.42 },
   mini: { speed: 38, dmgMul: 0.35, pierce: 0, life: 1.2, radius: 0.26 },

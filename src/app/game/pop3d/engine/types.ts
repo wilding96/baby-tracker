@@ -114,6 +114,13 @@ export interface PlayerBullet extends BulletMotion {
   angle: number;
   /** 存活时长（秒）：摇曳弹的相位基准 */
   age: number;
+  /** 哑铃弹：自转角速度（rad/s，方向随机） */
+  spin: number;
+  /** 哑铃弹：恒定横向漂移（世界单位/秒） */
+  drift: number;
+  /** 哑铃弹：蛇形摆幅 / 角速度（每发随机） */
+  wAmp: number;
+  wFreq: number;
   /** 是否僚机发射（僚机协同卡只认僚机的命中） */
   fromWing: boolean;
 }

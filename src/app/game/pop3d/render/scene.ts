@@ -271,10 +271,12 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
   const outlineMeshes = {} as Record<PlayerBulletKind, THREE.InstancedMesh>;
   const bulletCounts = {} as Record<PlayerBulletKind, number>;
   for (const k of PLAYER_BULLET_KINDS) {
+    // 哑铃弹一类要写两瓣，容量翻倍
+    const capacity = bulletDef(k).chaotic ? POOL.playerBullets * 2 : POOL.playerBullets;
     bulletMeshes[k] = instanced(
       bulletGeos[k],
       new THREE.MeshBasicMaterial({ color: 0xffffff }),
-      POOL.playerBullets,
+      capacity,
     );
     // 描边：反向外壳（几何已按 BULLET_VIS.outline 放大）
     outlineMeshes[k] = instanced(
@@ -283,7 +285,7 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
         color: PAL.ink,
         side: THREE.BackSide,
       }),
-      POOL.playerBullets,
+      capacity,
     );
     bulletMeshes[k].count = 0;
     outlineMeshes[k].count = 0;
@@ -315,7 +317,7 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       transparent: true,
       depthWrite: false,
     }),
-    POOL.playerBullets,
+    POOL.playerBullets * 2,
   );
   scene.add(glowMesh);
   const enemyBulletMesh = instanced(
@@ -622,7 +624,6 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
       const m = bulletCounts[b.kind];
       const color = b.element ? ELEMENT_BULLET[b.element] : shipColor;
       const y = HEIGHT.bullet;
-      const py = rz(b.z, y);
 
       // ── 拖尾：位置由速度反推（不存历史），加法混合下"越暗 = 越淡" ──
       const speed = Math.hypot(b.vx, b.vz) || 1;
@@ -663,39 +664,47 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
         trailN += 1;
       }
 
-      // ── 弹芯 ──
-      dummy.position.set(b.x, y, py);
-      dummy.scale.setScalar(1);
-      // 细长几何的长轴在局部 +Z：绕 Y 转 (π/2 - angle) 才对齐飞行方向
-      if (b.kind === "wave") {
-        // 火球：低速翻滚，棱面一闪一闪就是"火焰"（球体对齐无意义）
-        dummy.rotation.set(world.time * 2.4, world.time * 1.6, 0);
-      } else {
-        dummy.rotation.set(0, HALF_PI - b.angle, 0);
-      }
-      dummy.updateMatrix();
-      mesh.setMatrixAt(m, dummy.matrix);
-      mesh.setColorAt(m, color);
-
-      // ── 描边：同矩阵，压低一点点，避免和单面环 z-fighting ──
-      if (fx.outline) {
-        dummy.position.y = y - 0.03;
+      // ── 弹体：哑铃弹写两瓣（绕中心自转），其它弹一瓣 ──
+      const chaos = bulletDef(b.kind).chaotic;
+      const lobes = chaos ? 2 : 1;
+      const dir = chaos ? b.angle + b.spin * b.age : 0;
+      for (let o = 0; o < lobes; o += 1) {
+        const sign = o === 0 ? 1 : -1;
+        const lx = chaos ? b.x + Math.cos(dir) * chaos.arm * sign : b.x;
+        const lz = chaos ? b.z + Math.sin(dir) * chaos.arm * sign : b.z;
+        const idx = m + o;
+        dummy.position.set(lx, y, rz(lz, y));
+        dummy.scale.setScalar(1);
+        if (chaos) {
+          // 火球：低速翻滚，棱面闪动就是"火焰"（球体对齐无意义）
+          dummy.rotation.set(world.time * 2.4, world.time * 1.6, 0);
+        } else {
+          // 细长几何的长轴在局部 +Z：绕 Y 转 (π/2 - angle) 才对齐飞行方向
+          dummy.rotation.set(0, HALF_PI - b.angle, 0);
+        }
         dummy.updateMatrix();
-        outlineMeshes[b.kind].setMatrixAt(m, dummy.matrix);
-      }
+        mesh.setMatrixAt(idx, dummy.matrix);
+        mesh.setColorAt(idx, color);
 
-      // ── 辉光贴片：面向相机，外圈光晕（bloom 就从这里亮起来）──
-      if (fx.glow) {
-        dummy.position.set(b.x, y, py);
-        dummy.scale.setScalar(bulletDef(b.kind).radius * 2 * BULLET_VIS.glow);
-        dummy.quaternion.copy(camera.quaternion);
-        dummy.updateMatrix();
-        glowMesh.setMatrixAt(glowN, dummy.matrix);
-        glowMesh.setColorAt(glowN, tmpColor.copy(color).multiplyScalar(BULLET_VIS.glowGain));
-        glowN += 1;
-      }
+        // 描边：同矩阵，压低一点点
+        if (fx.outline) {
+          dummy.position.y = y - 0.03;
+          dummy.updateMatrix();
+          outlineMeshes[b.kind].setMatrixAt(idx, dummy.matrix);
+        }
 
-      bulletCounts[b.kind] = m + 1;
+        // 辉光贴片：面向相机，外圈光晕（bloom 就从这里亮起来）
+        if (fx.glow) {
+          dummy.position.set(lx, y, rz(lz, y));
+          dummy.scale.setScalar(bulletDef(b.kind).radius * 2 * BULLET_VIS.glow);
+          dummy.quaternion.copy(camera.quaternion);
+          dummy.updateMatrix();
+          glowMesh.setMatrixAt(glowN, dummy.matrix);
+          glowMesh.setColorAt(glowN, tmpColor.copy(color).multiplyScalar(BULLET_VIS.glowGain));
+          glowN += 1;
+        }
+      }
+      bulletCounts[b.kind] = m + lobes;
     }
     for (const k of PLAYER_BULLET_KINDS) {
       const mesh = bulletMeshes[k];

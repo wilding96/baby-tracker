@@ -27,11 +27,12 @@ export interface BulletDef {
   life: number;
   radius: number;
   /**
-   * 摇曳：横向速度按正弦摆（魂斗罗 F 弹那种大火球）。
-   * `amp` 是世界单位的摆幅、`freq` 是角速度——位置画成蛇形，**判定跟着位置走**，
-   * 所以不会出现"看着打中了却不算"。
+   * 哑铃弹（魂斗罗 F 弹那种"两颗火球绕轴转"）：`arm` 是两瓣到中心的距离，
+   * `spin` 是自转角速度，剩下三个是**每发随机的弹道扰动**——
+   * `drift` 恒定横漂、`amp`/`freq` 蛇形摆动。位置由引擎积分，
+   * 所以"打空"是真实结果（判定和视觉永远一致），而不是假动画。
    */
-  weave?: { amp: number; freq: number };
+  chaotic?: { arm: number; spin: number; drift: number; amp: number; freq: number };
 }
 
 const DEFS: Record<PlayerBulletKind, BulletDef> = {
@@ -40,8 +41,16 @@ const DEFS: Record<PlayerBulletKind, BulletDef> = {
   // 三把枪的**速度**也拉开：离子中速贯穿、新星低速重炮、脉冲高速细弹。
   bolt: { speed: 62, dmgMul: 1.25, pierce: 1, life: 0, radius: 0.54 },
   spread: { speed: 44, dmgMul: 0.8, pierce: 0, life: 0, radius: 0.68 },
-  // 脉冲（三号机）：大火球 —— 大判定、慢速、左右摇曳
-  wave: { speed: 34, dmgMul: 0.8, pierce: 0, life: 0, radius: 1.05, weave: { amp: 0.95, freq: 7.5 } },
+  // 脉冲（三号机）：哑铃火球 —— 两瓣绕轴自转 + 每发随机的弹道漂移，
+  // 打空是设计的一部分（所以单发伤害给得高）。
+  wave: {
+    speed: 32,
+    dmgMul: 1.2,
+    pierce: 0,
+    life: 0,
+    radius: 0.45,
+    chaotic: { arm: 1.15, spin: 7, drift: 1.1, amp: 0.9, freq: 3.6 },
+  },
   homing: { speed: 34, dmgMul: 0.7, pierce: 0, life: 3.0, radius: 0.42 },
   mini: { speed: 38, dmgMul: 0.35, pierce: 0, life: 1.2, radius: 0.26 },
 };

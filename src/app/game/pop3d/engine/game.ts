@@ -133,6 +133,10 @@ function makePlayerBullets(capacity: number): EntitySet<PlayerBullet> {
       life: 0,
       angle: 0,
       age: 0,
+      spin: 0,
+      drift: 0,
+      wAmp: 0,
+      wFreq: 0,
       fromWing: false,
     });
   }
@@ -641,6 +645,19 @@ export function createEngine({
     b.life = def.life;
     b.angle = Math.atan2(vz, vx);
     b.age = 0;
+    b.spin = 0;
+    b.drift = 0;
+    b.wAmp = 0;
+    b.wFreq = 0;
+    // 哑铃弹：两瓣相位、自转方向、横漂、蛇形——全部每发随机，所以直线也会打空
+    if (def.chaotic) {
+      const c = def.chaotic;
+      b.angle = Math.random() * Math.PI * 2;
+      b.spin = (Math.random() * 2 - 1) * c.spin;
+      b.drift = (Math.random() * 2 - 1) * c.drift;
+      b.wAmp = c.amp * (0.4 + Math.random());
+      b.wFreq = c.freq * (0.6 + Math.random() * 0.9);
+    }
     b.fromWing = fromWing;
     // 刚生成的子母弹与父弹位置重合，给一点隔断防止同帧自我触发
     b.hitCd = 0.05;
@@ -1251,10 +1268,10 @@ export function createEngine({
           b.vz = Math.sin(b.angle) * speed;
         }
       }
-      // 摇曳弹：横向速度按正弦摆（对方程求导即得 vy = amp·freq·cos(freq·t)），
-      // 位置自然画出蛇形，判定与视觉始终一致
-      const weave = bulletDef(b.kind).weave;
-      if (weave) b.vx = weave.amp * weave.freq * Math.cos(weave.freq * b.age);
+      // 哑铃弹：横向速度 = 恒定横漂 + 蛇形摆动（对 amp·sin 求导）。
+      // 位置由引擎积分，所以"打空"是真的打空，判定和视觉始终一致。
+      const chaos = bulletDef(b.kind).chaotic;
+      if (chaos) b.vx = b.drift + b.wAmp * b.wFreq * Math.cos(b.wFreq * b.age);
       b.x += b.vx * dt;
       b.z += b.vz * dt;
       if (b.z < -FIELD.halfH - 3 || b.z > FIELD.halfH + 3) set.slots.release(i);
@@ -1302,43 +1319,55 @@ export function createEngine({
       if (!bs.slots.alive[i]) continue;
       const b = bs.items[i];
       if (b.hitCd > 0) continue;
-      for (let j = 0; j < es.slots.capacity; j += 1) {
-        if (!es.slots.alive[j]) continue;
-        const e = es.items[j];
-        const dx = b.x - e.x;
-        const dz = b.z - e.z;
-        const rr = b.r + e.r;
-        if (dx * dx + dz * dz > rr * rr) continue;
+      // 哑铃弹两瓣各判一次、中间是空的——所以"直线也可能打空"是真实结果
+      const chaos = bulletDef(b.kind).chaotic;
+      const lobes = chaos ? 2 : 1;
+      const dir = chaos ? b.angle + b.spin * b.age : 0;
+      let done = false;
+      for (let o = 0; o < lobes && !done; o += 1) {
+        const sign = o === 0 ? 1 : -1;
+        const bx = chaos ? b.x + Math.cos(dir) * chaos.arm * sign : b.x;
+        const bz = chaos ? b.z + Math.sin(dir) * chaos.arm * sign : b.z;
+        for (let j = 0; j < es.slots.capacity; j += 1) {
+          if (!es.slots.alive[j]) continue;
+          const e = es.items[j];
+          const dx = bx - e.x;
+          const dz = bz - e.z;
+          const rr = b.r + e.r;
+          if (dx * dx + dz * dz > rr * rr) continue;
 
-        const dmg = b.dmg * playerDamageMul();
-        e.hp -= dmg;
-        e.flash = 0.1;
-        spawnSpark(b.x, b.z);
-        if (mods.burn > 0) e.burn = STATUS.burnTime;
-        if (mods.chill > 0) e.slow = STATUS.chillTime;
-        if (mods.chain > 0) chainTo(e, j, dmg);
+          const dmg = b.dmg * playerDamageMul();
+          e.hp -= dmg;
+          e.flash = 0.1;
+          spawnSpark(bx, bz);
+          if (mods.burn > 0) e.burn = STATUS.burnTime;
+          if (mods.chill > 0) e.slow = STATUS.chillTime;
+          if (mods.chain > 0) chainTo(e, j, dmg);
 
-        // 溅射：冲击波机型天生分裂，分裂弹卡按层数追加子母弹。
-        // 子母弹不再分裂——否则每命中一次都自我复制，弹幕会指数爆炸。
-        if (b.kind !== "mini") {
-          if (b.kind === "wave") spawnSplit(b.x, b.z, b.angle, 2);
-          if (mods.split > 0) spawnSplit(b.x, b.z, b.angle, mods.split * 2);
+          // 溅射：火球命中炸成两发小弹，分裂弹卡按层数追加子母弹。
+          // 子母弹不再分裂——否则每命中一次都自我复制，弹幕会指数爆炸。
+          const splitBase = chaos ? -Math.PI / 2 : b.angle;
+          if (b.kind !== "mini") {
+            if (b.kind === "wave") spawnSplit(bx, bz, splitBase, 2);
+            if (mods.split > 0) spawnSplit(bx, bz, splitBase, mods.split * 2);
+          }
+
+          // 僚机协同：僚机的命中给主武器叠增伤（2 秒不命中就清零）
+          if (b.fromWing && mods.wingLink > 0) {
+            world.linkStacks = Math.min(5, world.linkStacks + mods.wingLink);
+            world.linkTimer = 2;
+          }
+
+          if (b.pierce > 0) {
+            b.pierce -= 1;
+            b.hitCd = 0.06;
+          } else {
+            bs.slots.release(i);
+          }
+          if (e.hp <= 0) killEnemy(e, j, true);
+          done = true;
+          break;
         }
-
-        // 僚机协同：僚机的命中给主武器叠增伤（2 秒不命中就清零）
-        if (b.fromWing && mods.wingLink > 0) {
-          world.linkStacks = Math.min(5, world.linkStacks + mods.wingLink);
-          world.linkTimer = 2;
-        }
-
-        if (b.pierce > 0) {
-          b.pierce -= 1;
-          b.hitCd = 0.06;
-        } else {
-          bs.slots.release(i);
-        }
-        if (e.hp <= 0) killEnemy(e, j, true);
-        break;
       }
     }
   }

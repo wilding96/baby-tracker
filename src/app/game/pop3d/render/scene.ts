@@ -6,6 +6,7 @@
 
 import * as THREE from "three";
 import {
+  BACKGROUND,
   BOSS,
   BURST,
   CAMERA,
@@ -110,8 +111,38 @@ export function createRenderer(mount: HTMLElement): Renderer {
   sun.position.set(-24, 60, 36);
   scene.add(sun);
 
-  const grid = createFieldGrid();
-  scene.add(grid, createFieldBorder());
+  // 反向补光：避免低多边形背面在俯角下死黑（§5 立体感来源）
+  const fill = new THREE.DirectionalLight(0xffffff, 0.35);
+  fill.position.set(30, 20, -40);
+  scene.add(fill);
+
+  const gridNear = createFieldGrid();
+  scene.add(gridNear, createFieldBorder());
+
+  // 远层网格：更淡、更慢，做视差
+  const gridFar = new THREE.GridHelper(
+    BACKGROUND.farSize,
+    BACKGROUND.farDivisions,
+    new THREE.Color(PAL.ink),
+    new THREE.Color(PAL.ink),
+  );
+  gridFar.material.transparent = true;
+  gridFar.material.opacity = BACKGROUND.farOpacity;
+  gridFar.position.y = -0.03;
+  scene.add(gridFar);
+
+  // 纵向长线：只做"跑道"式的纵深暗示，颜色极淡
+  const lanePts: number[] = [];
+  for (const lx of BACKGROUND.laneXs) {
+    lanePts.push(lx, 0.01, -BACKGROUND.laneHalfLength, lx, 0.01, BACKGROUND.laneHalfLength);
+  }
+  const laneGeo = new THREE.BufferGeometry();
+  laneGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(lanePts), 3));
+  const lanes = new THREE.LineSegments(
+    laneGeo,
+    new THREE.LineBasicMaterial({ color: PAL.ink, transparent: true, opacity: BACKGROUND.laneOpacity }),
+  );
+  scene.add(lanes);
 
   const player = createPlayerMesh();
   scene.add(player);
@@ -268,8 +299,11 @@ export function createRenderer(mount: HTMLElement): Renderer {
       camera.position.copy(camBase);
     }
 
-    // ── 滚动网格：制造"在前进"的速度感 ──
-    grid.position.z = (world.time * 7) % 2; // 网格单元 = 2 世界单位，取模后可无缝循环
+    // ── 双层视差滚动：制造"在前进"的速度感 ──
+    const nearCell = BACKGROUND.nearSize / BACKGROUND.nearDivisions;
+    const farCell = BACKGROUND.farSize / BACKGROUND.farDivisions;
+    gridNear.position.z = (world.time * BACKGROUND.nearSpeed) % nearCell;
+    gridFar.position.z = (world.time * BACKGROUND.nearSpeed * BACKGROUND.farSpeedMul) % farCell;
 
     shadowCount = 0;
 

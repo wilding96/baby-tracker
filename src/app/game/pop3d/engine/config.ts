@@ -150,6 +150,21 @@ export const HEIGHT = {
   pop: 3.0, // 拟声词基准高度（之后还会向上飘）
 } as const;
 
+// ── 背景（§5：背景对比度永远低于前景）──
+export const BACKGROUND = {
+  nearSize: 64,
+  nearDivisions: 32,
+  nearOpacity: 0.1,
+  nearSpeed: 7,
+  farSize: 128,
+  farDivisions: 32,
+  farOpacity: 0.05,
+  farSpeedMul: 0.6,
+  laneXs: [-12, -6, 0, 6, 12],
+  laneOpacity: 0.06,
+  laneHalfLength: 40,
+} as const;
+
 // ── 敌种：三种，颜色 + 缩放区分（不新增 draw call）──
 export const ENEMY_KINDS: Record<EnemyKind, EnemyKindDef> = {
   drone: {

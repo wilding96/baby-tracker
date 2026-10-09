@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import * as THREE from "three";
-import { FIELD, PAL } from "../engine/config";
+import { BACKGROUND, FIELD, PAL } from "../engine/config";
 
 function flat(color: string): THREE.MeshLambertMaterial {
   return new THREE.MeshLambertMaterial({ color, flatShading: true });
@@ -57,10 +57,14 @@ export function createPlayerMesh(): THREE.Group {
 
 /** 场地参考网格：极低对比度，永远弱于前景（§5） */
 export function createFieldGrid(): THREE.GridHelper {
-  const size = FIELD.halfH * 2; // 正方形网格，边长取纵向场地长度即可覆盖全场地
-  const grid = new THREE.GridHelper(size, 32, new THREE.Color(PAL.ink), new THREE.Color(PAL.ink));
+  const grid = new THREE.GridHelper(
+    BACKGROUND.nearSize,
+    BACKGROUND.nearDivisions,
+    new THREE.Color(PAL.ink),
+    new THREE.Color(PAL.ink),
+  );
   grid.material.transparent = true;
-  grid.material.opacity = 0.08;
+  grid.material.opacity = BACKGROUND.nearOpacity;
   grid.position.y = -0.02;
   return grid;
 }

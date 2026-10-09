@@ -6,6 +6,7 @@ import { createEngine } from "./engine/game";
 import { ELEMENT_ICON, ELEMENT_NAME, META_UPGRADES, SCHOOL_COLOR, SCHOOL_NAME, SHIPS, SHIP_INFO } from "./engine/config";
 import { buyUpgrade, loadMeta, saveMeta, upgradeInfo } from "./engine/meta";
 import { createRenderer } from "./render/scene";
+import { createPaperRenderer } from "./render/paper";
 import type {
   CardDef,
   AudioAdapter,
@@ -158,12 +159,17 @@ export default function Pop3DGame() {
               speedLines: fxParam.includes("lines"),
               bloom: fxParam.includes("bloom"),
             };
-    const renderer = createRenderer(mount, {
-      bloom: bloomParam === null ? undefined : bloomParam !== "0",
-      fx,
-      // 主题：默认还是原来的画面；?theme=pop 才启用波普漫画实验版（贴图/网点/错版那套还要重做）
-      theme: params.get("theme") === "pop" ? "pop" : "classic",
-    });
+    const themeParam = params.get("theme");
+    // ?theme=paper = B 方向的纸片渲染器（固定正面视角 + AI 贴图 + 网点/分格）；
+    // 默认仍是原来的 3D 画面，?theme=pop 是上一版贴图实验。
+    const renderer =
+      themeParam === "paper"
+        ? createPaperRenderer(mount)
+        : createRenderer(mount, {
+            bloom: bloomParam === null ? undefined : bloomParam !== "0",
+            fx,
+            theme: themeParam === "pop" ? "pop" : "classic",
+          });
     const engine = createEngine({
       mount,
       renderer,

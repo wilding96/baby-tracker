@@ -26,14 +26,17 @@ import {
   HOMING,
   JUICE,
   LOOP,
+  ORBIT,
   PLAYER,
   POOL,
+  POOL_WINGMEN,
   RUN,
   SCORE,
   SHIP_INFO,
   STATUS,
   WAVES,
   WEAPON_MAX_LV,
+  WINGMAN,
   WORD_CLEAR,
   WORD_HURT,
   WORD_KILL_BASE,
@@ -44,6 +47,9 @@ import {
 import { stardustFor } from "./meta";
 import { aimedAngle, fanAngle, spiralAngle } from "./patterns";
 import { createSlots } from "./pools";
+// 命名债：approach 其实住在 rig.ts（当初为运镜写的），僚机跟随复用它。
+// 它零相对导入，动它会连带 tests/pop3d-rig.test.mjs 的加载，故本批次不挪窝。
+import { approach } from "./rig";
 import { resolveSpawnXs } from "./waves";
 import type {
   Boss,
@@ -61,8 +67,10 @@ import type {
   Player,
   PlayerBullet,
   Pop,
+  Orb,
   ShipType,
   WaveDef,
+  Wingman,
   World,
 } from "./types";
 import { EMPTY_META } from "./types";
@@ -129,6 +137,18 @@ function makeEnemyBullets(capacity: number): EntitySet<EnemyBullet> {
   for (let i = 0; i < capacity; i += 1) {
     items.push({ x: 0, z: 0, vx: 0, vz: 0, r: 0, dmg: 0, hitCd: 0 });
   }
+  return { items, slots: createSlots(capacity) };
+}
+
+function makeWingmen(capacity: number): EntitySet<Wingman> {
+  const items: Wingman[] = [];
+  for (let i = 0; i < capacity; i += 1) items.push({ slot: i, x: 0, z: 0, cd: 0 });
+  return { items, slots: createSlots(capacity) };
+}
+
+function makeOrbs(capacity: number): EntitySet<Orb> {
+  const items: Orb[] = [];
+  for (let i = 0; i < capacity; i += 1) items.push({ angle: 0, cd: 0 });
   return { items, slots: createSlots(capacity) };
 }
 
@@ -263,6 +283,10 @@ export function createEngine({
     input,
     playerBullets: makePlayerBullets(POOL.playerBullets),
     enemyBullets: makeEnemyBullets(POOL.enemyBullets),
+    wingmen: makeWingmen(POOL_WINGMEN),
+    orbs: makeOrbs(ORBIT.max),
+    linkStacks: 0,
+    linkTimer: 0,
     enemies: makeEnemies(POOL.enemies),
     bursts: makeBursts(POOL.bursts),
     pops: makePops(JUICE.popCap),
@@ -387,6 +411,8 @@ export function createEngine({
     mods.scoreMul = 1 + c("bounty") * 0.5;
     mods.dustMul = 1 + c("star") * 0.25;
     mods.energyMul = 1 + meta.upgrades.energy * 0.12;
+    // 僚机数量由卡层数决定：卡一变就立刻把实体补到位（选卡/开局的统一入口）
+    syncWingmen();
   }
 
   function computeEnergyNeed(): number {
@@ -668,6 +694,62 @@ export function createEngine({
     b.r = BULLET.enemyRadius;
     b.dmg = dmg;
     b.hitCd = 0;
+  }
+
+  // ── 僚机（实体编队，不是"多发子弹"）──
+  /** 把僚机数量补/减到目标值（卡是数据，实体是状态） */
+  function syncWingmen(): void {
+    const want = Math.min(WINGMAN.max, mods.wings * 2);
+    let have = countAlive(world.wingmen);
+    while (have < want) {
+      const i = world.wingmen.slots.acquire();
+      if (i < 0) break;
+      const w = world.wingmen.items[i];
+      w.slot = have;
+      w.x = player.pos.x;
+      w.z = player.pos.z;
+      w.cd = 0.3;
+      have += 1;
+    }
+    // 多出来的从最大槽位开始回收
+    while (have > want) {
+      let maxSlot = -1;
+      let maxIndex = -1;
+      for (let i = 0; i < world.wingmen.slots.capacity; i += 1) {
+        if (!world.wingmen.slots.alive[i]) continue;
+        const s = world.wingmen.items[i].slot;
+        if (s > maxSlot) {
+          maxSlot = s;
+          maxIndex = i;
+        }
+      }
+      if (maxIndex < 0) break;
+      world.wingmen.slots.release(maxIndex);
+      have -= 1;
+    }
+  }
+
+  function updateWingmen(dt: number): void {
+    const set = world.wingmen;
+    const kind = SHIP_BULLET[ship];
+    const def = bulletDef(kind);
+    for (let i = 0; i < set.slots.capacity; i += 1) {
+      if (!set.slots.alive[i]) continue;
+      const w = set.items[i];
+      // 编队位：内联展开 attachments.wingmanSlot（避免每帧分配）
+      const side = w.slot % 2 === 0 ? -1 : 1;
+      const row = Math.floor(w.slot / 2);
+      const tx = player.pos.x + side * (WINGMAN.offsetX + row * 1.4);
+      const tz = player.pos.z + WINGMAN.offsetZ + row * 1.0;
+      w.x = approach(w.x, tx, dt, WINGMAN.follow);
+      w.z = approach(w.z, tz, dt, WINGMAN.follow);
+
+      w.cd -= dt;
+      if (w.cd <= 0) {
+        w.cd = mods.fireCd * WINGMAN.fireCdMul;
+        spawnPlayerBullet(kind, w.x, w.z - 1.2, 0, -def.speed, WINGMAN.dmgMul);
+      }
+    }
   }
 
   // ── 敌机 ──
@@ -1274,6 +1356,7 @@ export function createEngine({
     if (player.invuln > 0) player.invuln -= dt;
 
     firePlayer(dt);
+    updateWingmen(dt);
     updatePlayerBullets(dt);
     updateEnemyBullets(dt);
     updateEnemies(dt);
@@ -1416,6 +1499,8 @@ export function createEngine({
   function resetWorld(): void {
     clear(world.playerBullets);
     clear(world.enemyBullets);
+    clear(world.wingmen);
+    clear(world.orbs);
     clear(world.enemies);
     clear(world.bursts);
     clear(world.pops);
@@ -1426,6 +1511,8 @@ export function createEngine({
     boss.burn = 0;
     stressAngle = 0;
     sfxKillCd = 0;
+    world.linkStacks = 0;
+    world.linkTimer = 0;
     world.freeze = 0;
     world.shake = 0;
     world.muzzle = 0;

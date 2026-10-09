@@ -34,6 +34,7 @@ import {
   createFieldGrid,
   createPlayerBulletGeometries,
   createPlayerMesh,
+  createWingmanMesh,
 } from "./assets";
 
 function instanced(geometry: THREE.BufferGeometry, material: THREE.Material, count: number): THREE.InstancedMesh {
@@ -206,6 +207,15 @@ export function createRenderer(mount: HTMLElement): Renderer {
   );
   scene.add(enemyOutline, enemyMesh, enemyBulletMesh, burstMesh);
 
+  // 僚机：最多 4 架，直接放 Group（数量太小，不值得上 InstancedMesh）
+  const wingmanMeshes: THREE.Group[] = [];
+  for (let i = 0; i < 4; i += 1) {
+    const m = createWingmanMesh();
+    m.visible = false;
+    scene.add(m);
+    wingmanMeshes.push(m);
+  }
+
   // ── 贴地投影：画在地面真实坐标上，不做位置补偿（它就是"真实位置"的标记）──
   const shadowGeo = new THREE.CircleGeometry(1, 16);
   shadowGeo.rotateX(-Math.PI / 2); // 平躺在地面
@@ -355,6 +365,19 @@ export function createRenderer(mount: HTMLElement): Renderer {
     player.position.set(p.pos.x, HEIGHT.player, rz(p.pos.z, HEIGHT.player));
     player.scale.setScalar(world.muzzle > 0 ? 1.12 : 1);
     pushShadow(p.pos.x, p.pos.z, 2.6); // 玩家机翼展半宽 2.3，阴影略大一圈
+
+    // 僚机：编队实体（数量 ≤ 4，用 Group + 贴地阴影）
+    for (const m of wingmanMeshes) m.visible = false;
+    const wms = world.wingmen;
+    for (let i = 0; i < wms.slots.capacity; i += 1) {
+      if (!wms.slots.alive[i]) continue;
+      const w = wms.items[i];
+      const mesh = wingmanMeshes[w.slot];
+      if (!mesh) continue;
+      mesh.visible = world.phase === "playing";
+      mesh.position.set(w.x, HEIGHT.player, rz(w.z, HEIGHT.player));
+      pushShadow(w.x, w.z, 1.3);
+    }
 
     // 敌机（实体 + 描边外壳）
     let n = 0;

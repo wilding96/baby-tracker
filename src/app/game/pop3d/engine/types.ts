@@ -118,6 +118,21 @@ export interface PlayerBullet extends BulletMotion {
  */
 export type EnemyBullet = BulletMotion;
 
+// ── 附着物（跟着玩家走的实体，不进子弹池）──
+
+export interface Wingman {
+  /** 编队槽位（0..3），决定左右与前后 */
+  slot: number;
+  x: number;
+  z: number;
+  cd: number;
+}
+
+export interface Orb {
+  angle: number;
+  cd: number;
+}
+
 // ── 敌机 ──
 
 export type EnemyKind = "drone" | "weaver" | "gunner";
@@ -255,6 +270,11 @@ export interface World {
   input: InputState;
   playerBullets: EntitySet<PlayerBullet>;
   enemyBullets: EntitySet<EnemyBullet>;
+  wingmen: EntitySet<Wingman>;
+  orbs: EntitySet<Orb>;
+  /** 僚机协同叠层（主武器增伤，2 秒不命中就清零） */
+  linkStacks: number;
+  linkTimer: number;
   enemies: EntitySet<Enemy>;
   bursts: EntitySet<Burst>;
   pops: EntitySet<Pop>;

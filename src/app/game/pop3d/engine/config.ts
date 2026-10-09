@@ -138,6 +138,27 @@ export const BULLET = { enemyRadius: 0.5 } as const;
 /** 比例导引的最大转向速率（rad/s）：太大像锁头，太小追不上 */
 export const HOMING = { turnRate: 2.6 } as const;
 
+// ── 僚机（实体编队）──
+export const WINGMAN = {
+  max: 4,
+  offsetX: 2.6,
+  offsetZ: 1.2,
+  follow: 10, // 跟随速率（复用 rig 的 approach）
+  fireCdMul: 1.15,
+  dmgMul: 0.6,
+} as const;
+
+export const POOL_WINGMEN = 4;
+
+// ── 环绕护卫弹（附着物，不进子弹池）──
+export const ORBIT = {
+  max: 4,
+  radius: 3.2,
+  angular: 2.4,
+  dmgCd: 0.25,
+  dmgMul: 0.9,
+} as const;
+
 // ── 高度分层（世界 Y）──
 // 透视下"离地高度"就是纵深线索；但抬高会让屏幕位置偏移，
 // 因此所有实体绘制时都要走 projection.compensatedZ 补偿回判定点。

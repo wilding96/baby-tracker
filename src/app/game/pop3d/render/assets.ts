@@ -117,6 +117,24 @@ export function createEnemyBulletGeometry(): THREE.BufferGeometry {
   return new THREE.SphereGeometry(0.45, 8, 6);
 }
 
+/** 僚机：玩家机的缩小版，配色改成蓝色（与玩家机区分） */
+export function createWingmanMesh(): THREE.Group {
+  const group = new THREE.Group();
+  const body = part(new THREE.ConeGeometry(0.5, 2.0, 4), flat(PAL.blue), 0, 0, -0.25);
+  body.rotation.x = -Math.PI / 2;
+  group.add(body);
+  const wings = part(new THREE.BoxGeometry(2.5, 0.2, 0.7), flat(PAL.cyan), 0, 0, 0.45);
+  group.add(wings);
+  return group;
+}
+
+/** 环绕护卫弹：平躺的小环 */
+export function createOrbGeometry(): THREE.BufferGeometry {
+  const g = new THREE.RingGeometry(0.34, 0.48, 12);
+  g.rotateX(-Math.PI / 2);
+  return g;
+}
+
 /** 爆点：低面数多面体，靠缩放做大再收回 */
 export function createBurstGeometry(): THREE.BufferGeometry {
   return new THREE.IcosahedronGeometry(0.9, 0);

@@ -6,6 +6,7 @@
 
 import * as THREE from "three";
 import {
+  BOSS,
   BURST,
   CAMERA,
   ELEMENT_COLOR,
@@ -38,6 +39,9 @@ function instanced(geometry: THREE.BufferGeometry, material: THREE.Material, cou
   mesh.count = 0;
   return mesh;
 }
+
+/** 贴地投影容量：玩家 1 + 僚机 4（批次 3 用）+ 敌机 48 + Boss 1 + 余量 */
+const SHADOW_CAPACITY = 64;
 
 /** 拟声词预渲染成贴图（§8.8）：运行时只查表，不再碰 canvas */
 function makeWordTexture(text: string): THREE.CanvasTexture {
@@ -148,6 +152,21 @@ export function createRenderer(mount: HTMLElement): Renderer {
   );
   scene.add(enemyOutline, enemyMesh, playerBulletMesh, enemyBulletMesh, burstMesh);
 
+  // ── 贴地投影：画在地面真实坐标上，不做位置补偿（它就是"真实位置"的标记）──
+  const shadowGeo = new THREE.CircleGeometry(1, 16);
+  shadowGeo.rotateX(-Math.PI / 2); // 平躺在地面
+  const shadowMesh = instanced(
+    shadowGeo,
+    new THREE.MeshBasicMaterial({
+      color: PAL.ink,
+      transparent: true,
+      opacity: 0.18,
+      depthWrite: false,
+    }),
+    SHADOW_CAPACITY,
+  );
+  scene.add(shadowMesh);
+
   // ── 拟声词贴片池 ──
   const wordTextures = WORDS.map(makeWordTexture);
   const popSprites: THREE.Sprite[] = [];
@@ -185,6 +204,21 @@ export function createRenderer(mount: HTMLElement): Renderer {
   /** 绘制用 z：把"抬高 h"的实体补偿回地面判定点的像素 */
   function rz(z: number, h: number): number {
     return compensatedZ(z, h, degToRad(rigPitchDeg));
+  }
+
+  let shadowCount = 0;
+  /**
+   * 写一个接地阴影实例；坐标为地面真实坐标（不补偿）。
+   * 注意：实体已被位置补偿到"地面判定点的像素"，所以阴影会和实体重合，
+   * 因此这里传的是**最终半径**（略大于实体footprint），露出一圈当作接地阴影。
+   */
+  function pushShadow(x: number, z: number, radius: number): void {
+    if (shadowCount >= SHADOW_CAPACITY) return;
+    dummy.position.set(x, HEIGHT.shadow, z);
+    dummy.scale.setScalar(radius);
+    dummy.updateMatrix();
+    shadowMesh.setMatrixAt(shadowCount, dummy.matrix);
+    shadowCount += 1;
   }
 
   // ── 屏幕 → 地面射线 ──
@@ -237,12 +271,15 @@ export function createRenderer(mount: HTMLElement): Renderer {
     // ── 滚动网格：制造"在前进"的速度感 ──
     grid.position.z = (world.time * 7) % 2; // 网格单元 = 2 世界单位，取模后可无缝循环
 
+    shadowCount = 0;
+
     // 玩家机（无敌帧闪烁 + 枪口闪光）
     const p = world.player;
     const blink = p.invuln > 0 && Math.floor(world.time * 24) % 2 === 1;
     player.visible = world.phase === "playing" && !blink;
     player.position.set(p.pos.x, HEIGHT.player, rz(p.pos.z, HEIGHT.player));
     player.scale.setScalar(world.muzzle > 0 ? 1.12 : 1);
+    pushShadow(p.pos.x, p.pos.z, 2.6); // 玩家机翼展半宽 2.3，阴影略大一圈
 
     // 敌机（实体 + 描边外壳）
     let n = 0;
@@ -259,6 +296,7 @@ export function createRenderer(mount: HTMLElement): Renderer {
       dummy.scale.setScalar(e.scale * 1.16);
       dummy.updateMatrix();
       enemyOutline.setMatrixAt(n, dummy.matrix);
+      pushShadow(e.x, e.z, e.r * 1.8);
       n += 1;
     }
     enemyMesh.count = n;
@@ -348,7 +386,11 @@ export function createRenderer(mount: HTMLElement): Renderer {
       const k = Math.min(1, (boss.z + FIELD.halfH + 12) / 12);
       bossMesh.group.scale.setScalar(0.55 + 0.45 * k);
       bossMesh.core.material.color.copy(boss.flash > 0 ? FLASH_COLOR : CORE_COLOR);
+      pushShadow(boss.x, boss.z, BOSS.radius * 1.2);
     }
+
+    shadowMesh.count = shadowCount;
+    shadowMesh.instanceMatrix.needsUpdate = true;
 
     renderer.render(scene, camera);
   }

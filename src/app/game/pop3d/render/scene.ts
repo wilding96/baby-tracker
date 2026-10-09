@@ -328,20 +328,15 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
     new THREE.MeshBasicMaterial({
       color: PAL.laser,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.4,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     }),
   );
+  // 芯用**不透明**的绿色：之前用白色加法混合，芯把绿晕整个盖住，看着就是一根白棍
   const beamCore = new THREE.Mesh(
     new THREE.BoxGeometry(1, 0.02, 1),
-    new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.9,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    }),
+    new THREE.MeshBasicMaterial({ color: PAL.laser }),
   );
   const beamTip = new THREE.Mesh(
     createGlowGeometry(),
@@ -596,17 +591,18 @@ export function createRenderer(mount: HTMLElement, options: RendererOptions = {}
     beamCore.visible = beamOn;
     beamTip.visible = beamOn;
     if (beamOn) {
-      // 光柱是沿 z 的细长盒；两端都走投影补偿，才和敌人（同样补偿过）对齐
+      // 光柱止于落点（world.beam.tipZ）：打到谁就停在谁身上，不再"穿过去还在飞"。
+      // 两端都走投影补偿，才和敌人（同样补偿过）对齐。
       const za = rz(beam.z0, HEIGHT.bullet);
-      const zb = rz(beam.z1, HEIGHT.bullet);
+      const zb = rz(Math.min(beam.tipZ, beam.z0), HEIGHT.bullet);
       const len = Math.abs(zb - za);
       const cz = (za + zb) / 2;
-      beamOuter.scale.set(beam.halfW * 3, 1, len);
+      beamOuter.scale.set(beam.halfW * 2.4, 1, len);
       beamOuter.position.set(beam.x, HEIGHT.bullet, cz);
-      beamCore.scale.set(beam.halfW * 1.1, 1, len);
-      beamCore.position.set(beam.x, HEIGHT.bullet + 0.01, cz);
-      beamTip.position.set(beam.x, HEIGHT.bullet, rz(beam.tipZ, HEIGHT.bullet));
-      beamTip.scale.setScalar(beam.halfW * 5);
+      beamCore.scale.set(beam.halfW * 0.9, 1, len);
+      beamCore.position.set(beam.x, HEIGHT.bullet + 0.02, cz);
+      beamTip.position.set(beam.x, HEIGHT.bullet, zb);
+      beamTip.scale.setScalar(beam.halfW * 6);
       beamTip.quaternion.copy(camera.quaternion);
     }
 

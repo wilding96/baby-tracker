@@ -755,43 +755,65 @@ export function createEngine({
     const dps = (mods.bulletDmg * bulletDef(SHIP_BULLET.ion).dmgMul) / mods.fireCd;
     const tickDmg = dps * BEAM.hitFxCd;
     const es = world.enemies;
-    let landed = false;
-    for (let i = 0; i < es.slots.capacity; i += 1) {
-      if (!es.slots.alive[i]) continue;
-      const e = es.items[i];
-      if (Math.abs(e.x - bx) > e.r + halfW) continue;
-      if (e.z < z1 - e.r || e.z > z0 + e.r) continue;
-
-      e.hp -= dps * dt * playerDamageMul();
-      e.flash = 0.08;
-      landed = true;
-      if (e.z > beam.tipZ) beam.tipZ = e.z; // 光斑落在"最靠前"的那个敌人身上
-      if (sparkCd <= 0) {
-        // 每帧都触发会很吵：光斑 / 连锁 / 分裂环统一按节流窗口走
-        spawnSpark(e.x, e.z);
-        if (mods.chain > 0) chainTo(e, i, tickDmg);
-        if (mods.split > 0) spawnSplit(e.x, e.z, -Math.PI / 2, mods.split * 2);
+    // ── 由近到远结算：默认只打"最靠前"的那一个，贯穿卡每层多穿一个目标 ──
+    // 光束的绘制长度也只画到最后一个命中点，所以不会出现"光穿过敌人还在飞"。
+    let pierceLeft = mods.pierce;
+    let limitZ = z0;
+    let hitAny = false;
+    for (;;) {
+      let bestIndex = -1;
+      let bestZ = -Infinity;
+      for (let i = 0; i < es.slots.capacity; i += 1) {
+        if (!es.slots.alive[i]) continue;
+        const e = es.items[i];
+        if (e.z > limitZ || e.z < z1 - e.r) continue;
+        if (Math.abs(e.x - bx) > e.r + halfW) continue;
+        if (e.z > bestZ) {
+          bestZ = e.z;
+          bestIndex = i;
+        }
       }
-      if (e.hp <= 0) killEnemy(e, i, true);
-    }
-    if (landed && sparkCd <= 0) sparkCd = BEAM.hitFxCd;
+      const bossHit =
+        boss.active &&
+        !boss.entering &&
+        boss.z <= limitZ &&
+        boss.z >= z1 - BOSS.radius &&
+        Math.abs(boss.x - bx) <= BOSS.radius + halfW;
 
-    if (
-      boss.active &&
-      !boss.entering &&
-      Math.abs(boss.x - bx) <= BOSS.radius + halfW &&
-      boss.z >= z1 - BOSS.radius &&
-      boss.z <= z0 + BOSS.radius
-    ) {
-      const mul = elementMulFor(mods.element, boss.weak, boss.resist) * playerDamageMul();
-      boss.hp -= dps * dt * mul;
-      boss.flash = 0.08;
-      if (sparkCd <= 0) sparkCd = BEAM.hitFxCd;
-      if (boss.hp <= 0) {
-        boss.hp = 0;
-        win();
+      if (bossHit && boss.z >= bestZ) {
+        const mul = elementMulFor(mods.element, boss.weak, boss.resist) * playerDamageMul();
+        boss.hp -= dps * dt * mul;
+        boss.flash = 0.08;
+        bestZ = boss.z;
+        hitAny = true;
+        if (sparkCd <= 0) spawnSpark(boss.x, boss.z);
+        if (boss.hp <= 0) {
+          boss.hp = 0;
+          win();
+          return;
+        }
+      } else if (bestIndex >= 0) {
+        const e = es.items[bestIndex];
+        e.hp -= dps * dt * playerDamageMul();
+        e.flash = 0.08;
+        hitAny = true;
+        if (sparkCd <= 0) {
+          // 每帧都触发会很吵：光斑 / 连锁 / 分裂环统一按节流窗口走
+          spawnSpark(e.x, e.z);
+          if (mods.chain > 0) chainTo(e, bestIndex, tickDmg);
+          if (mods.split > 0) spawnSplit(e.x, e.z, -Math.PI / 2, mods.split * 2);
+        }
+        if (e.hp <= 0) killEnemy(e, bestIndex, true);
+      } else {
+        break;
       }
+
+      beam.tipZ = bestZ; // 光束就画到这里为止
+      if (pierceLeft <= 0) break;
+      pierceLeft -= 1;
+      limitZ = bestZ - 0.01; // 再往上找下一个目标
     }
+    if (hitAny && sparkCd <= 0) sparkCd = BEAM.hitFxCd;
   }
 
   function spawnEnemyBullet(x: number, z: number, vx: number, vz: number, dmg: number): void {

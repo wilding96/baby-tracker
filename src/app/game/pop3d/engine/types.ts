@@ -238,8 +238,11 @@ export interface Boss {
   t: number;
   hp: number;
   maxHp: number;
-  phase: 1 | 2;
+  /** 三阶段：血条三段各对应一个打法（§6.2） */
+  phase: 1 | 2 | 3;
   fanCd: number;
+  ringCd: number;
+  aimCd: number;
   spiralCd: number;
   spiralAngle: number;
   flash: number;

@@ -418,6 +418,27 @@ export const BOSS = {
   phase2At: 0.5, // HP 比例低于此值进入二阶段
 } as const;
 
+// ── Boss 三阶段时间轴：血条三段 = 三个打法明显不同的阶段（§6.2）──
+// 每阶段的扇形/环形/螺旋/自机狙节奏都不一样，转阶段会清屏 + 停帧 + 强震。
+export const BOSS_PHASE: Record<
+  1 | 2 | 3,
+  {
+    fanCd: number;
+    fanCount: number;
+    fanSpread: number;
+    ringCd: number;
+    ringCount: number;
+    ringSpeed: number;
+    spiralCd: number;
+    aimCd: number;
+    swaySpeed: number;
+  }
+> = {
+  1: { fanCd: 1.6, fanCount: 5, fanSpread: 0.38, ringCd: 3.4, ringCount: 12, ringSpeed: 12, spiralCd: 0, aimCd: 0, swaySpeed: 0.55 },
+  2: { fanCd: 1.25, fanCount: 7, fanSpread: 0.3, ringCd: 3.0, ringCount: 14, ringSpeed: 13, spiralCd: 0.13, aimCd: 2.6, swaySpeed: 0.7 },
+  3: { fanCd: 1.0, fanCount: 9, fanSpread: 0.26, ringCd: 2.6, ringCount: 18, ringSpeed: 14, spiralCd: 0.09, aimCd: 1.9, swaySpeed: 0.9 },
+};
+
 // ── 能量与升级曲线（§8.3：沿用 2D 版的 base / growth 口径）──
 export const ENERGY = {
   base: 140,

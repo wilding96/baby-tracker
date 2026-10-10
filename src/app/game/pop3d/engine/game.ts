@@ -16,6 +16,7 @@ import type { PlayerBulletKind } from "./bullets";
 import {
   BEAM,
   BOSS,
+  BOSS_PHASE,
   BURST,
   CARDS,
   EBULLET,
@@ -264,6 +265,8 @@ export function createEngine({
     maxHp: 0,
     phase: 1,
     fanCd: 0,
+    ringCd: 0,
+    aimCd: 0,
     spiralCd: 0,
     spiralAngle: 0,
     flash: 0,
@@ -1139,6 +1142,8 @@ export function createEngine({
     boss.maxHp = bossHp;
     boss.phase = 1;
     boss.fanCd = 1.2;
+    boss.ringCd = 2.2;
+    boss.aimCd = 2.6;
     boss.spiralCd = 0;
     boss.spiralAngle = 0;
     boss.flash = 0;
@@ -1159,11 +1164,28 @@ export function createEngine({
     pushHud();
   }
 
-  function fireBossFan(): void {
-    const n = BOSS.fanCount;
+  function fireBossFan(n: number, spread: number): void {
     for (let k = 0; k < n; k += 1) {
-      const a = fanAngle(k, n, BOSS.fanSpread, Math.PI / 2);
+      const a = fanAngle(k, n, spread, Math.PI / 2);
       spawnEnemyBullet("spike", boss.x, boss.z + 2, Math.cos(a) * BOSS.fanSpeed, Math.sin(a) * BOSS.fanSpeed, BOSS.fanDmg);
+    }
+  }
+
+  /** 环形扩散：随机相位，避免每次都在同一个角度留缝 */
+  function fireBossRing(count: number, speed: number): void {
+    const off = Math.random() * Math.PI * 2;
+    for (let k = 0; k < count; k += 1) {
+      const a = off + (k / count) * Math.PI * 2;
+      spawnEnemyBullet("ball", boss.x, boss.z, Math.cos(a) * speed, Math.sin(a) * speed, BOSS.fanDmg * 0.8);
+    }
+  }
+
+  /** 自机狙三连（菱形弹）：逼玩家横向走位 */
+  function fireBossAim(): void {
+    const base = aimedAngle(player.pos.x - boss.x, player.pos.z - boss.z);
+    for (let k = -1; k <= 1; k += 1) {
+      const a = base + k * 0.2;
+      spawnEnemyBullet("diamond", boss.x, boss.z + 2, Math.cos(a) * BOSS.fanSpeed, Math.sin(a) * BOSS.fanSpeed, BOSS.fanDmg * 0.9);
     }
   }
 
@@ -1196,24 +1218,57 @@ export function createEngine({
       return;
     }
 
-    boss.x = Math.sin(boss.t * BOSS.swaySpeed) * BOSS.swayX;
-    if (boss.phase === 1 && boss.hp <= boss.maxHp * BOSS.phase2At) {
-      boss.phase = 2;
+    // ── 三阶段：按血量切成三段，和 HUD 的三段血条一一对应 ──
+    const ratio = boss.hp / boss.maxHp;
+    const want: 1 | 2 | 3 = ratio > 2 / 3 ? 1 : ratio > 1 / 3 ? 2 : 3;
+    if (want !== boss.phase) {
+      boss.phase = want;
+      // 阶段切换演出：停帧 + 强震 + 清屏（喘息窗口）+ 运镜 + 爆炸
       playCine("phase", 0.6);
-      clear(world.enemyBullets); // 喘息窗口：清屏后过场才安全
+      clear(world.enemyBullets);
+      spawnBurst(boss.x, boss.z, 2.4);
+      spawnPop(boss.x, boss.z + 7, WORD_WARN, 2);
+      world.freeze = Math.max(world.freeze, JUICE.freezeBoss);
+      addShake(JUICE.shakeBoss);
+      audio?.explosion(true);
+      // 换阶段时重置节奏，先给玩家一个呼吸窗口
+      boss.fanCd = 1.1;
+      boss.ringCd = 1.7;
+      boss.aimCd = 1.9;
+      boss.spiralCd = 0.45;
+      pushHud();
     }
 
+    const p = BOSS_PHASE[boss.phase];
+    boss.x = Math.sin(boss.t * p.swaySpeed) * BOSS.swayX;
+
+    // 扇形：全程都有，越往后越密
     boss.fanCd -= dt;
     if (boss.fanCd <= 0) {
-      boss.fanCd = boss.phase === 2 ? BOSS.fanCd * 0.7 : BOSS.fanCd;
-      fireBossFan();
+      boss.fanCd = p.fanCd;
+      fireBossFan(p.fanCount, p.fanSpread);
     }
-    if (boss.phase === 2) {
+    // 环形扩散：全程都有
+    boss.ringCd -= dt;
+    if (boss.ringCd <= 0) {
+      boss.ringCd = p.ringCd;
+      fireBossRing(p.ringCount, p.ringSpeed);
+    }
+    // 二阶段起：螺旋（细光束弹）
+    if (p.spiralCd > 0) {
       boss.spiralCd -= dt;
       if (boss.spiralCd <= 0) {
-        boss.spiralCd = BOSS.spiralCd;
+        boss.spiralCd = p.spiralCd;
         boss.spiralAngle = spiralAngle(boss.spiralAngle, BOSS.spiralStep);
         fireBossSpiral();
+      }
+    }
+    // 二阶段起：自机狙三连（菱形）
+    if (p.aimCd > 0) {
+      boss.aimCd -= dt;
+      if (boss.aimCd <= 0) {
+        boss.aimCd = p.aimCd;
+        fireBossAim();
       }
     }
   }

@@ -454,7 +454,23 @@ export function createPaperRenderer(
     const boss = world.boss;
     if (boss.active) {
       const grow = boss.entering ? Math.min(1, (boss.z + FIELD.halfH + 12) / 12) * 0.5 + 0.5 : 1;
-      sprite(sprites.boss, boss.x, boss.z, 12 * grow, { flash: boss.flash > 0 });
+      // 三阶段：越往后越大越"暴走"，第三阶段垫一圈红色网点（危险信号）
+      const rage = boss.phase === 3 ? 1.06 : boss.phase === 2 ? 1.03 : 1;
+      if (boss.phase === 3) {
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        ctx.beginPath();
+        ctx.arc(sx(boss.x), sy(boss.z), len(9.5), 0, Math.PI * 2);
+        ctx.clip();
+        ctx.fillStyle = PAL.red;
+        ctx.fillRect(sx(boss.x) - len(10), sy(boss.z) - len(10), len(20), len(20));
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = dotOnLight;
+        ctx.fillRect(sx(boss.x) - len(10), sy(boss.z) - len(10), len(20), len(20));
+        ctx.restore();
+        calls += 2;
+      }
+      sprite(sprites.boss, boss.x, boss.z, 12 * grow * rage, { flash: boss.flash > 0 });
       // 核心：黄星芒（阶段切换/受击时会白闪）
       const cr = len(1.9);
       ctx.save();

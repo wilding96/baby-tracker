@@ -445,9 +445,9 @@ export default function Pop3DGame() {
       {phase === "menu" && (
         <Veil>
           <h1 className="text-4xl font-black tracking-widest text-[#FFD400] [-webkit-text-stroke:3px_#101010] [paint-order:stroke_fill] [text-shadow:5px_5px_0_#E5007E]">
-            POP3D
+            萌宠战机
           </h1>
-          <p className="text-xs tracking-[3px] text-[#0057FF]">3D 竖版弹幕 · M3</p>
+          <p className="text-xs tracking-[3px] text-[#0057FF]">波普漫画 · 宠物道具弹幕</p>
 
           <div className="flex w-full gap-2">
             {SHIPS.map((s) => {

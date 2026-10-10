@@ -9,6 +9,7 @@ import {
   Ghost,
   Trophy,
   Crown,
+  Cat,
   ChevronRight,
 } from "lucide-react";
 import { Divider } from "animal-island-ui";
@@ -21,6 +22,13 @@ const games = [
     bg: "bg-gradient-to-br from-amber-400 to-orange-500",
     title: "快乐消消乐",
     desc: "经典三消游戏，放松心情",
+  },
+  {
+    href: "/game/pop3d",
+    icon: Cat,
+    bg: "bg-gradient-to-br from-[#141A38] via-[#3A2260] to-[#E5007E]",
+    title: "萌宠战机",
+    desc: "波普漫画弹幕射击：激光笔 / 小鱼干 / 骨头三件套",
   },
   {
     href: "/game/perspective-match",

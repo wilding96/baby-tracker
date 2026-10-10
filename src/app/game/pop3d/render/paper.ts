@@ -100,6 +100,35 @@ export function createPaperRenderer(
   const len = (v: number): number => v * view.scale;
 
   /** 画一张精灵：以世界坐标 (x,z) 为中心，h 为屏幕高度，可选翻转/白闪 */
+  /**
+   * 光束"光带"贴图：横向渐变 = 外辉 → 绿本体 → 白芯 → 绿本体 → 外辉。
+   * 只有束宽变化时才重画（缓存），每帧只 drawImage，所以能做到"有光晕"又不掉帧。
+   */
+  let beamStrip: HTMLCanvasElement | null = null;
+  let beamStripHalfW = -1;
+  function getBeamStrip(halfW: number): HTMLCanvasElement {
+    if (beamStrip && Math.abs(beamStripHalfW - halfW) < 0.4) return beamStrip;
+    const w = Math.max(24, Math.ceil(halfW * 2 * 4));
+    const h = 8;
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const g = c.getContext("2d")!;
+    const grad = g.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0, "rgba(53,224,122,0)");
+    grad.addColorStop(0.22, "rgba(53,224,122,0.28)");
+    grad.addColorStop(0.38, "rgba(53,224,122,0.85)");
+    grad.addColorStop(0.5, "rgba(255,255,255,1)");
+    grad.addColorStop(0.62, "rgba(53,224,122,0.85)");
+    grad.addColorStop(0.78, "rgba(53,224,122,0.28)");
+    grad.addColorStop(1, "rgba(53,224,122,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, w, h);
+    beamStrip = c;
+    beamStripHalfW = halfW;
+    return c;
+  }
+
   function sprite(
     img: HTMLImageElement,
     x: number,
@@ -244,24 +273,42 @@ export function createPaperRenderer(
       const top = Math.min(y0, y1);
       const hgt = Math.max(1, Math.abs(y0 - y1));
       const ink = Math.max(2, len(0.12));
-      ctx.fillStyle = PAL.laser;
-      ctx.fillRect(bx - bw / 2, top, bw, hgt);
-      ctx.strokeStyle = PAL.ink;
-      ctx.lineWidth = ink;
-      ctx.strokeRect(bx - bw / 2, top, bw, hgt);
-      // 白芯：光束的层次
-      ctx.fillStyle = PAL.paper;
-      ctx.fillRect(bx - bw * 0.16, top, bw * 0.32, hgt);
-      // 能量刻度：沿光束的小横条（印刷味的"滋滋"感）
-      ctx.fillStyle = PAL.ink;
-      const tick = Math.max(6, len(1.6));
-      ctx.globalAlpha = 0.35;
-      for (let ty = top + tick * 0.5; ty < top + hgt; ty += tick) {
-        ctx.fillRect(bx - bw * 0.5, ty, bw, Math.max(2, len(0.08)));
-      }
-      ctx.globalAlpha = 1;
+      // ── 光柱：加法混合的渐变光带（中心白热、两侧衰减），不再是实心条 ──
+      const strip = getBeamStrip(beam.halfW);
+      const sw = Math.max(bw * 3, 10);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.drawImage(strip, bx - sw / 2, top, sw, hgt);
+      // 能量流：一条更亮的窄带沿光束滚动，看起来在"滋滋"输出
+      const flowSpan = hgt + 260;
+      const flowY = top + ((world.time * 780) % flowSpan) - 130;
+      ctx.globalAlpha = 0.5;
+      ctx.drawImage(strip, bx - sw * 0.3, flowY, sw * 0.6, Math.min(180, flowSpan));
+      ctx.restore();
+      // 枪口光斑（起点也要有光）
+      const muzzle = ctx.createRadialGradient(bx, y0, 0, bx, y0, Math.max(6, bw * 1.6));
+      muzzle.addColorStop(0, "rgba(255,255,255,0.8)");
+      muzzle.addColorStop(1, "rgba(53,224,122,0)");
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = muzzle;
+      ctx.beginPath();
+      ctx.arc(bx, y0, Math.max(6, bw * 1.6), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
       // 落点：四角星芒 + 一圈网点（猫追的那个光点）
       const R = Math.max(8, bw * 1.5);
+      const halo = ctx.createRadialGradient(bx, y1, 0, bx, y1, R * 2.4);
+      halo.addColorStop(0, "rgba(255,255,255,0.95)");
+      halo.addColorStop(0.3, "rgba(53,224,122,0.6)");
+      halo.addColorStop(1, "rgba(53,224,122,0)");
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(bx, y1, R * 2.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
       ctx.save();
       ctx.translate(bx, y1);
       ctx.fillStyle = PAL.yellow;

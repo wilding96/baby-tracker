@@ -279,11 +279,20 @@ export function createPaperRenderer(
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       ctx.drawImage(strip, bx - sw / 2, top, sw, hgt);
-      // 能量流：一条更亮的窄带沿光束滚动，看起来在"滋滋"输出
-      const flowSpan = hgt + 260;
-      const flowY = top + ((world.time * 780) % flowSpan) - 130;
-      ctx.globalAlpha = 0.5;
-      ctx.drawImage(strip, bx - sw * 0.3, flowY, sw * 0.6, Math.min(180, flowSpan));
+      // 能量流（纵向）：一串"箭头带"从枪口往落点方向滚，让人觉得光在源源不断射出去
+      const gap = Math.max(56, bw * 3.2);
+      const seg = gap * 0.5;
+      const phase = (world.time * 900) % gap;
+      ctx.globalAlpha = 0.6;
+      for (let yy = y0 - phase; yy > y1 - seg; yy -= gap) {
+        if (yy - seg > y0 || yy < y1 - seg * 0.5) continue;
+        ctx.drawImage(strip, bx - sw * 0.3, yy - seg, sw * 0.6, seg);
+      }
+      // 再叠一道更宽更亮的"脉冲"慢速上扫，让整根光柱有呼吸感
+      const pulseH = Math.min(260, hgt);
+      const pulseY = y0 - ((world.time * 380) % (hgt + pulseH));
+      ctx.globalAlpha = 0.35;
+      ctx.drawImage(strip, bx - sw * 0.62, pulseY - pulseH * 0.5, sw * 1.24, pulseH);
       ctx.restore();
       // 枪口光斑（起点也要有光）
       const muzzle = ctx.createRadialGradient(bx, y0, 0, bx, y0, Math.max(6, bw * 1.6));

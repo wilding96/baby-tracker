@@ -333,7 +333,9 @@ export const BACKGROUND = {
 // ── 敌种：三种，颜色 + 缩放区分（不新增 draw call）──
 export const ENEMY_KINDS: Record<EnemyKind, EnemyKindDef> = {
   drone: {
-    hp: 26,
+    // 血量口径（2026-10-10 调整）：目标是"不出现一碰就死"——
+    // 激光笔/小鱼干 一发 ~33~40，所以无人机要 2 发起步；炮台 3 发；weaver 1~2 发
+    hp: 50,
     speed: 12,
     radius: 1.5,
     scale: 1.0,
@@ -347,7 +349,7 @@ export const ENEMY_KINDS: Record<EnemyKind, EnemyKindDef> = {
     color: PAL.magenta,
   },
   weaver: {
-    hp: 18,
+    hp: 40,
     speed: 16,
     radius: 1.28,
     scale: 0.85,
@@ -361,7 +363,7 @@ export const ENEMY_KINDS: Record<EnemyKind, EnemyKindDef> = {
     color: PAL.green,
   },
   gunner: {
-    hp: 70,
+    hp: 110,
     speed: 8,
     radius: 2.4,
     scale: 1.6,

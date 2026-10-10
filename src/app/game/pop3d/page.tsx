@@ -161,24 +161,24 @@ export default function Pop3DGame() {
               bloom: fxParam.includes("bloom"),
             };
     const themeParam = params.get("theme");
-    // ?theme=paper = B 方向的纸片渲染器（固定正面视角 + AI 贴图 + 网点/分格）；
-    // 默认仍是原来的 3D 画面，?theme=pop 是上一版贴图实验。
-    const renderer =
-      themeParam === "paper"
-        ? createPaperRenderer(mount, {
-            // ?bg=planet|bands|plain 切换背景装饰（默认大行星）
-            bg:
-              params.get("bg") === "bands"
-                ? "bands"
-                : params.get("bg") === "plain"
-                  ? "plain"
-                  : "planet",
-          })
-        : createRenderer(mount, {
-            bloom: bloomParam === null ? undefined : bloomParam !== "0",
-            fx,
-            theme: themeParam === "pop" ? "pop" : "classic",
-          });
+    // 默认就是纸片渲染器（B 方向：固定正面视角 + AI 贴图 + 网点/分格/错版）。
+    // 回退选项：?theme=3d（原 3D 画面）、?theme=pop（3D + 网点错版实验版）。
+    const use3d = themeParam === "3d" || themeParam === "classic" || themeParam === "pop";
+    const renderer = use3d
+      ? createRenderer(mount, {
+          bloom: bloomParam === null ? undefined : bloomParam !== "0",
+          fx,
+          theme: themeParam === "pop" ? "pop" : "classic",
+        })
+      : createPaperRenderer(mount, {
+          // ?bg=bands|planet|plain 切换背景装饰（默认斜向色带）
+          bg:
+            params.get("bg") === "planet"
+              ? "planet"
+              : params.get("bg") === "plain"
+                ? "plain"
+                : "bands",
+        });
     const engine = createEngine({
       mount,
       renderer,

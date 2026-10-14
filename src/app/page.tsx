@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import FloatingParticles from "@/components/FloatingParticles";
 import Reveal from "@/components/Reveal";
 import { useCountUp } from "@/hooks/useCountUp";
+import { getBabyAgeAt } from "@/lib/babyAge";
 import DailyQuote from "@/components/DailyQuote";
 import CelebrationOverlay from "@/components/CelebrationOverlay";
 import BabyAge from "@/components/BabyAge";
@@ -548,6 +549,7 @@ export default function Home() {
                   const Icon = typeMeta.icon;
                   const isFirst = index === 0;
                   const isLast = index === sortedDesc.length - 1;
+                  const age = getBabyAgeAt(babyBirthday, event.date);
 
                   return (
                     <Reveal key={event.id} delay={index * 60}>
@@ -572,9 +574,18 @@ export default function Home() {
                             <p className="font-semibold text-[#725d42] text-sm leading-tight">
                               {event.title}
                             </p>
-                            <p className="text-xs text-[#9f927d]">
-                              {format(parseISO(event.date), "yyyy年M月d日")}
-                            </p>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <p className="text-xs text-[#9f927d]">
+                                {format(parseISO(event.date), "yyyy年M月d日")}
+                              </p>
+                              {age && (
+                                <span
+                                  className="inline-flex items-center rounded-full border border-[#efd28a] bg-[#fff7dc] px-2 py-0.5 text-[11px] font-bold text-[#9a6a1f]"
+                                >
+                                  {age.label}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <button
                             type="button"

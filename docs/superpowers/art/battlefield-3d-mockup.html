@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>战场样机 3D v4 · 平面世界 + 立体玩具（实例化版）</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0810; display: flex; justify-content: center; overflow: hidden; }
+  canvas { height: 100vh; aspect-ratio: 720 / 1280; display: block; }
+  body.gray canvas { filter: grayscale(1); }
+  #dbg {
+    position: fixed; left: 8px; top: 8px; z-index: 9;
+    font: 700 11px/1.5 ui-monospace, Consolas, monospace;
+    color: #101010; background: #FFF8E7; border: 3px solid #101010;
+    padding: 2px 6px; box-shadow: 4px 4px 0 #101010; white-space: pre;
+  }
+</style>
+</head>
+<body>
+<div id="dbg"></div>
+<script type="importmap">
+{ "imports": {
+    "three": "/node_modules/three/build/three.module.js",
+    "three/addons/": "/node_modules/three/examples/jsm/"
+} }
+</script>
+<script type="module">
+// ═══════════════════════════════════════════════════════════════════
+// 战场样机 3D v4 —— 「平面世界 + 立体玩具」的**实例化版**
+//
+// 形态不变（v2/v3 已定）：正交平面场地 + 立体实物角色。
+// 造型不变（**刻意不改**，这样 DC 的前后对比才是干净的）。
+// 这一版只做一件事：**把 draw call 从 271 压进 <60 的红线。**
+//
+// 三条手法（都是 §5 原本就写明的要求，v3 的样机违反了它）：
+//   ① 顶点色代替多材质：一个玩具的所有 primitive 合并成**一个**几何体
+//      → 否则一个玩具要拆成 5~8 个 DC
+//   ② 反向外壳描边也跟着合并，并且**按类型实例化**（不能每个 primitive 挂一个）
+//   ③ 弹幕按弹型 InstancedMesh；所有贴地投影合成**一个** InstancedMesh
+//
+// 踩坑记录（沿用 pop3d 自己文档里那条）：mergeGeometries 混用「索引几何」和
+//   「非索引几何」会**返回 null**，然后在 render 里炸 reading 'id' of null。
+//   Icosahedron/Octahedron 是非索引，Box/Sphere/Cylinder 是索引
+//   → 所以每块几何先 toNonIndexed()，并把属性集统一成 position/normal/color。
+//
+// ?t=1.5 确定性单帧 | ?gray=1 灰度 | 需要本地静态服务器
+// ═══════════════════════════════════════════════════════════════════
+import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+
+const W = 720, H = 1280;
+const HALF_W = 18, HALF_H = 32;
+const FIELD = { halfW: HALF_W, halfH: HALF_H };
+
+const cv = document.createElement("canvas");
+document.body.appendChild(cv);
+const dbg = document.getElementById("dbg");
+const params = new URLSearchParams(location.search);
+// 弹幕倍率：用来验证「弹幕翻几倍，DC 不变」——实例化的意义就在这
+const MULT = Math.max(1, Number(params.get("mult") || 1));
+
+const renderer = new THREE.WebGLRenderer({
+  canvas: cv, antialias: true, alpha: false, preserveDrawingBuffer: true,
+});
+renderer.setPixelRatio(1);
+renderer.setSize(W, H, false);
+renderer.setClearColor(0x0d0a12, 1);
+
+const scene = new THREE.Scene();
+
+const PITCH = THREE.MathUtils.degToRad(24);
+const TAN_P = Math.tan(PITCH);
+const D = 200;
+const cam = new THREE.OrthographicCamera(-HALF_W, HALF_W, HALF_H, -HALF_H, 0.1, 400);
+cam.position.set(0, D * Math.cos(PITCH), D * Math.sin(PITCH));
+cam.up.set(0, Math.sin(PITCH), -Math.cos(PITCH));
+cam.lookAt(0, 0, 0);
+const rz = (z, h) => z + h * TAN_P;      // 高度补偿：看到的 = 判定点
+
+scene.add(new THREE.AmbientLight(0x53536a, 0.5));
+const key = new THREE.DirectionalLight(0xfff4e2, 1.55);
+key.position.set(-26, 60, 34); scene.add(key);
+const fill = new THREE.DirectionalLight(0x7fa6ff, 0.45);
+fill.position.set(34, 22, -30); scene.add(fill);
+const rim = new THREE.DirectionalLight(0xffd9f0, 0.3);
+rim.position.set(10, 30, -60); scene.add(rim);
+
+const INK = 0x101010, PAPER = 0xfff8e7, MAGENTA = 0xe5007e,
+      RED = 0xff2d2d, YELLOW = 0xffd400, GREEN = 0x35e07a,
+      DUCK = 0xffb02e, BONE = 0xd9bc7e;
+
+// ═══════════════════════════════════════════════════════════════════
+// ① 顶点色合并：parts → 一个几何体
+// ═══════════════════════════════════════════════════════════════════
+const _tmpM = new THREE.Matrix4();
+const _tmpQ = new THREE.Quaternion();
+const _tmpE = new THREE.Euler();
+const _tmpV = new THREE.Vector3();
+
+function prep(geo, color, pos = [0, 0, 0], rot = [0, 0, 0], scale = [1, 1, 1]) {
+  let g = geo.index ? geo.toNonIndexed() : geo;
+  // 统一属性集，否则 mergeGeometries 会因为属性不一致返回 null
+  for (const k of Object.keys(g.attributes)) {
+    if (k !== "position" && k !== "normal" && k !== "color") g.deleteAttribute(k);
+  }
+  if (!g.attributes.normal) g.computeVertexNormals();
+  _tmpM.compose(
+    _tmpV.set(pos[0], pos[1], pos[2]),
+    _tmpQ.setFromEuler(_tmpE.set(rot[0], rot[1], rot[2])),
+    new THREE.Vector3(scale[0], scale[1], scale[2]),
+  );
+  g.applyMatrix4(_tmpM);
+  const n = g.attributes.position.count;
+  const arr = new Float32Array(n * 3);
+  const c = new THREE.Color(color);
+  for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
+  g.setAttribute("color", new THREE.BufferAttribute(arr, 3));
+  return g;
+}
+
+/** parts: prep(...) 的数组 → 一个合并几何体 + 一份放大 7.5% 的描边几何体 */
+function prefab(parts, outlineK = 1.075) {
+  const geo = mergeGeometries(parts, false);
+  if (!geo) throw new Error("mergeGeometries 返回 null：属性集不一致（检查 toNonIndexed/属性统一）");
+  const outline = geo.clone();
+  outline.scale(outlineK, outlineK, outlineK);
+  return { geo, outline };
+}
+
+const MAT_BODY = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+const MAT_OUT = new THREE.MeshBasicMaterial({
+  color: INK, side: THREE.BackSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+});
+
+/** ② 按类型实例化：本体 + 描边各一个 InstancedMesh，共享同一批矩阵 */
+function pair(pf, cap, outline = true) {
+  const body = new THREE.InstancedMesh(pf.geo, MAT_BODY, cap);
+  body.frustumCulled = false;
+  scene.add(body);
+  let out = null;
+  if (outline) {
+    out = new THREE.InstancedMesh(pf.outline, MAT_OUT, cap);
+    out.frustumCulled = false;
+    scene.add(out);
+  }
+  return {
+    body, out, cap, used: 0,
+    set(i, dummy) {
+      body.setMatrixAt(i, dummy.matrix);
+      if (out) out.setMatrixAt(i, dummy.matrix);
+      if (i + 1 > this.used) this.used = i + 1;
+    },
+    flush() {
+      body.count = this.used;
+      body.instanceMatrix.needsUpdate = true;
+      if (out) { out.count = this.used; out.instanceMatrix.needsUpdate = true; }
+      this.used = 0;
+    },
+  };
+}
+
+// ═══ ③ 所有贴地投影 = 一个 InstancedMesh ═══
+const SHADOW_CAP = 200;
+const shGeo = new THREE.CircleGeometry(1, 16).rotateX(-Math.PI / 2);
+const shadowIM = new THREE.InstancedMesh(
+  shGeo,
+  new THREE.MeshBasicMaterial({ color: 0x0a0710, transparent: true, opacity: 0.5, depthWrite: false }),
+  SHADOW_CAP,
+);
+shadowIM.frustumCulled = false;
+scene.add(shadowIM);
+let shadowN = 0;
+const _dummy = new THREE.Object3D();
+const _shadowM = new THREE.Matrix4();
+function addShadow(x, z, r, h) {
+  if (shadowN >= SHADOW_CAP) return;
+  const k = r * (1 + h * 0.05);
+  _shadowM.makeScale(k, 1, k * 0.95);
+  _shadowM.setPosition(x + h * 0.34, 0.05, z + h * 0.30);
+  shadowIM.setMatrixAt(shadowN++, _shadowM);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 造型：**为俯视剪影而设计**
+//
+// v3 反馈：老鼠被读成"粉色小章鱼"、熊被读成"毛球/仓鼠"、猫被读成"青蛙"。
+// 原因是——**俯视下只有剪影在说话**，而我堆了一堆球（球从正上方看就是一团模糊的圆）。
+// 这一版的三条改法：
+//   ① **扁圆盘（DISC）代替球**：耳朵/眼睛/脚/鼻头。盘从正上方看是明确的圆，
+//      球从正上方看是模糊的包 —— 这是"能不能读出器官"的关键
+//   ② **平躺的环代替立着的环**：立环从上方看只是一条线；平躺才看得见环孔
+//      （发条钥匙的蝴蝶结因此才读得出是"钥匙"）
+//   ③ **细长管（TUBE）代替贴身环做尾巴**：尾巴必须甩出身体轮廓之外，
+//      不然会被读成触手
+//   另外：没有方向性的东西（扫地机）补上"明确的正面"（缺口弧 + 前保险杠 + 伸出的滚刷）
+// ═══════════════════════════════════════════════════════════════════
+const S = (a, b, c) => new THREE.SphereGeometry(a, b, c);
+const T = (...a) => new THREE.TorusGeometry(...a);
+const C = (...a) => new THREE.CylinderGeometry(...a);
+const CONE = (...a) => new THREE.ConeGeometry(...a);
+const BOX = (...a) => new THREE.BoxGeometry(...a);
+/** 扁圆盘：俯视下的"圆" */
+const DISC = (r, h = 0.12, seg = 12) => new THREE.CylinderGeometry(r, r, h, seg);
+/** 细长管：尾巴 / 线头 */
+const TUBE = (pts, rad, seg = 10) => new THREE.TubeGeometry(
+  new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(p[0], p[1], p[2]))), seg, rad, 5, false);
+const FLAT = [-Math.PI / 2, 0, 0];   // 环/盘放平（孔朝上）
+
+const PF = {
+  // 发条老鼠：细长身体 + 长尖吻 + 大圆盘耳（与头留缝）+ 四只小脚 + 甩出体外的细尾 + 平躺双环发条钥匙
+  mouse: prefab([
+    prep(S(1, 12, 8), MAGENTA, [0, 0, 0], [0, 0, 0], [1.8, 0.8, 1.05]),        // 细长身体
+    prep(CONE(0.42, 1.6, 10), MAGENTA, [1.7, 0.0, 0], [0, 0, -Math.PI / 2]),  // 长尖吻
+    prep(S(0.17, 8, 6), INK, [2.5, 0.0, 0]),                                   // 鼻尖
+    prep(DISC(0.66, 0.14, 14), MAGENTA, [0.6, 0.82, -0.8]),                     // 大圆盘耳（抬到头顶高度以上）
+    prep(DISC(0.66, 0.14, 14), MAGENTA, [0.6, 0.82, 0.8]),
+    prep(DISC(0.18, 0.12, 10), INK, [1.5, 0.42, -0.36]),                       // 眼
+    prep(DISC(0.18, 0.12, 10), INK, [1.5, 0.42, 0.36]),
+    prep(DISC(0.27, 0.1, 10), MAGENTA, [0.8, -0.44, -1.0]),                    // 四只小脚
+    prep(DISC(0.27, 0.1, 10), MAGENTA, [0.8, -0.44, 1.0]),
+    prep(DISC(0.27, 0.1, 10), MAGENTA, [-0.9, -0.44, -0.95]),
+    prep(DISC(0.27, 0.1, 10), MAGENTA, [-0.9, -0.44, 0.95]),
+    prep(TUBE([[-1.35, 0, 0], [-2.3, 0.1, 0.4], [-3.2, 0.28, 1.0], [-3.75, 0.46, 1.6]], 0.085, 12), MAGENTA),
+    // 发条旋钮：**小而低**，贴着背、位置明显靠后。
+    // 教训：做成"凸起的大环 + 横杆"会在小尺寸下被读成一张"脸"，
+    // 反而破坏整只老鼠的剪影 —— 细节不该和主体剪影抢辨识度。
+    prep(DISC(0.2, 0.1, 10), INK, [-0.6, 0.72, 0]),
+    prep(C(0.09, 0.09, 0.45, 8), PAPER, [-0.6, 0.98, 0]),
+    prep(DISC(0.24, 0.12, 12), PAPER, [-0.6, 1.24, 0]),
+  ]),
+  // 尖叫鸭：宽扁嘴（不是锥）+ 明确的两片翅膀 + 尾羽
+  duck: prefab([
+    prep(S(1, 12, 8), DUCK, [0, 0, 0], [0, 0, 0], [1.35, 0.85, 1.05]),
+    prep(S(0.62, 12, 8), DUCK, [1.15, 0.6, 0]),
+    prep(BOX(1.0, 0.2, 0.78), RED, [1.95, 0.5, 0]),                            // 扁嘴
+    prep(DISC(0.14, 0.12, 10), INK, [1.5, 0.92, -0.32]),
+    prep(DISC(0.14, 0.12, 10), INK, [1.5, 0.92, 0.32]),
+    prep(DISC(0.5, 0.12, 12), DUCK, [-0.2, 0.42, -0.92], [0, 0, 0], [1, 1, 0.72]),  // 翅膀
+    prep(DISC(0.5, 0.12, 12), DUCK, [-0.2, 0.42, 0.92], [0, 0, 0], [1, 1, 0.72]),
+    prep(CONE(0.36, 0.7, 8), DUCK, [-1.35, 0.25, 0], [0, 0, Math.PI / 2]),     // 尾羽
+  ]),
+  // 毛线球：球 + 更粗的纸白线圈 + 甩出的线头
+  yarn: prefab([
+    prep(S(1.35, 14, 10), MAGENTA),
+    prep(T(1.35, 0.16, 6, 20), PAPER, [0, 0, 0], [0, 0, 0.2]),
+    prep(T(1.35, 0.16, 6, 20), PAPER, [0, 0, 0], [Math.PI / 2, 0, 0.5]),
+    prep(T(1.35, 0.16, 6, 20), PAPER, [0, 0, 0], [0.7, 0.9, 0]),
+    prep(TUBE([[1.2, -0.5, 0.7], [2.0, -0.9, 1.1], [2.6, -1.5, 0.6], [3.0, -2.1, 1.4]], 0.1, 10), BONE),
+  ]),
+  // 扫地机器人：**补上前方性** —— 顶面红色三角（指向前方）+ 前保险杠 + 伸出的滚刷。
+  // 注意：**不要用整圈红环**，环必然被读成"黑白同心圆图案"（v3 就是这么被误读的）。
+  vacuum: prefab([
+    prep(C(2.25, 2.25, 0.7, 24), MAGENTA),
+    prep(C(2.05, 2.05, 0.3, 24), INK, [0, 0.45, 0]),
+    prep(CONE(0.95, 1.5, 3), RED, [0, 0.62, 0.55], [Math.PI / 2, 0, 0]),        // 朝向三角
+    prep(BOX(3.5, 0.4, 0.6), RED, [0, 0.5, 2.0]),                              // 前保险杠
+    prep(C(0.24, 0.24, 2.5, 10), INK, [0, -0.1, 2.35], [0, 0, Math.PI / 2]),   // 滚刷
+    prep(C(0.5, 0.5, 0.8, 12), INK, [0, 0.8, -0.7]),
+    prep(DISC(0.3, 0.12, 10), PAPER, [0, 1.22, -0.7]),
+    prep(DISC(0.46, 0.4, 10), INK, [-1.95, -0.25, -0.7], [0, 0, Math.PI / 2]), // 侧轮
+    prep(DISC(0.46, 0.4, 10), INK, [1.95, -0.25, -0.7], [0, 0, Math.PI / 2]),
+  ]),
+  // 拖鞋（精英）：脚形鞋底（前宽后窄）+ **明确的 V 形鞋带**（不再是横条纹）
+  slipper: prefab([
+    prep(S(1, 14, 8), MAGENTA, [0, 0, -0.3], [0, 0, 0], [1.15, 0.5, 2.1]),     // 后跟（窄）
+    prep(S(1, 14, 8), MAGENTA, [0, 0.12, 1.5], [0, 0, 0], [1.6, 0.6, 1.7]),    // 前掌（宽）
+    prep(BOX(0.26, 0.24, 2.5), RED, [-0.62, 0.62, 0.5], [0, 0.42, 0]),         // V 形带（左）
+    prep(BOX(0.26, 0.24, 2.5), RED, [0.62, 0.62, 0.5], [0, -0.42, 0]),         // V 形带（右）
+    prep(BOX(0.34, 0.26, 0.5), RED, [0, 0.66, 1.6]),                           // 前掌交汇
+  ]),
+  // Boss 毛绒熊：**小圆耳**（明显小于头）+ 纸白口鼻 + 墨鼻头 + 四肢 + 红补丁 + 缝合线
+  bear: prefab([
+    prep(S(3.3, 16, 12), MAGENTA, [0, 0, 0], [0, 0, 0], [1, 0.8, 0.95]),       // 头
+    prep(S(1.1, 10, 8), MAGENTA, [-2.55, 2.15, -1.6]),                         // 小圆耳（抬到头顶高度以上、推出轮廓）
+    prep(S(1.1, 10, 8), MAGENTA, [2.55, 2.15, -1.6]),
+    prep(DISC(0.55, 0.12, 10), INK, [-2.55, 2.72, -1.6]),                      // 耳内
+    prep(DISC(0.55, 0.12, 10), INK, [2.55, 2.72, -1.6]),
+    prep(S(1.45, 12, 10), PAPER, [0, 0.15, 2.5], [0, 0, 0], [1, 0.6, 0.85]),   // 纸白口鼻
+    prep(S(0.3, 8, 6), INK, [0, 0.45, 3.3]),                                   // 鼻头
+    prep(DISC(0.36, 0.12, 10), PAPER, [-1.15, 1.5, 0.85]),                     // 眼
+    prep(DISC(0.36, 0.12, 10), PAPER, [1.15, 1.5, 0.85]),
+    prep(DISC(0.15, 0.12, 8), INK, [-1.15, 1.58, 0.85]),
+    prep(DISC(0.15, 0.12, 8), INK, [1.15, 1.58, 0.85]),
+    prep(S(3.9, 14, 10), MAGENTA, [0, -0.5, -2.4], [0, 0, 0], [1.12, 0.75, 0.9]), // 身体（比头宽）
+    prep(S(1.08, 10, 8), MAGENTA, [-3.3, -0.2, -0.5]),                         // 前爪
+    prep(S(1.08, 10, 8), MAGENTA, [3.3, -0.2, -0.5]),
+    prep(S(1.22, 10, 8), MAGENTA, [-3.1, -0.45, -2.6]),                        // 后爪
+    prep(S(1.22, 10, 8), MAGENTA, [3.1, -0.45, -2.6]),
+    prep(C(1.25, 1.25, 0.3, 16), RED, [-1.95, 0.5, -2.1], [Math.PI / 2, 0, 0]), // 红补丁
+    prep(BOX(0.18, 0.12, 0.5), PAPER, [0, 0.62, 1.85]),                        // 缝合线（虚线）
+    prep(BOX(0.18, 0.12, 0.5), PAPER, [0, 0.78, 1.15]),
+    prep(BOX(0.18, 0.12, 1.0), PAPER, [0, 1.15, -0.1]),
+  ]),
+  // 玩家绿猫（面朝 -z）：**大头 + 大三角耳（带纸白内耳）**才是俯视下的猫。
+  // v4 被读成"鳄鱼"是因为头太小、身体太长、胡须太长（像吻部）。
+  cat: prefab([
+    prep(S(1, 14, 10), GREEN, [0, 0, 0.45], [0, 0, 0], [1.1, 0.8, 1.35]),       // 身体
+    prep(S(0.88, 14, 10), GREEN, [0, 0.45, -1.0]),                             // 头
+    // 耳朵：向上立起的三角锥（3 段）。**尺寸要够大**——
+    // 小锥体的绝大部分会埋在头里，只露一个尖就完全读不出来。
+    prep(CONE(0.78, 1.55, 3), GREEN, [-0.54, 1.5, -1.2], [0, Math.PI + 0.22, 0]),
+    prep(CONE(0.78, 1.55, 3), GREEN, [0.54, 1.5, -1.2], [0, Math.PI - 0.22, 0]),
+    prep(CONE(0.4, 0.85, 3), PAPER, [-0.54, 1.95, -1.22], [0, Math.PI + 0.22, 0]),
+    prep(CONE(0.4, 0.85, 3), PAPER, [0.54, 1.95, -1.22], [0, Math.PI - 0.22, 0]),
+    prep(DISC(0.3, 0.12, 10), PAPER, [-0.42, 1.1, -1.52], [0, 0, 0], [1, 1, 0.66]),  // 眼（压扁成椭圆）
+    prep(DISC(0.3, 0.12, 10), PAPER, [0.42, 1.1, -1.52], [0, 0, 0], [1, 1, 0.66]),
+    prep(DISC(0.13, 0.12, 8), INK, [-0.42, 1.17, -1.52]),
+    prep(DISC(0.13, 0.12, 8), INK, [0.42, 1.17, -1.52]),
+    prep(DISC(0.18, 0.1, 8), INK, [0, 0.78, -1.82]),                           // 鼻
+    prep(BOX(0.62, 0.07, 0.06), PAPER, [-0.58, 0.76, -1.72], [0, 0.42, 0]),    // 短胡须 ×4
+    prep(BOX(0.62, 0.07, 0.06), PAPER, [-0.58, 0.68, -1.6], [0, 0.14, 0]),
+    prep(BOX(0.62, 0.07, 0.06), PAPER, [0.58, 0.76, -1.72], [0, -0.42, 0]),
+    prep(BOX(0.62, 0.07, 0.06), PAPER, [0.58, 0.68, -1.6], [0, -0.14, 0]),
+    prep(DISC(0.32, 0.1, 10), GREEN, [-0.85, -0.34, -0.35]),                   // 四只脚
+    prep(DISC(0.32, 0.1, 10), GREEN, [0.85, -0.34, -0.35]),
+    prep(DISC(0.32, 0.1, 10), GREEN, [-0.88, -0.34, 1.1]),
+    prep(DISC(0.32, 0.1, 10), GREEN, [0.88, -0.34, 1.1]),
+    prep(TUBE([[0, 0, 1.6], [0.55, 0.2, 2.5], [1.45, 0.5, 3.0], [2.15, 0.9, 2.65]], 0.13, 12), GREEN),
+  ]),
+  // 僚机：缩小的猫（保留三角耳与胡须）
+  wing: prefab([
+    prep(S(0.6, 12, 8), GREEN, [0, 0, 0.25], [0, 0, 0], [1.05, 0.8, 1.4]),
+    prep(S(0.55, 12, 8), GREEN, [0, 0.24, -0.6]),
+    prep(CONE(0.3, 0.5, 3), GREEN, [-0.34, 0.62, -0.76], [0, Math.PI + 0.25, 0]),
+    prep(CONE(0.3, 0.5, 3), GREEN, [0.34, 0.62, -0.76], [0, Math.PI - 0.25, 0]),
+    prep(DISC(0.2, 0.1, 8), PAPER, [-0.2, 0.55, -0.86]),
+    prep(DISC(0.2, 0.1, 8), PAPER, [0.2, 0.55, -0.86]),
+    prep(BOX(0.44, 0.06, 0.05), PAPER, [-0.34, 0.38, -0.92], [0, 0.3, 0]),
+    prep(BOX(0.44, 0.06, 0.05), PAPER, [0.34, 0.38, -0.92], [0, -0.3, 0]),
+  ]),
+  // 弹幕：本体 + 白高光合并成一个几何体（原来这是 2 个 DC/颗）
+  // 注意段数：弹珠在屏幕上只有几十像素，用 Sphere(0.66,14,10) 单颗就是 ~412 面，
+  // 426 颗 = 17.5 万面去画小点。降到 6×5 + 八面体高光 ≈ 56 面/颗。
+  ball: prefab([
+    prep(S(0.66, 6, 5), RED),
+    prep(new THREE.OctahedronGeometry(0.26, 0), PAPER, [0, 0.5, -0.14]),
+  ], 1),
+  diamond: prefab([
+    prep(new THREE.OctahedronGeometry(0.72, 0), MAGENTA),
+    prep(new THREE.OctahedronGeometry(0.26, 0), PAPER, [0, 0.44, 0]),
+  ], 1),
+  long: prefab([
+    prep(BOX(0.72, 0.72, 2.4), RED),
+    prep(BOX(0.3, 0.3, 1.5), PAPER, [0, 0.42, 0]),
+  ], 1),
+};
+
+// 弹幕按类型实例化（高光合并后，一种弹 = 1 个 DC）
+const BULLET_KINDS = ["ball", "diamond", "long"];
+const bulletPair = {};
+const bulletCap = { ball: 0, diamond: 0, long: 0 };
+
+// ═══════════════════════════════════════════════════════════════════
+// 场地：一张"印出来的"平面（正交 → 板缝平行不收敛）
+// ═══════════════════════════════════════════════════════════════════
+function printTexture() {
+  const Sz = 512, c = document.createElement("canvas");
+  c.width = c.height = Sz;
+  const g = c.getContext("2d");
+  g.fillStyle = "#3b3350"; g.fillRect(0, 0, Sz, Sz);
+  g.strokeStyle = "#2e2740"; g.lineWidth = 9;
+  for (let x = 0; x <= Sz; x += 128) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, Sz); g.stroke(); }
+  g.lineWidth = 6;
+  for (let y = 0; y <= Sz; y += 256) { g.beginPath(); g.moveTo(0, y); g.lineTo(Sz, y); g.stroke(); }
+  g.fillStyle = "rgba(16,16,16,0.16)";
+  for (let y = 16; y < Sz; y += 32) {
+    for (let x = 16 + ((y / 32) % 2) * 16; x < Sz; x += 32) {
+      g.beginPath(); g.arc(x, y, 3.4, 0, Math.PI * 2); g.fill();
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 3);
+  return t;
+}
+const field = new THREE.Mesh(new THREE.PlaneGeometry(HALF_W * 2, HALF_H * 2),
+  new THREE.MeshLambertMaterial({ map: printTexture() }));
+field.rotation.x = -Math.PI / 2;
+scene.add(field);
+
+// 分格边框：8 条合并成 1 个几何体（顶点色区分纸白/墨黑）→ 1 个 DC
+{
+  const bars = [];
+  const bar = (w, d, x, z, col) => {
+    const g = new THREE.PlaneGeometry(w, d).toNonIndexed().rotateX(-Math.PI / 2);
+    g.translate(x, 0.03, z);
+    const n = g.attributes.position.count;
+    const arr = new Float32Array(n * 3);
+    const c = new THREE.Color(col);
+    for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
+    g.setAttribute("color", new THREE.BufferAttribute(arr, 3));
+    g.deleteAttribute("uv");
+    bars.push(g);
+  };
+  bar(HALF_W * 2 + 2.6, 1.3, 0, HALF_H + 1.3, PAPER); bar(HALF_W * 2 + 2.6, 1.3, 0, -HALF_H - 1.3, PAPER);
+  bar(1.3, HALF_H * 2 + 2.6, HALF_W + 1.3, 0, PAPER); bar(1.3, HALF_H * 2 + 2.6, -HALF_W - 1.3, 0, PAPER);
+  bar(HALF_W * 2 + 1.2, 0.5, 0, HALF_H + 0.35, INK); bar(HALF_W * 2 + 1.2, 0.5, 0, -HALF_H - 0.35, INK);
+  bar(0.5, HALF_H * 2 + 1.2, HALF_W + 0.35, 0, INK); bar(0.5, HALF_H * 2 + 1.2, -HALF_W - 0.35, 0, INK);
+  const frame = new THREE.Mesh(mergeGeometries(bars, false), MAT_BODY);
+  frame.frustumCulled = false;
+  scene.add(frame);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 实体
+// ═══════════════════════════════════════════════════════════════════
+const IM = {
+  mouse: pair(PF.mouse, 3),
+  duck: pair(PF.duck, 1),
+  yarn: pair(PF.yarn, 1),
+  vacuum: pair(PF.vacuum, 1),
+  slipper: pair(PF.slipper, 1),
+  bear: pair(PF.bear, 1),
+  cat: pair(PF.cat, 1),
+  wing: pair(PF.wing, 2),
+};
+const setIM = (im, i, x, y, z, rx = 0, ry = 0, rz2 = 0, sx = 1, sy = 1, sz2 = 1) => {
+  _dummy.position.set(x, y, z);
+  _dummy.rotation.set(rx, ry, rz2);
+  _dummy.scale.set(sx, sy, sz2);
+  _dummy.updateMatrix();
+  im.set(i, _dummy);
+};
+
+// 玩具：发条鼠原地绕圈（yaw 跟随速度）／鸭上下浮沉／毛线球滚／扫地机自转／拖鞋摆动／熊呼吸
+const ANG = (vx, vz) => Math.atan2(-vz, vx);
+
+const mice = [
+  { bx: -12, bz: 7, s: 1.0, R: 3.6, w: 0.55, ph: 0.0 },
+  { bx: 12, bz: 9, s: 0.95, R: 3.0, w: -0.62, ph: 1.7 },
+  { bx: -7, bz: -24, s: 0.85, R: 2.4, w: 0.7, ph: 3.1 },
+];
+function updMice(t) {
+  mice.forEach((m, i) => {
+    const h = 0.85, p = m.w * t + m.ph;
+    const x = m.bx + m.R * Math.cos(p), z = m.bz + m.R * Math.sin(p);
+    const vx = -m.R * m.w * Math.sin(p), vz = m.R * m.w * Math.cos(p);
+    setIM(IM.mouse, i, x, h, rz(z, h), 0, ANG(vx, vz), 0, m.s, m.s, m.s);
+    addShadow(x, z, 2.3 * m.s, h);
+  });
+}
+function updDuck(t) {
+  const h = 0.9 + 0.55 * Math.sin(t * 1.5 + 0.9), z = -22;
+  setIM(IM.duck, 0, 11, h, rz(z, h), 0.12 * Math.sin(t * 1.2), t * 0.5, 0, 0.9, 0.9, 0.9);
+  addShadow(11, z, 2.1 * 0.9, h);
+}
+function updYarn(t) {
+  const h = 1.4, x = -13 + 2.6 * Math.sin(t * 0.4 + 0.4), z = -20 + 3.2 * Math.cos(t * 0.32 + 0.4);
+  setIM(IM.yarn, 0, x, h, rz(z, h), t * 1.6, 0, t * 0.9, 1, 1, 1);
+  addShadow(x, z, 1.7, h);
+}
+function updVacuum(t) {
+  const h = 0.4, x = -11, z = -13;
+  setIM(IM.vacuum, 0, x, h, rz(z, h), 0, t * 1.1, 0, 1, 1, 1);   // 整机自转 = 炮塔扫描
+  addShadow(x, z, 2.6, h);
+}
+function updSlipper(t) {
+  const h = 0.55, x = 1.6 * Math.sin(t * 0.5), z = -3;
+  setIM(IM.slipper, 0, x, h, rz(z, h), -0.18 * Math.abs(Math.sin(t * 1.2)), 0.5 * Math.sin(t * 0.9), 0, 1, 1, 1);
+  addShadow(x, z, 3.1, h);
+}
+function updBear(t) {
+  const h = 3.4, x = 2.2 * Math.sin(t * 0.42), z = -25.5;
+  const br = 1 + 0.045 * Math.sin(t * 1.5);
+  setIM(IM.bear, 0, x, h, rz(z, h), 0.06 * Math.sin(t * 0.7), 0.1 * Math.sin(t * 0.42), 0, 1, br, 1);
+  addShadow(x, z, 5.2, h);
+}
+
+// 玩家 + 僚机
+const pRing = new THREE.Mesh(new THREE.RingGeometry(2.1, 2.55, 28),
+  new THREE.MeshBasicMaterial({ color: PAPER, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
+pRing.rotation.x = -Math.PI / 2; scene.add(pRing);
+
+const P0 = { z: 25 };
+function updPlayer(t) {
+  const h = 0.85, A = 6.5, Wv = 0.85, p = Wv * t;
+  const x = A * Math.sin(p);
+  const z = P0.z - 1.4 * Math.cos(p * 0.7);
+  const vx = A * Wv * Math.cos(p), vz = 1.4 * Wv * 0.7 * Math.sin(p * 0.7);
+  setIM(IM.cat, 0, x, h, rz(z, h), 0, ANG(vx, vz) - Math.PI / 2, 0, 1, 1, 1);
+  addShadow(x, z, 2.0, h);
+  pRing.position.set(x, 0.12, z);
+  for (let i = 0; i < 2; i++) {
+    const ox = i === 0 ? -6.5 : 6.5;
+    const wx = x + ox * 1.15, wz = z + 3.0 + 0.5 * Math.sin(t * 2 + ox);
+    setIM(IM.wing, i, wx, h, rz(wz, h), 0, 0, 0, 1, 1, 1);
+    addShadow(wx, wz, 1.0, h);
+  }
+  return { x, z };
+}
+
+// ── 弹幕 ──
+const BOSS = { x: 0, z: -30 };
+const bullets = [];
+for (let m = 0; m < MULT; m++) {
+  const ph = m * 0.87;              // 每层加相位偏移，避免完全重叠
+  const rr = (m % 3) * 1.9;
+  for (let i = 0; i < 16; i++) bullets.push({ kind: "ball", pat: "ring", a: (i / 16) * Math.PI * 2 + 0.3 + ph, r0: 8.4 + rr, sp: 8.5 });
+  for (let i = 0; i < 18; i++) {
+    const half = i < 9 ? -1 : 1, k = i % 9;
+    bullets.push({ kind: "ball", pat: "fan", a: Math.PI / 2 + half * (0.18 + Math.abs(k - 3.5) * 0.16) + ph * 0.4, r0: 13 + (i >= 9 ? 7 : 0) + rr, sp: 7.5 });
+  }
+  for (let i = 0; i < 22; i++) bullets.push({ kind: i % 6 === 3 ? "diamond" : "ball", pat: "spiral", a: i * 0.66 + ph, r0: 10 + i * 0.85 + rr, sp: 9 });
+  for (let i = 0; i < 8; i++) bullets.push({ kind: i % 3 === 0 ? "long" : "ball", pat: "stream", x0: (i - 3.5) * 1.4 + (m - (MULT - 1) / 2) * 2.4, z0: -24 + i * 4.4 + m * 2.2, sp: 13 });
+  for (let i = 0; i < 7; i++) bullets.push({ kind: "ball", pat: "aimed", a: Math.PI / 2 + (i - 3) * 0.16 + ph, r0: 6 + i * 3.2 + rr, sp: 11 });
+}
+for (const b of bullets) bulletCap[b.kind] += 1;
+for (const k of BULLET_KINDS) bulletPair[k] = pair(PF[k], bulletCap[k], false);   // 弹幕不做描边
+
+function updateBullets(t) {
+  for (const k of BULLET_KINDS) bulletPair[k].used = 0;
+  for (const b of bullets) {
+    let x = 0, z = 0, rx = 0, ry = 0, rz2 = 0;
+    if (b.pat === "stream") {
+      z = -28 + (((b.z0 + 28) + b.sp * t) % 56);
+      x = b.x0;
+      rx = 0.5 * t;
+    } else {
+      const a = b.a + (b.pat === "spiral" ? 0.45 * t : 0);
+      const r = (b.r0 + b.sp * t) % 62;
+      x = BOSS.x + Math.cos(a) * r;
+      z = BOSS.z + Math.sin(a) * r;
+      rx = 0.5 * t; ry = a; rz2 = 0.3 * t;
+    }
+    const inside = Math.abs(x) < FIELD.halfW - 0.6 && z > -FIELD.halfH + 1 && z < FIELD.halfH - 1;
+    if (!inside) continue;
+    const im = bulletPair[b.kind];
+    setIM(im, im.used, x, 1.0, rz(z, 1.0), rx, ry, rz2, 1, 1, 1);
+    addShadow(x, z, 0.72, 1.0);
+  }
+}
+
+// ── 奖励 ──
+const PK = prefab([prep(new THREE.OctahedronGeometry(0.62, 0), YELLOW)], 1);
+const PK_BIG = prefab([
+  prep(new THREE.OctahedronGeometry(0.95, 0), YELLOW),
+  prep(CONE(0.42, 0.7, 4), YELLOW, [0, 0.6, 0]),
+], 1);
+const imSmall = pair(PK, 4, false), imBig = pair(PK_BIG, 1, false);
+const picks = [[3, 14, 0], [-5, 4, 0], [6, -8, 0], [-4, -18, 0]];
+function updPicks(t) {
+  imSmall.used = 0; imBig.used = 0;
+  picks.forEach(([px, pz, ph]) => {
+    const h = 1.3 + 0.35 * Math.sin(t * 1.8 + px + pz);
+    setIM(imSmall, imSmall.used, px, h, rz(pz, h), 0.5 * t + px, 0.9 * t + ph, 0, 1, 1, 1);
+    addShadow(px, pz, 0.78, h);
+  });
+  const h = 1.3 + 0.35 * Math.sin(t * 1.8 - 1 + 20);
+  setIM(imBig, 0, -1, h, rz(20, h), 0.5 * t, 0.9 * t, 0, 1, 1, 1);
+  addShadow(-1, 20, 1.2, h);
+}
+
+// ── 光束 ──
+const beamLen = 26;
+const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, beamLen, 12),
+  new THREE.MeshBasicMaterial({ color: 0x2fbf68 }));
+beam.rotation.x = Math.PI / 2; scene.add(beam);
+const beamCore = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, beamLen, 10),
+  new THREE.MeshBasicMaterial({ color: PAPER }));
+beamCore.rotation.x = Math.PI / 2; scene.add(beamCore);
+const beamDecal = new THREE.Mesh(new THREE.PlaneGeometry(0.8, beamLen),
+  new THREE.MeshBasicMaterial({ color: GREEN, transparent: true, opacity: 0.45 }));
+beamDecal.rotation.x = -Math.PI / 2; scene.add(beamDecal);
+const spark = new THREE.Mesh(new THREE.RingGeometry(0.75, 1.3, 22),
+  new THREE.MeshBasicMaterial({ color: PAPER, side: THREE.DoubleSide }));
+spark.rotation.x = -Math.PI / 2; scene.add(spark);
+
+// ═══════════════════════════════════════════════════════════════════
+// 每帧
+// ═══════════════════════════════════════════════════════════════════
+function frame(t) {
+  shadowN = 0;
+  const p = updPlayer(t);
+  updMice(t); updDuck(t); updYarn(t); updVacuum(t); updSlipper(t); updBear(t);
+  updateBullets(t); updPicks(t);
+
+  for (const k in IM) IM[k].flush();
+  for (const k of BULLET_KINDS) bulletPair[k].flush();
+  imSmall.flush(); imBig.flush();
+  shadowIM.count = shadowN;
+  shadowIM.instanceMatrix.needsUpdate = true;
+
+  beam.position.set(p.x, 1.9, rz(12, 1.9));
+  beamCore.position.copy(beam.position);
+  beamDecal.position.set(p.x, 0.05, rz(12, 0.05));
+  spark.position.set(p.x, 0.14, -1.5);
+
+  renderer.render(scene, cam);
+}
+
+const params2 = params;
+const FIXED_T = params2.has("t") ? Number(params2.get("t")) : null;
+if (params2.get("gray") === "1") document.body.classList.add("gray");
+
+if (FIXED_T !== null) {
+  frame(FIXED_T);
+  const dc = renderer.info.render.calls;
+  dbg.textContent = `t=${FIXED_T.toFixed(2)} fixed  mult=${MULT}\nDC=${dc}  bullets=${bullets.length}  shadows=${shadowIM.count}\nobjects=${scene.children.length}`;
+  window.__dc = dc;
+  window.__ready = true;
+} else {
+  const start = performance.now();
+  let fps = 0, last = start, acc = 0, n = 0;
+  (function loop() {
+    const now = performance.now();
+    const t = (now - start) / 1000;
+    acc += now - last; n++; last = now;
+    if (acc > 400) { fps = 1000 / (acc / n); acc = 0; n = 0; }
+    frame(t);
+    dbg.textContent = `t=${t.toFixed(1)}s  fps=${fps.toFixed(0)}  mult=${MULT}\nDC=${renderer.info.render.calls}  tris=${(renderer.info.render.triangles / 1000).toFixed(1)}k\nbullets=${bullets.length}  shadows=${shadowIM.count}`;
+    window.__t = t; window.__dc = renderer.info.render.calls; window.__ready = true;
+    requestAnimationFrame(loop);
+  })();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>战场样机 v4 · 客厅里的猫 + 一道绿光</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; display: flex; justify-content: center; }
+  canvas { height: 100vh; aspect-ratio: 720 / 1280; display: block; }
+</style>
+</head>
+<body>
+<canvas id="cv" width="720" height="1280"></canvas>
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// 战场样机 v4 —— 只验证一件事：灰度可读性
+//
+// 四次迭代的结论（全部来自看截图后的反馈，不是空想）：
+//   v1 敌弹弹芯画墨点 → 灰度下变成甜甜圈，被读成"飘浮的几何小物件"
+//   v1 老鼠剪影 → 被读成"黑白猫头"                      → v2 重画剪影
+//   v2 敌弹内部点纸白高光 → 实心弹被打散成"碎片"          → v3 去高光
+//   v3 地毯画同心圆环 + 木纹 + 电线 → 和环形弹直接撞车，
+//      反馈"分不清哪些是背景装饰"                        → v4 环境只留大色块
+//   v1~v3 敌机全用「墨黑剪影 + 纸白描边」→ 三次都没解决：
+//      白描边是必需的（否则暗底上看不见），但它和「奖励 / 弹体」抢同一条
+//      明度带；而且满屏白线稿会把弹幕的注意力抢走。
+//   ==> 结论：「敌机一律黑剪影」在弹幕品类里不成立。v4 改回
+//       「暗底 + 亮色敌机 + 亮色敌弹」，把独特性交给题材 / 环境 / 玩家侧。
+//
+// 明度带（灰度验收的唯一依据）：
+//   白 0.97 = 光束芯（玩家侧）        黄 0.79 = 奖励
+//   绿 0.63 = 玩家（猫）              红 0.42 = 敌弹 + "危险"标记
+//   品红 0.33 = 敌机（玩具）          环境 0.11~0.19      墨黑 0.06 = 所有描边
+// ?gray=1 出灰度图
+// ═══════════════════════════════════════════════════════════════════
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+const W = 720, H = 1280;
+
+const P = {
+  ink:    "#101010",
+  paper:  "#FFF8E7",
+  yellow: "#FFD400",   // 奖励 + 拟声词
+  green:  "#35E07A",   // 玩家（猫）+ 光束——画面唯一"活着"的东西
+  greenHot:"#8CFFBE",
+  red:    "#FF2D2D",   // 敌弹 + 危险标记
+  magenta:"#E5007E",   // 敌机（玩具）
+  // ── 环境（俯视的客厅）：只允许大色块 + 长直线 ──
+  floor:  "#1E1822",
+  plank:  "#171219",
+  rug:    "#292231",
+  rugEdge:"#3A3145",
+  sofa:   "#332B3F",
+  bowl:   "#2A2333",
+  shade:  "#120F17",
+};
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rnd = mulberry32(20261010);
+
+function path(fn) { ctx.beginPath(); fn(ctx); }
+
+/** 敌机 / 玩具：亮色实心 + 墨黑描边（两款原游戏验证过的做法） */
+function toy(fn, color = P.magenta, lw = 3.4) {
+  path(fn);
+  ctx.fillStyle = color; ctx.fill();
+  ctx.lineWidth = lw; ctx.strokeStyle = P.ink; ctx.lineJoin = "round"; ctx.stroke();
+}
+
+function det(fn, lw = 3, color = P.paper) {
+  ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color;
+  ctx.lineWidth = lw; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  fn(ctx); ctx.restore();
+}
+
+// ═══ 环境：俯视的客厅（全部是大件；不放任何中小图形）═══
+function drawRoom() {
+  ctx.fillStyle = P.floor; ctx.fillRect(0, 0, W, H);
+
+  // 木地板板缝：长、直、低对比
+  ctx.strokeStyle = P.plank; ctx.lineWidth = 7;
+  for (let x = 48; x < W; x += 96) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  ctx.lineWidth = 4;
+  for (let y = 84; y < H; y += 208) {
+    for (let x = 0; x < W; x += 96) {
+      const ox = (y / 208) % 2 ? 48 : 0;
+      ctx.beginPath(); ctx.moveTo(x + ox, y); ctx.lineTo(x + ox + 96, y); ctx.stroke();
+    }
+  }
+
+  // 地毯：一整块实色 + 一圈边框，内部不放任何纹样
+  ctx.fillStyle = P.rug;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(64, 344, 592, 792, 36); else ctx.rect(64, 344, 592, 792);
+  ctx.fill();
+  ctx.strokeStyle = P.rugEdge; ctx.lineWidth = 8; ctx.stroke();
+
+  // 猫食盆（左下角，大而低对比 = "这是客厅"的最强信号）
+  ctx.fillStyle = P.bowl;
+  ctx.beginPath(); ctx.ellipse(96, 1198, 132, 62, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = P.rugEdge; ctx.lineWidth = 7; ctx.stroke();
+  ctx.fillStyle = P.shade;
+  ctx.beginPath(); ctx.ellipse(96, 1192, 88, 36, 0, 0, Math.PI * 2); ctx.fill();
+
+  // 沙发扶手（右侧压边）
+  ctx.fillStyle = P.sofa;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(590, 130, 200, 800, 64); else ctx.rect(590, 130, 200, 800);
+  ctx.fill();
+  ctx.strokeStyle = P.plank; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(636, 150); ctx.lineTo(636, 910); ctx.stroke();
+
+  // 桌腿投影：一整块暗色，无细节
+  ctx.fillStyle = P.shade; ctx.globalAlpha = 0.5;
+  ctx.beginPath(); ctx.ellipse(140, 142, 186, 116, -0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+// ═══ 敌机：家里的玩具（亮品红实心 + 墨黑描边）═══
+/** 发条老鼠：尖吻 + 大圆耳 + 胡须 + 显眼的发条钥匙（钥匙 = 弱点） */
+function windUpMouse(x, y, s, rot) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s);
+  toy((c) => { c.moveTo(-32, 2); c.quadraticCurveTo(-66, 20, -96, -8); }, P.magenta, 5);  // 尾
+  toy((c) => { c.ellipse(-4, 0, 32, 21, 0, 0, Math.PI * 2); });                            // 身体
+  toy((c) => { c.arc(22, 0, 15, 0, Math.PI * 2); });                                       // 头
+  toy((c) => { c.moveTo(30, -11); c.lineTo(56, 0); c.lineTo(30, 11); c.closePath(); });     // 吻
+  toy((c) => { c.arc(14, -17, 12, 0, Math.PI * 2); });                                      // 耳
+  toy((c) => { c.arc(15, 17, 12, 0, Math.PI * 2); });
+  // 发条钥匙（纸白，弱点一眼可见）
+  det((c) => { c.fillRect(-4, -40, 8, 18); }, 0);
+  det((c) => { c.beginPath(); c.arc(-11, -46, 8, 0, Math.PI * 2); c.stroke(); }, 4.5);
+  det((c) => { c.beginPath(); c.arc(11, -46, 8, 0, Math.PI * 2); c.stroke(); }, 4.5);
+  // 眼 + 胡须
+  det((c) => { c.beginPath(); c.arc(26, -5, 3.6, 0, Math.PI * 2); c.fill(); }, 0, P.ink);
+  det((c) => {
+    c.beginPath(); c.moveTo(40, -4); c.lineTo(60, -14); c.stroke();
+    c.beginPath(); c.moveTo(40, 3); c.lineTo(62, 4); c.stroke();
+    c.beginPath(); c.moveTo(40, 8); c.lineTo(58, 17); c.stroke();
+  }, 2.4);
+  ctx.restore();
+}
+
+function yarnBall(x, y, s) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  toy((c) => { c.arc(0, 0, 38, 0, Math.PI * 2); });
+  det((c) => {
+    for (let i = 0; i < 4; i++) {
+      c.beginPath(); c.arc(0, 0, 36 - i * 4, -1.15 + i * 0.55, 0.85 + i * 0.55); c.stroke();
+    }
+    c.beginPath(); c.moveTo(-34, 22); c.quadraticCurveTo(-96, 56, -142, 8); c.stroke();
+  }, 2.8);
+  ctx.restore();
+}
+
+/** 拖鞋（精英）：红鞋带 = "这只更危险" */
+function slipper(x, y, s, rot) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s);
+  toy((c) => { c.ellipse(0, 6, 48, 88, 0, 0, Math.PI * 2); }, P.magenta);
+  toy((c) => { c.ellipse(0, -42, 33, 32, 0, 0, Math.PI * 2); }, P.magenta);
+  ctx.strokeStyle = P.red; ctx.lineWidth = 12; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.beginPath(); ctx.moveTo(-34, -20); ctx.lineTo(0, 8); ctx.lineTo(34, -20); ctx.stroke();
+  ctx.strokeStyle = P.ink; ctx.lineWidth = 3.4; ctx.stroke();
+  det((c) => {
+    for (let i = 0; i < 4; i++) { c.beginPath(); c.arc(0, 46 + i * 12, 26 - i * 3, 0.5, Math.PI - 0.5); c.stroke(); }
+  }, 2.6);
+  ctx.restore();
+}
+
+/** 扫地机器人（炮台）：红环 = 正在蓄力 */
+function robotVacuum(x, y, s, rot) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s);
+  toy((c) => { c.arc(0, 0, 56, 0, Math.PI * 2); }, P.magenta);
+  ctx.strokeStyle = P.red; ctx.lineWidth = 9;
+  ctx.beginPath(); ctx.arc(0, 0, 38, 0.45, Math.PI - 0.45); ctx.stroke();
+  ctx.strokeStyle = P.ink; ctx.lineWidth = 3.4; ctx.stroke();
+  det((c) => { c.beginPath(); c.arc(0, 0, 22, 0, Math.PI * 2); c.stroke(); }, 3, P.ink);
+  det((c) => { c.beginPath(); c.arc(0, -30, 5.5, 0, Math.PI * 2); c.fill(); }, 0);
+  ctx.restore();
+}
+
+/** 尖叫鸭（v5 替换掉"带字母的积木"）——
+ *  v4 反馈：方块里加粗字母 = 天然像「道具图标」，被读成奖励。
+ *  这不是明度问题，是形状语言问题：任何"方框 + 粗字形"都会读成 UI 道具。 */
+function squeakyDuck(x, y, s, rot) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s);
+  toy((c) => { c.ellipse(-6, 12, 44, 34, 0, 0, Math.PI * 2); }, P.magenta);   // 身体
+  toy((c) => { c.arc(26, -18, 24, 0, Math.PI * 2); }, P.magenta);             // 头
+  toy((c) => { c.moveTo(44, -20); c.lineTo(70, -12); c.lineTo(44, -2); c.closePath(); }, P.red); // 嘴（红=危险）
+  det((c) => { c.beginPath(); c.arc(30, -26, 5, 0, Math.PI * 2); c.fill(); }, 0, P.ink);
+  det((c) => { c.beginPath(); c.ellipse(-6, 12, 26, 16, 0, 0, Math.PI * 2); c.stroke(); }, 2.8);
+  ctx.restore();
+}
+
+// ═══ Boss：主人的毛绒熊 ═══
+function plushBear(x, y, s) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  toy((c) => { c.arc(-94, -80, 40, 0, Math.PI * 2); }, P.magenta);
+  toy((c) => { c.arc(94, -80, 40, 0, Math.PI * 2); }, P.magenta);
+  det((c) => { c.beginPath(); c.arc(-94, -80, 21, 0, Math.PI * 2); c.fill(); }, 0, P.ink);
+  det((c) => { c.beginPath(); c.arc(94, -80, 21, 0, Math.PI * 2); c.fill(); }, 0, P.ink);
+  toy((c) => { c.ellipse(0, 104, 122, 88, 0, 0, Math.PI * 2); }, P.magenta);
+  toy((c) => { c.arc(0, 0, 114, 0, Math.PI * 2); }, P.magenta);
+  toy((c) => { c.ellipse(0, 44, 48, 36, 0, 0, Math.PI * 2); }, P.paper);
+  // 胸口红补丁（危险）
+  ctx.fillStyle = P.red;
+  ctx.beginPath(); ctx.arc(-46, 120, 27, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 3.4; ctx.strokeStyle = P.ink; ctx.stroke();
+  det((c) => {
+    c.setLineDash([7, 6]);
+    c.beginPath(); c.arc(-46, 120, 20, 0, Math.PI * 2); c.stroke();
+  }, 2.6, P.paper);
+  // 白按键眼
+  ctx.fillStyle = P.paper;
+  for (const ex of [-42, 42]) {
+    ctx.beginPath(); ctx.arc(ex, -14, 15, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = P.ink; ctx.stroke();
+    ctx.fillStyle = P.ink;
+    ctx.beginPath(); ctx.arc(ex, -14, 6.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = P.paper;
+  }
+  det((c) => {
+    c.setLineDash([8, 7]);
+    c.beginPath(); c.moveTo(0, -112); c.lineTo(0, -72); c.stroke();
+    c.beginPath(); c.moveTo(-30, 48); c.lineTo(30, 48); c.stroke();
+  }, 3);
+  ctx.restore();
+}
+
+// ═══ 玩家：绿猫（画面里唯一的彩色实体）═══
+function catPlayer(x, y) {
+  ctx.save(); ctx.translate(x, y);
+  const G = P.green, L = 3.6;
+  ctx.strokeStyle = P.ink; ctx.lineWidth = 14; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(-16, 30); ctx.quadraticCurveTo(-64, 24, -58, -28); ctx.stroke();
+  ctx.strokeStyle = G; ctx.lineWidth = 8.5;
+  ctx.beginPath(); ctx.moveTo(-16, 30); ctx.quadraticCurveTo(-64, 24, -58, -28); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(0, 24, 28, 31, 0, 0, Math.PI * 2);
+  ctx.fillStyle = G; ctx.fill(); ctx.lineWidth = L; ctx.strokeStyle = P.ink; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, -14, 26, 0, Math.PI * 2);
+  ctx.fillStyle = G; ctx.fill(); ctx.stroke();
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(s * 6, -33); ctx.lineTo(s * 25, -46); ctx.lineTo(s * 26, -20); ctx.closePath();
+    ctx.fillStyle = G; ctx.fill(); ctx.stroke();
+  }
+  ctx.fillStyle = P.paper;
+  for (const ex of [-9.5, 9.5]) { ctx.beginPath(); ctx.arc(ex, -16, 4.4, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+}
+
+function catWing(x, y) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(0.6, 0.6);
+  ctx.beginPath(); ctx.ellipse(0, 22, 27, 29, 0, 0, Math.PI * 2);
+  ctx.fillStyle = P.green; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = P.ink; ctx.stroke();
+  for (const s of [-1, 1]) {
+    ctx.beginPath(); ctx.moveTo(s * 5, -21); ctx.lineTo(s * 23, -36); ctx.lineTo(s * 24, -9); ctx.closePath();
+    ctx.fillStyle = P.green; ctx.fill(); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(0, -7, 23, 0, Math.PI * 2);
+  ctx.fillStyle = P.green; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = P.paper;
+  for (const ex of [-8, 8]) { ctx.beginPath(); ctx.arc(ex, -9, 3.8, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+}
+
+// ═══ 光束 ═══
+function beam(x, yTop, yBot, halfW) {
+  const g = ctx.createLinearGradient(x - halfW * 2.6, 0, x + halfW * 2.6, 0);
+  g.addColorStop(0, "rgba(53,224,122,0)");
+  g.addColorStop(0.30, "rgba(53,224,122,0.42)");
+  g.addColorStop(0.44, "rgba(140,255,190,0.95)");
+  g.addColorStop(0.50, "#FFFFFF");
+  g.addColorStop(0.56, "rgba(140,255,190,0.95)");
+  g.addColorStop(0.70, "rgba(53,224,122,0.42)");
+  g.addColorStop(1, "rgba(53,224,122,0)");
+  ctx.save();
+  ctx.fillStyle = g;
+  ctx.fillRect(x - halfW * 2.6, yTop, halfW * 5.2, yBot - yTop);
+  ctx.globalAlpha = 0.5;
+  const gap = 124, seg = 54;
+  for (let yy = yBot; yy > yTop; yy -= gap) {
+    const hb = ctx.createLinearGradient(x - halfW, 0, x + halfW, 0);
+    hb.addColorStop(0, "rgba(53,224,122,0)");
+    hb.addColorStop(0.5, P.greenHot);
+    hb.addColorStop(1, "rgba(53,224,122,0)");
+    ctx.fillStyle = hb;
+    ctx.fillRect(x - halfW * 0.85, yy - seg, halfW * 1.7, seg);
+  }
+  ctx.restore();
+}
+
+function beamSpark(x, y, R) {
+  ctx.save(); ctx.translate(x, y);
+  const halo = ctx.createRadialGradient(0, 0, 0, 0, 0, R * 2.8);
+  halo.addColorStop(0, "rgba(255,255,255,0.95)");
+  halo.addColorStop(0.28, "rgba(53,224,122,0.62)");
+  halo.addColorStop(1, "rgba(53,224,122,0)");
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(0, 0, R * 2.8, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(0, -R); ctx.lineTo(R * 0.3, -R * 0.3); ctx.lineTo(R, 0); ctx.lineTo(R * 0.3, R * 0.3);
+  ctx.lineTo(0, R); ctx.lineTo(-R * 0.3, R * 0.3); ctx.lineTo(-R, 0); ctx.lineTo(-R * 0.3, -R * 0.3);
+  ctx.closePath();
+  ctx.fillStyle = P.paper; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = P.ink; ctx.stroke();
+  ctx.restore();
+}
+
+// ═══ 敌弹 ═══
+// v5：恢复「亮色弹体 + 小纸白芯 + 墨黑边」——两款原游戏验证过的做法。
+//   小纸白芯给每个弹体一个局部亮点，让它在一片深色里"自己会亮"，
+//   从而不再被读成"背景粒子"。v2 失败的原因是当时环境里还有地毯圆环和
+//   木纹在抢，不是芯本身的问题（v4 已把环境清干净）。
+function enemyBullet(b) {
+  const core = (r) => {
+    ctx.fillStyle = P.paper;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+  };
+  ctx.save(); ctx.translate(b.x, b.y);
+  if (b.kind === "diamond") {
+    const r = 14;
+    ctx.rotate(b.rot || 0);
+    path((c) => { c.moveTo(0, -r); c.lineTo(r * 0.9, 0); c.lineTo(0, r); c.lineTo(-r * 0.9, 0); c.closePath(); });
+    ctx.fillStyle = P.magenta; ctx.fill();
+    ctx.lineWidth = 3.8; ctx.strokeStyle = P.ink; ctx.stroke();
+    core(4.2);
+  } else if (b.kind === "long") {
+    ctx.rotate(b.rot || 0);
+    ctx.fillStyle = P.red;
+    ctx.beginPath(); ctx.roundRect(-6.5, -23, 13, 46, 6.5); ctx.fill();
+    ctx.lineWidth = 3.6; ctx.strokeStyle = P.ink; ctx.stroke();
+    ctx.fillStyle = P.paper;
+    ctx.beginPath(); ctx.roundRect(-2.6, -15, 5.2, 30, 2.6); ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2);
+    ctx.fillStyle = P.red; ctx.fill();
+    ctx.lineWidth = 3.8; ctx.strokeStyle = P.ink; ctx.stroke();
+    core(3.6);
+  }
+  ctx.restore();
+}
+
+// ═══ 奖励：黄 ═══
+function pickup(p) {
+  ctx.save(); ctx.translate(p.x, p.y);
+  if (p.big) {
+    path((c) => { c.ellipse(0, 0, 23, 14, 0, 0, Math.PI * 2); });
+    ctx.fillStyle = P.yellow; ctx.fill();
+    ctx.lineWidth = 3.4; ctx.strokeStyle = P.ink; ctx.stroke();
+    path((c) => { c.moveTo(21, 0); c.lineTo(35, -12); c.lineTo(35, 12); c.closePath(); });
+    ctx.fillStyle = P.yellow; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.ink;
+    ctx.beginPath(); ctx.arc(-9, -3, 3, 0, Math.PI * 2); ctx.fill();
+  } else {
+    const r = 11;
+    path((c) => { c.moveTo(0, -r); c.lineTo(r, 0); c.lineTo(0, r); c.lineTo(-r, 0); c.closePath(); });
+    ctx.fillStyle = P.yellow; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = P.ink; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function comicBurst(x, y, R) {
+  ctx.save(); ctx.translate(x, y);
+  ctx.beginPath();
+  const spikes = 11;
+  for (let i = 0; i < spikes * 2; i++) {
+    const a = (i / (spikes * 2)) * Math.PI * 2;
+    const r = i % 2 === 0 ? R : R * 0.52;
+    const px = Math.cos(a) * r, py = Math.sin(a) * r;
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = P.paper; ctx.fill();
+  ctx.lineWidth = 4; ctx.strokeStyle = P.ink; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, R * 0.44, 0, Math.PI * 2);
+  ctx.fillStyle = P.red; ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+function popWord(text, x, y, size, rot) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+  ctx.font = `900 ${size}px "Arial Black", Impact, sans-serif`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = size * 0.22; ctx.strokeStyle = P.ink;
+  ctx.strokeText(text, 0, 0);
+  ctx.fillStyle = P.yellow; ctx.fillText(text, 0, 0);
+  ctx.restore();
+}
+
+// ═══════════════════════════ 组帧 ═══════════════════════════
+const BOSS = { x: 360, y: 196 };
+
+function drawScene() {
+  drawRoom();
+
+  robotVacuum(150, 262, 1.0, 0.18);
+  windUpMouse(146, 434, 1.0, 2.5);
+  windUpMouse(556, 456, 0.92, -2.3);
+  yarnBall(112, 694, 1.0);
+  windUpMouse(206, 830, 0.86, 2.9);
+  squeakyDuck(506, 902, 1.0, 0.16);
+  slipper(352, 606, 1.0, -0.28);
+
+  // ── 敌弹（v5：~72 颗，并留出清晰通道）──
+  // v4 反馈"密密麻麻…容易眼花缭乱"：110 颗均匀散点 = 读成粒子场。
+  // 真实弹幕是「有结构的图案 + 可见的空隙」，眼睛才解析得出威胁。
+  const bullets = [];
+  for (let i = 0; i < 16; i++) {                       // 一圈环形
+    const a = (i / 16) * Math.PI * 2 + 0.3;
+    bullets.push({ x: BOSS.x + Math.cos(a) * 176, y: BOSS.y + Math.sin(a) * 176, kind: "ball" });
+  }
+  for (let f = 0; f < 2; f++) {                        // 两道扇形，中间留走廊
+    for (let i = 0; i < 9; i++) {
+      const a = Math.PI / 2 + (i < 4 ? -1 : 1) * (0.16 + Math.abs(i - 3.5) * 0.14);
+      const d = 300 + f * 158;
+      bullets.push({ x: BOSS.x + Math.cos(a) * d, y: BOSS.y + Math.sin(a) * d, kind: "ball" });
+    }
+  }
+  for (let i = 0; i < 22; i++) {                       // 单臂螺旋（可见空隙）
+    const a = i * 0.62, d = 214 + i * 15;
+    bullets.push({ x: BOSS.x + Math.cos(a) * d, y: BOSS.y + Math.sin(a) * d,
+                   kind: i % 6 === 3 ? "diamond" : "ball", rot: a });
+  }
+  for (let i = 0; i < 10; i++) {                       // 自机狙
+    const a = Math.PI / 2 + (rnd() - 0.5) * 0.5, d = 268 + i * 40;
+    bullets.push({ x: BOSS.x + Math.cos(a) * d, y: BOSS.y + Math.sin(a) * d, kind: "ball" });
+  }
+  for (let i = 0; i < 6; i++) {                        // 长条弹
+    const a = Math.PI / 2 + (i - 2.5) * 0.22;
+    bullets.push({ x: BOSS.x + Math.cos(a) * 470, y: BOSS.y + Math.sin(a) * 470,
+                   kind: "long", rot: a - Math.PI / 2 });
+  }
+
+  const onField = bullets.filter((b) => b.x > 28 && b.x < 692 && b.y > 28 && b.y < 1196);
+
+  const pickups = [
+    { x: 288, y: 388 }, { x: 452, y: 588 }, { x: 172, y: 556 }, { x: 470, y: 940 },
+    { x: 268, y: 706 }, { x: 300, y: 1046, big: true },
+  ];
+
+  plushBear(BOSS.x, BOSS.y, 1.0);
+  for (const b of onField) enemyBullet(b);
+  for (const p of pickups) pickup(p);
+
+  comicBurst(160, 962, 44);
+  popWord("POW!", 160, 962, 40, -0.14);
+  comicBurst(636, 320, 34);
+  popWord("BAP!", 636, 320, 30, 0.12);
+
+  beam(352, 632, 1104, 9);
+  beamSpark(352, 606, 15);
+
+  catWing(280, 1178);
+  catWing(424, 1178);
+  catPlayer(352, 1122);
+
+  window.__bullets = onField.length;
+}
+
+function toGray() {
+  const img = ctx.getImageData(0, 0, W, H);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const y = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    d[i] = d[i + 1] = d[i + 2] = y;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function bands() {
+  const luma = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return +(((n >> 16 & 255) * 0.299 + (n >> 8 & 255) * 0.587 + (n & 255) * 0.114) / 255).toFixed(3);
+  };
+  return { paper: luma(P.paper), yellow: luma(P.yellow), green: luma(P.green),
+           red: luma(P.red), magenta: luma(P.magenta),
+           env_sofa: luma(P.sofa), env_rug: luma(P.rug), env_floor: luma(P.floor), ink: luma(P.ink) };
+}
+
+const params = new URLSearchParams(location.search);
+drawScene();
+if (params.get("gray") === "1") toGray();
+window.__bands = bands();
+document.title = "mockup v4 ok · bullets=" + window.__bullets;
+</script>
+</body>
+</html>

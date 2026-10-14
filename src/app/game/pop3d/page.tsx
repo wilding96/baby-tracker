@@ -7,6 +7,7 @@ import { ELEMENT_ICON, ELEMENT_NAME, META_UPGRADES, SCHOOL_COLOR, SCHOOL_NAME, S
 import { buyUpgrade, loadMeta, saveMeta, upgradeInfo } from "./engine/meta";
 import { createRenderer } from "./render/scene";
 import { createPaperRenderer } from "./render/paper";
+import { createToyRenderer } from "./render/toy";
 import type {
   CardDef,
   AudioAdapter,
@@ -162,22 +163,28 @@ export default function Pop3DGame() {
             };
     const themeParam = params.get("theme");
     // 默认就是纸片渲染器（B 方向：固定正面视角 + AI 贴图 + 网点/分格/错版）。
-    // 回退选项：?theme=3d（原 3D 画面）、?theme=pop（3D + 网点错版实验版）。
+    // 回退与实验选项：
+    //   ?theme=3d / classic → 原 3D 画面（长焦弱透视）
+    //   ?theme=pop          → 3D + 网点错版实验版
+    //   ?theme=toy          → 玩具渲染器：正交平面场地 + 立体玩具（顶点色合并 + 实例化）
     const use3d = themeParam === "3d" || themeParam === "classic" || themeParam === "pop";
-    const renderer = use3d
-      ? createRenderer(mount, {
-          bloom: bloomParam === null ? undefined : bloomParam !== "0",
-          fx,
-          theme: themeParam === "pop" ? "pop" : "classic",
-        })
-      : createPaperRenderer(mount, {
-          // ?bg=bands|planet|plain 切换背景装饰（默认斜向色带）
-          bg:
-            params.get("bg") === "planet"
-              ? "planet"
-              : params.get("bg") === "plain"
-                ? "plain"
-                : "bands",
+    const renderer =
+      themeParam === "toy"
+        ? createToyRenderer(mount)
+        : use3d
+          ? createRenderer(mount, {
+              bloom: bloomParam === null ? undefined : bloomParam !== "0",
+              fx,
+              theme: themeParam === "pop" ? "pop" : "classic",
+            })
+          : createPaperRenderer(mount, {
+              // ?bg=bands|planet|plain 切换背景装饰（默认斜向色带）
+              bg:
+                params.get("bg") === "planet"
+                  ? "planet"
+                  : params.get("bg") === "plain"
+                    ? "plain"
+                    : "bands",
         });
     const engine = createEngine({
       mount,

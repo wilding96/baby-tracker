@@ -74,6 +74,9 @@ export default function Pop3DGame() {
   const [offer, setOffer] = useState<CardDef[]>([]);
   const [canReroll, setCanReroll] = useState(false);
   const [build, setBuild] = useState<{ id: string; stacks: number }[]>([]);
+  const [intro, setIntro] = useState(false);
+  const [countdown, setCountdown] = useState(3);
+  const introRef = useRef({ intro: false, n: -1 });
   const [ship, setShip] = useState<ShipType>("nova");
   const [meta, setMeta] = useState<MetaData>(() => ({ ...EMPTY_META, upgrades: { ...EMPTY_META.upgrades } }));
   const [stats, setStats] = useState<RunStats | null>(null);
@@ -253,6 +256,11 @@ export default function Pop3DGame() {
               : "";
           }
           if (warnRef.current) warnRef.current.style.display = h.warn ? "block" : "none";
+          if (introRef.current.intro !== h.intro || introRef.current.n !== h.countdown) {
+            introRef.current = { intro: h.intro, n: h.countdown };
+            setIntro(h.intro);
+            setCountdown(h.countdown);
+          }
         },
         onPhase: (next, nextOffer, info) => {
           setPhase(next);
@@ -474,6 +482,12 @@ export default function Pop3DGame() {
               {muted ? "🔇" : "🔊"}
             </button>
           </div>
+
+          {intro && (
+            <div className="pop-countdown" key={countdown}>
+              <span>{countdown > 0 ? countdown : "GO!"}</span>
+            </div>
+          )}
         </>
       )}
 

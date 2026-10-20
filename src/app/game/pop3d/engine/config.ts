@@ -389,6 +389,8 @@ export const ENEMY_KINDS: Record<EnemyKind, EnemyKindDef> = {
 export const RUN = {
   duration: 100, // 参考整局时长（秒）
   bossAt: 60, // Boss 登场时间（秒）
+  /** 开局倒计时：3 / 2 / 1 / GO（世界时间在这段时间内不推进） */
+  countdown: 3.6,
   /** 里程碑发牌：三次三选一落在三段杂兵的交界（秒） */
   cardAt: [20, 38, 58] as const,
   rampFrom: 1.0, // 局内难度系数起点

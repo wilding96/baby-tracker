@@ -287,6 +287,7 @@ export function createEngine({
     time: skipTo,
     frame: 0,
     phase: "menu",
+    introT: 0,
     score: 0,
     kills: 0,
     level: 0,
@@ -401,6 +402,8 @@ export function createEngine({
       score: world.score,
       time: world.time,
       level: world.level,
+      intro: world.introT > 0,
+      countdown: world.introT > 0 ? Math.max(0, Math.ceil(world.introT - 0.6)) : 0,
       energyPct: cardProgress(world.time),
       element: mods.element,
       shield: world.shield,
@@ -1963,6 +1966,12 @@ export function createEngine({
       return;
     }
 
+    // 开局倒计时：世界时间停住，敌机/子弹/输入都不推进
+    if (world.introT > 0) {
+      world.introT = Math.max(0, world.introT - dt);
+      return;
+    }
+
     world.time += dt;
     world.frame += 1;
     if (sfxKillCd > 0) sfxKillCd -= dt;
@@ -2176,6 +2185,7 @@ export function createEngine({
     world.cine.active = false;
     world.cine.t = 0;
     world.timeScale = 1;
+    world.introT = 0;
   }
 
   function newRun(nextShip: ShipType, nextMeta: MetaData): void {
@@ -2191,6 +2201,7 @@ export function createEngine({
 
     world.ship = ship;
     world.time = skipTo;
+    world.introT = skipTo > 0 ? 0 : RUN.countdown;
     world.score = 0;
     world.kills = 0;
     world.level = 0;

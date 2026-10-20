@@ -979,3 +979,47 @@
 .float-glow {
   animation: float-glow 2.6s ease-in-out infinite;
 }
+
+/* 开局倒计时：3 → 2 → 1 → GO */
+.pop-countdown {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.pop-countdown span {
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: clamp(72px, 22vw, 120px);
+  font-weight: 900;
+  line-height: 1;
+  color: #ffd400;
+  -webkit-text-stroke: 4px #101010;
+  paint-order: stroke fill;
+  text-shadow: 8px 8px 0 #e5007e;
+  animation: pop-count-pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes pop-count-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pop-countdown span {
+    animation: none;
+  }
+}

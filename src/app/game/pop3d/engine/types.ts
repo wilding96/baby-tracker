@@ -329,6 +329,8 @@ export interface World {
   time: number; // 累积秒数（本局）
   frame: number; // 已执行的固定步数
   phase: Phase;
+  /** 开局倒计时剩余秒数；>0 时不推进世界 */
+  introT: number;
   score: number;
   kills: number;
   level: number; // 已选卡次数
@@ -394,6 +396,10 @@ export interface HudState {
   score: number;
   time: number; // 本局已进行秒数
   level: number;
+  /** 开局倒计时中（世界时间停住） */
+  intro: boolean;
+  /** 倒计时剩余：3 / 2 / 1，0 表示 GO */
+  countdown: number;
   energyPct: number; // 升级进度 0~1
   element: Element | null;
   /** 护盾与核弹（v2 新资源，HUD 要显示） */

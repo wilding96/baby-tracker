@@ -194,6 +194,78 @@ export function createPaperRenderer(
     calls += 3;
   }
 
+  /**
+   * 僚机：独立的纸片小无人机。
+   * 之前是把玩家猫贴图缩小后染蓝——轮廓是同一只猫，和"僚机"的语义、和整体画风都不搭。
+   * 这里改成程序画的纸片飞机 / 卫星，沿用墨黑描边 + 米白纸面 + 少量青色套色。
+   */
+  function drawWingman(x: number, z: number, support: boolean): void {
+    const cx = sx(x);
+    const cy = sy(z);
+    const u = len(1);
+    ctx.save();
+
+    // 贴地投影：光在左上 → 影子朝右下
+    ctx.fillStyle = "rgba(16,16,16,0.22)";
+    ctx.beginPath();
+    ctx.ellipse(cx + u * 0.35, cy + u * 1.12, u * 1.05, u * 0.38, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+
+    if (support) {
+      // 支援型：小卫星 —— 青环 + 米白核心
+      ctx.strokeStyle = PAL.cyan;
+      ctx.lineWidth = Math.max(3, u * 0.16);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, u * 1.1, u * 0.52, -0.45, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, u * 0.6, 0, Math.PI * 2);
+      ctx.fillStyle = PAL.paper;
+      ctx.fill();
+      ctx.lineWidth = Math.max(2, u * 0.12);
+      ctx.strokeStyle = PAL.ink;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, u * 0.22, 0, Math.PI * 2);
+      ctx.fillStyle = PAL.green;
+      ctx.fill();
+    } else {
+      // 攻击型：前掠纸飞机 —— 米白纸面 + 墨黑描边 + 青色中脊
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - u * 1.12);
+      ctx.lineTo(cx + u * 0.92, cy + u * 0.98);
+      ctx.lineTo(cx, cy + u * 0.52);
+      ctx.lineTo(cx - u * 0.92, cy + u * 0.98);
+      ctx.closePath();
+      ctx.fillStyle = PAL.paper;
+      ctx.fill();
+      ctx.lineWidth = Math.max(2, u * 0.13);
+      ctx.strokeStyle = PAL.ink;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - u * 0.9);
+      ctx.lineTo(cx + u * 0.2, cy + u * 0.72);
+      ctx.lineTo(cx - u * 0.2, cy + u * 0.72);
+      ctx.closePath();
+      ctx.fillStyle = PAL.cyan;
+      ctx.fill();
+
+      // 翼尖灯：稳态，不闪
+      ctx.fillStyle = PAL.yellow;
+      ctx.fillRect(cx - u * 1.0, cy + u * 0.88, u * 0.2, u * 0.2);
+      ctx.fillRect(cx + u * 0.8, cy + u * 0.88, u * 0.2, u * 0.2);
+    }
+
+    ctx.restore();
+    calls += 1;
+  }
+
   function render(world: World): void {
     calls = 0;
     const w = canvas.width / dpr;
@@ -468,14 +540,11 @@ export function createPaperRenderer(
       calls += 1;
     }
 
-    // ── 僚机（贴图缩小 + 蓝色套色）──
+    // ── 僚机：纸片小无人机（程序绘制，不复用玩家猫贴图）──
     for (let i = 0; i < world.wingmen.slots.capacity; i += 1) {
       if (!world.wingmen.slots.alive[i]) continue;
       const m = world.wingmen.items[i];
-      sprite(sprites.player, m.x, m.z, m.type === "attack" ? 2.9 : 2.4, {
-        tint: m.type === "support" ? PAL.cyan : PAL.blue,
-        alpha: 0.95,
-      });
+      drawWingman(m.x, m.z, m.type === "support");
     }
 
     // ── 玩家机（护盾泡 + 无敌期用网点环表示，不闪烁）──

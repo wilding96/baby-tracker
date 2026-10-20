@@ -197,6 +197,332 @@
   }
 }
 
+/* ── 海克斯风抽卡（参考 LOL 斗魂竞技场的强化卡）── */
+.hex-draft {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 28px 18px;
+  overflow-y: auto;
+  background: radial-gradient(120% 80% at 50% 0%, #1a2745 0%, #0b1220 42%, #05070c 100%);
+  color: #e8eefc;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+.hex-draft::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.32;
+  background-image:
+    linear-gradient(rgba(120, 170, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 170, 255, 0.05) 1px, transparent 1px);
+  background-size: 34px 34px;
+  -webkit-mask-image: radial-gradient(circle at 50% 35%, #000 0%, transparent 72%);
+  mask-image: radial-gradient(circle at 50% 35%, #000 0%, transparent 72%);
+}
+
+.hex-draft__head {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.hex-draft__kicker {
+  font-size: 10px;
+  letter-spacing: 4px;
+  color: #8fa3c8;
+  text-transform: uppercase;
+}
+
+.hex-draft__title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 6px;
+  color: #f4f8ff;
+  text-shadow: 0 0 22px rgba(120, 180, 255, 0.35);
+}
+
+.hex-draft__sub {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #7d8bab;
+}
+
+.hex-draft__list {
+  position: relative;
+  display: grid;
+  width: 100%;
+  max-width: 430px;
+  gap: 12px;
+}
+
+.hex-draft__hint {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #63708c;
+}
+
+.hex-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 64px 1fr 14px;
+  gap: 13px;
+  align-items: center;
+  width: 100%;
+  padding: 13px 14px 13px 11px;
+  border: 1px solid rgba(150, 170, 205, 0.22);
+  border-radius: 10px;
+  background: linear-gradient(158deg, #161e2f 0%, #0c101a 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 10px 24px rgba(0, 0, 0, 0.5);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+  animation: hex-card-in 0.28s ease-out backwards;
+}
+
+.hex-card:nth-child(2) {
+  animation-delay: 0.05s;
+}
+
+.hex-card:nth-child(3) {
+  animation-delay: 0.1s;
+}
+
+.hex-card:active {
+  transform: translateY(1px) scale(0.995);
+}
+
+.hex-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.055), transparent 32%);
+}
+
+@media (hover: hover) {
+  .hex-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(190, 215, 255, 0.5);
+  }
+}
+
+.hex-card__icon {
+  position: relative;
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+}
+
+.hex-card__hex,
+.hex-card__hex-in {
+  position: absolute;
+  clip-path: polygon(50% 0%, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%);
+}
+
+.hex-card__hex {
+  inset: 0;
+  background: var(--accent);
+  opacity: 0.85;
+}
+
+.hex-card__hex-in {
+  inset: 1.5px;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.1), transparent 66%),
+    #0a0e17;
+}
+
+.hex-card__hex-in svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hex-card__body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.hex-card__tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  letter-spacing: 2.2px;
+  color: var(--accent);
+}
+
+.hex-card__dot {
+  width: 5px;
+  height: 5px;
+  background: var(--accent);
+  transform: rotate(45deg);
+}
+
+.hex-card__name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #f2f6ff;
+}
+
+.hex-card__desc {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #8e9bb3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.hex-card__gem {
+  justify-self: end;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  opacity: 0.8;
+  transform: rotate(45deg);
+}
+
+/* 普通卡：银色边线 + 冷灰图标，不做花哨填充 */
+.hex-card--common .hex-card__hex {
+  opacity: 0.55;
+}
+
+/* 棱彩：深底不变，只有一圈很细的虹彩边 + 暖金光晕 */
+.hex-card--prismatic {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(158deg, #1a2133 0%, #0b0f18 100%) padding-box,
+    conic-gradient(from 150deg, #d7b25e, #8fdcff, #b79bff, #f3dfa0, #d7b25e) border-box;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 0 26px rgba(232, 200, 119, 0.16),
+    0 12px 28px rgba(0, 0, 0, 0.55);
+}
+
+.hex-card--prismatic::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 11px;
+  pointer-events: none;
+  background: linear-gradient(
+    118deg,
+    rgba(255, 228, 160, 0.14),
+    transparent 36%,
+    transparent 70%,
+    rgba(150, 210, 255, 0.1)
+  );
+}
+
+.hex-card--prismatic .hex-card__hex {
+  opacity: 1;
+}
+
+.hex-card--prismatic .hex-card__gem {
+  background: linear-gradient(135deg, #fff3c9, #e8c877 45%, #b79bff);
+  box-shadow: 0 0 14px rgba(240, 216, 154, 0.7);
+}
+
+@keyframes hex-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 棱彩选中：暖金脉冲 + 一圈金边，不用彩虹铺底 */
+.hex-prism-pulse {
+  position: absolute;
+  width: 70vmin;
+  height: 70vmin;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    rgba(255, 232, 170, 0.5) 0%,
+    rgba(255, 210, 120, 0.18) 38%,
+    transparent 68%
+  );
+  animation: hex-prism-pulse 0.9s ease-out forwards;
+}
+
+.hex-prism-ring {
+  position: absolute;
+  width: 40vmin;
+  height: 40vmin;
+  border: 2px solid rgba(255, 226, 150, 0.9);
+  border-radius: 9999px;
+  box-shadow: 0 0 24px rgba(255, 214, 120, 0.6);
+  animation: hex-prism-ring 0.9s ease-out forwards;
+}
+
+@keyframes hex-prism-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  25% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+@keyframes hex-prism-ring {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hex-card,
+  .hex-prism-pulse,
+  .hex-prism-ring {
+    animation: none;
+  }
+}
+
 .island-action-button,
 .island-action-button span,
 .island-action-button svg {

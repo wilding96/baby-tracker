@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useGameAudio } from "@/hooks/useGameAudio";
 import { createEngine } from "./engine/game";
-import { ELEMENT_ICON, ELEMENT_NAME, META_UPGRADES, SCHOOL_COLOR, SCHOOL_NAME, SHIPS, SHIP_INFO } from "./engine/config";
+import { ELEMENT_ICON, ELEMENT_NAME, META_UPGRADES, SCHOOL_NAME, SHIPS, SHIP_INFO } from "./engine/config";
 import { buyUpgrade, loadMeta, saveMeta, upgradeInfo } from "./engine/meta";
 import { createRenderer } from "./render/scene";
 import { createPaperRenderer } from "./render/paper";
@@ -36,6 +36,15 @@ const btnMain =
   "w-full rounded-none border-4 border-[#101010] bg-[#FF2D2D] px-4 py-2 font-bold text-[#FFF8E7] shadow-[6px_6px_0_#101010] transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none";
 const btnGhost =
   "w-full rounded-none border-4 border-[#101010] bg-[#FFF8E7] px-4 py-2 text-sm font-bold text-[#101010] shadow-[6px_6px_0_#101010] transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none";
+
+/** 深色海克斯卡面上的流派色：比战场色板提亮，保证对比度 */
+const HEX_ACCENT: Record<CardDef["school"], string> = {
+  weapon: "#6AA8FF",
+  wing: "#63E6FF",
+  shield: "#4BE0A0",
+  life: "#FF6B6B",
+  nuke: "#FF7AC8",
+};
 
 export default function Pop3DGame() {
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -302,21 +311,9 @@ export default function Pop3DGame() {
 
       {/* 炫彩卡选中演出：棱彩光晕扫过全屏（0.9 秒，然后自己消失） */}
       {prismatic && (
-        <div className="pointer-events-none absolute inset-0 z-40">
-          <style>{"@keyframes prismfx{0%{opacity:0;transform:scale(.6)}25%{opacity:.95}100%{opacity:0;transform:scale(1.5)}}@keyframes prismring{0%{opacity:.9;transform:scale(.2)}100%{opacity:0;transform:scale(1.8)}}"}</style>
-          <div
-            className="absolute left-1/2 top-1/2 h-[70vmin] w-[70vmin] -translate-x-1/2 -translate-y-1/2 rounded-full"
-            style={{
-              background:
-                "conic-gradient(from 0deg,#FF2D2D,#FFD400,#00A05A,#00C2FF,#E5007E,#FF2D2D)",
-              mixBlendMode: "screen",
-              animation: "prismfx 0.9s ease-out forwards",
-            }}
-          />
-          <div
-            className="absolute left-1/2 top-1/2 h-[40vmin] w-[40vmin] -translate-x-1/2 -translate-y-1/2 rounded-full border-[10px] border-[#FFF8E7]"
-            style={{ animation: "prismring 0.9s ease-out forwards" }}
-          />
+        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center">
+          <div className="hex-prism-pulse" />
+          <div className="hex-prism-ring" />
         </div>
       )}
 
@@ -504,16 +501,21 @@ export default function Pop3DGame() {
 
       {/* ── 三选一 ── */}
       {phase === "card" && (
-        <Veil>
-          <p className="text-xl font-bold tracking-[3px] text-[#101010]">选择强化</p>
-          <p className="text-[11px] text-[#0057FF]">构筑你的流派</p>
-          <div className="flex w-full gap-2">
+        <div className="hex-draft">
+          <div className="hex-draft__head">
+            <p className="hex-draft__kicker">Hextech Augment</p>
+            <h2 className="hex-draft__title">选择强化</h2>
+            <p className="hex-draft__sub">三选一 · 构筑本局流派</p>
+          </div>
+          <div className="hex-draft__list">
             {offer.map((c) => {
               const prisma = c.tier === "prismatic";
               return (
                 <button
                   key={c.id}
                   type="button"
+                  className={`hex-card ${prisma ? "hex-card--prismatic" : "hex-card--common"}`}
+                  style={{ "--accent": prisma ? "#e8c877" : HEX_ACCENT[c.school] } as React.CSSProperties}
                   onClick={() => {
                     if (prisma) {
                       setPrismatic(c.id);
@@ -521,35 +523,28 @@ export default function Pop3DGame() {
                     }
                     engineRef.current?.chooseCard(c.id);
                   }}
-                  style={{
-                    boxShadow: prisma ? "0 6px 0 #FFD400" : `0 5px 0 ${SCHOOL_COLOR[c.school]}`,
-                    background: prisma
-                      ? "linear-gradient(150deg,#FFF8E7 0%,#FFE7F6 40%,#E4F6FF 75%,#FFF8E7 100%)"
-                      : "#FFF8E7",
-                  }}
-                  className={`flex flex-1 flex-col items-center gap-1 rounded-none border-4 border-[#101010] px-1 pb-3 pt-0 active:translate-y-[3px] active:!shadow-none ${
-                    prisma ? "ring-4 ring-[#FFD400]" : ""
-                  }`}
                 >
-                  <span
-                    className="w-full py-0.5 text-[10px] tracking-[2px] text-[#FFF8E7]"
-                    style={{
-                      background: prisma
-                        ? "linear-gradient(90deg,#FF2D2D,#FFD400,#00A05A,#00C2FF,#E5007E)"
-                        : SCHOOL_COLOR[c.school],
-                    }}
-                  >
-                    {prisma ? "炫彩 · " : ""}
-                    {SCHOOL_NAME[c.school]}
+                  <span className="hex-card__icon" aria-hidden="true">
+                    <span className="hex-card__hex" />
+                    <span className="hex-card__hex-in">
+                      <AugmentIcon school={c.school} />
+                    </span>
                   </span>
-                  <span className="text-2xl leading-tight">{c.icon}</span>
-                  <span className="text-xs font-bold text-[#101010]">{c.name}</span>
-                  <span className="px-0.5 text-[10px] font-bold leading-snug text-[#101010]/80">{c.desc}</span>
+                  <span className="hex-card__body">
+                    <span className="hex-card__tier">
+                      <i className="hex-card__dot" />
+                      {prisma ? "棱彩" : "白银"} · {SCHOOL_NAME[c.school]}
+                    </span>
+                    <span className="hex-card__name">{c.name}</span>
+                    <span className="hex-card__desc">{c.desc}</span>
+                  </span>
+                  <span className="hex-card__gem" aria-hidden="true" />
                 </button>
               );
             })}
           </div>
-        </Veil>
+          <p className="hex-draft__hint">点击卡面装备</p>
+        </div>
       )}
 
       {/* ── 复活 ── */}
@@ -647,6 +642,47 @@ function Veil({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
+}
+
+/** 抽卡图标：按流派画线稿，不再用 ✚ ✈ ❍ 这类字符占位 */
+function AugmentIcon({ school }: { school: CardDef["school"] }) {
+  const base = { viewBox: "0 0 24 24", "aria-hidden": true } as const;
+  switch (school) {
+    case "weapon":
+      return (
+        <svg {...base}>
+          <circle cx="12" cy="12" r="6" />
+          <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+        </svg>
+      );
+    case "wing":
+      return (
+        <svg {...base}>
+          <path d="M3 11l18-8-8 18-2.5-7.5L3 11z" />
+        </svg>
+      );
+    case "shield":
+      return (
+        <svg {...base}>
+          <path d="M12 2l7 3v5.5c0 4.6-3 8-7 9.5-4-1.5-7-4.9-7-9.5V5l7-3z" />
+          <path d="M9 12l2 2 4-4" />
+        </svg>
+      );
+    case "life":
+      return (
+        <svg {...base}>
+          <path d="M20.8 5.6a5.2 5.2 0 00-7.4 0L12 7l-1.4-1.4a5.2 5.2 0 10-7.4 7.4L12 21l8.8-8a5.2 5.2 0 000-7.4z" />
+          <path d="M3.5 12h4l1.5-3 2.5 6 2-4h6" />
+        </svg>
+      );
+    case "nuke":
+      return (
+        <svg {...base}>
+          <circle cx="12" cy="13" r="6.5" />
+          <path d="M9 3h6M12 3v3.5M17 6.5l2-1.5" />
+        </svg>
+      );
+  }
 }
 
 function Row({ label, value, accent }: { label: string; value: string; accent?: boolean }) {

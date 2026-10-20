@@ -134,6 +134,8 @@ export interface PlayerBullet extends BulletMotion {
   wFreq: number;
   /** 骨头：两瓣到中心的距离（主武器强化会把它拉长） */
   arm: number;
+  /** 主武器强化层数（含炫彩）：只用于视觉分级 */
+  vis: number;
   /** 是否僚机发射（僚机协同卡只认僚机的命中） */
   fromWing: boolean;
 }

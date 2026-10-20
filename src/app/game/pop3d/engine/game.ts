@@ -140,6 +140,7 @@ function makePlayerBullets(capacity: number): EntitySet<PlayerBullet> {
       wAmp: 0,
       wFreq: 0,
       arm: 0,
+      vis: 0,
       fromWing: false,
     });
   }
@@ -661,11 +662,13 @@ export function createEngine({
     b.wAmp = 0;
     b.wFreq = 0;
     b.arm = 0;
+    b.vis = mods.wpn + (mods.wpnX ? 1 : 0);
     // 哑铃弹：两瓣相位、自转方向、横漂、蛇形——全部每发随机，所以直线也会打空
-    if (def.chaotic) {
+    // 僚机弹用独立造型，不套主炮的骨头轨迹/棍状判定
+    if (def.chaotic && !fromWing) {
       const c = def.chaotic;
       // 主武器强化：骨头变长（判定与外观一起长）
-      b.arm = c.arm + mods.wpn * 0.15;
+      b.arm = c.arm + mods.wpn * 0.2;
       b.angle = Math.random() * Math.PI * 2;
       b.spin = (Math.random() * 2 - 1) * c.spin;
       // 强化也让横漂收敛（更好命中）
@@ -950,7 +953,6 @@ export function createEngine({
   function updateWingmen(dt: number): void {
     const set = world.wingmen;
     const kind = SHIP_BULLET[ship];
-    const def = bulletDef(kind);
     for (let i = 0; i < set.slots.capacity; i += 1) {
       if (!set.slots.alive[i]) continue;
       const w = set.items[i];
@@ -969,7 +971,7 @@ export function createEngine({
         if (w.cd <= 0) {
           w.cd = mods.fireCd * WINGMAN.fireCdMul;
           w.muzzle = JUICE.muzzle;
-          spawnPlayerBullet(kind, w.x, w.z - 1.2, 0, -def.speed, WINGMAN.dmgMul, true);
+          spawnPlayerBullet(kind, w.x, w.z - 1.2, 0, -WINGMAN.speed, WINGMAN.dmgMul, true);
         }
       } else {
         // 支援型：绕玩家慢速公转（角度由时间推出来，零状态），每 2 秒把护盾顶上去
@@ -1578,7 +1580,7 @@ export function createEngine({
       }
       // 哑铃弹：横向速度 = 恒定横漂 + 蛇形摆动（对 amp·sin 求导）。
       // 位置由引擎积分，所以"打空"是真的打空，判定和视觉始终一致。
-      const chaos = bulletDef(b.kind).chaotic;
+      const chaos = b.fromWing ? undefined : bulletDef(b.kind).chaotic;
       if (chaos) b.vx = b.drift + b.wAmp * b.wFreq * Math.cos(b.wFreq * b.age);
       b.x += b.vx * dt;
       b.z += b.vz * dt;
@@ -1629,7 +1631,7 @@ export function createEngine({
       if (b.hitCd > 0) continue;
       // 哑铃弹是一根"棍"：两瓣小球 + 连杆都算判定。
       // 打空来自它自己的随机弹道（横漂 + 蛇形），而不是"中间有洞"。
-      const chaos = bulletDef(b.kind).chaotic;
+      const chaos = b.fromWing ? undefined : bulletDef(b.kind).chaotic;
       const ux = chaos ? Math.cos(b.angle + b.spin * b.age) : 0;
       const uz = chaos ? Math.sin(b.angle + b.spin * b.age) : 0;
       for (let j = 0; j < es.slots.capacity; j += 1) {

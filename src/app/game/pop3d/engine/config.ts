@@ -150,12 +150,13 @@ export const EBULLET: Record<
   "ball" | "diamond" | "long" | "ring" | "spike" | "laser",
   { radius: number; color: string }
 > = {
-  ball: { radius: 0.5, color: PAL.red }, // 自机狙基础弹
-  diamond: { radius: 0.44, color: PAL.magenta }, // 散射菱形
-  long: { radius: 0.34, color: PAL.orange }, // 高速长条
-  ring: { radius: 0.4, color: PAL.red }, // 慢速环形扩散
-  spike: { radius: 0.42, color: PAL.magenta }, // 旋转尖刺
-  laser: { radius: 0.3, color: "#FF8A8A" }, // 细长光束弹
+  // 颜色按"危险来源"分开，形状仍然是一色一形的主语言
+  ball: { radius: 0.5, color: PAL.red }, // 自机狙基础弹：红
+  diamond: { radius: 0.44, color: "#FF8A00" }, // 散射菱形：橙
+  long: { radius: 0.34, color: "#FF3D9A" }, // 高速长条：桃红
+  ring: { radius: 0.4, color: "#FF5A3C" }, // 慢速环形扩散：珊瑚
+  spike: { radius: 0.42, color: "#C026D3" }, // 旋转尖刺：紫
+  laser: { radius: 0.3, color: "#FF6B6B" }, // 细长光束弹：鲑红
 };
 
 // ── 追踪弹 ──
@@ -283,6 +284,8 @@ export const WINGMAN = {
   offsetX: 2.6,
   offsetZ: 1.2,
   follow: 10, // 跟随速率（复用 rig 的 approach）
+  /** 僚机弹统一初速：不吃机型速度差异，保证青色飞镖的观感一致 */
+  speed: 56,
   fireCdMul: 1.15,
   dmgMul: 0.6,
 } as const;

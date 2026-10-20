@@ -53,13 +53,18 @@ const toolCards = [
 
 export default function DiscoverPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
     const check = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setIsLoggedIn(Boolean(user));
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        setIsLoggedIn(Boolean(user));
+      } finally {
+        setAuthLoading(false);
+      }
     };
     check();
   }, []);
@@ -78,6 +83,11 @@ export default function DiscoverPage() {
           <p className="text-xs text-[#9f927d]">
             记录、心情、家庭留言，都在这里
           </p>
+          {authLoading && (
+            <p className="text-xs font-semibold text-[#6fba2c]">
+              正在检查登录状态…
+            </p>
+          )}
         </header>
 
         {/* 记录 & 心情 & 社区 */}
@@ -107,7 +117,8 @@ export default function DiscoverPage() {
                   <p className="text-xs text-[#9f927d] mt-0.5">{card.desc}</p>
                 </div>
                 <span className="text-xs text-[#5a7f38] font-semibold flex items-center gap-1 shrink-0">
-                  {["/mood", "/board", "/record"].includes(card.href) &&
+                  {!authLoading &&
+                    ["/mood", "/board", "/record"].includes(card.href) &&
                     !isLoggedIn && (
                       <span className="flex items-center gap-0.5 text-[#9f927d]">
                         <Lock size={12} />

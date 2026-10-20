@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Divider } from "animal-island-ui";
 import { Button } from "@/components/ui/button";
+import { PageLoading } from "@/components/ui/page-loading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -114,7 +115,10 @@ export default function BoardPage() {
       await loadMessages(currentBabyId);
     };
 
-    init();
+    init().catch((error) => {
+      console.error("留言板初始化失败", error);
+      setLoading(false);
+    });
   }, [router, loadMessages]);
 
   const handleSubmit = async () => {
@@ -225,7 +229,7 @@ export default function BoardPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <p className="text-sm text-[#9f927d]">加载中...</p>
+              <PageLoading compact label="正在加载留言…" />
             ) : messages.length === 0 ? (
               <p className="text-sm text-[#9f927d]">
                 还没有留言，来写第一条吧。

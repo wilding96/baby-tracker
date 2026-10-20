@@ -26,6 +26,7 @@ import CelebrationOverlay from "@/components/CelebrationOverlay";
 import BabyAge from "@/components/BabyAge";
 import AgeBadge from "@/components/AgeBadge";
 import StreakHeatmap from "@/components/StreakHeatmap";
+import { PageLoading } from "@/components/ui/page-loading";
 import TaskMonsters from "@/components/TaskMonsters";
 import ShareCard from "@/components/ShareCard";
 import AnchorNav from "@/components/AnchorNav";
@@ -115,6 +116,7 @@ export default function Home() {
   const [userId, setUserId] = useState<string | null>(null);
   const [events, setEvents] = useState<GrowthEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [logsLoading, setLogsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [todaySummary, setTodaySummary] = useState({
@@ -252,6 +254,7 @@ export default function Home() {
   // 今日护理汇总（喂养奶量 / 睡眠时长 / 尿布次数）
   useEffect(() => {
     if (!babyId) return;
+    let cancelled = false;
 
     const fetchToday = async () => {
       const todayStart = startOfDay(new Date()).toISOString();
@@ -312,8 +315,14 @@ export default function Home() {
       setLogDates(dates);
     };
 
-    fetchToday();
-    fetchLogDates();
+    setLogsLoading(true);
+    Promise.all([fetchToday(), fetchLogDates()]).finally(() => {
+      if (!cancelled) setLogsLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [babyId]);
 
   const sortedDesc = useMemo(
@@ -418,6 +427,11 @@ export default function Home() {
     setEvents((prev) => prev.filter((event) => event.id !== id));
     setPendingDeleteId(null);
   };
+
+  // 事件与今日记录都到位后再渲染，避免先闪一下"暂无事件 / 0 ml"
+  if (loading || (!!babyId && logsLoading)) {
+    return <PageLoading fullScreen label="正在加载成长记录…" />;
+  }
 
   return (
     <main className="island-page relative min-h-screen overflow-hidden pb-24">

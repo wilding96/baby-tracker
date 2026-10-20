@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Divider } from "animal-island-ui";
 import { Button } from "@/components/ui/button";
+import { PageLoading } from "@/components/ui/page-loading";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Save } from "lucide-react";
@@ -102,7 +103,10 @@ export default function ProfilePage() {
       setPageLoading(false);
     };
 
-    fetchBaby();
+    fetchBaby().catch((error) => {
+      console.error("加载宝宝资料失败", error);
+      setPageLoading(false);
+    });
   }, [router]);
 
   // 2. 保存修改
@@ -136,11 +140,7 @@ export default function ProfilePage() {
   };
 
   if (pageLoading) {
-    return (
-      <div className="island-page min-h-screen flex items-center justify-center text-[#725d42]">
-        加载中...
-      </div>
-    );
+    return <PageLoading fullScreen label="正在加载宝宝资料…" />;
   }
 
   return (

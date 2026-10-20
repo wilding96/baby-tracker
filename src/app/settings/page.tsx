@@ -32,6 +32,7 @@ import {
 import Image from "next/image";
 import avatar from "@/assets/images/avatar.png";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { PageLoading } from "@/components/ui/page-loading";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -39,6 +40,7 @@ export default function SettingsPage() {
   // 状态管理
   const [babyName, setBabyName] = useState("加载中...");
   const [inviteCode, setInviteCode] = useState("...");
+  const [dataLoading, setDataLoading] = useState(true);
   const [loading, setLoading] = useState(false); // 用于退出登录
   const [copied, setCopied] = useState(false); // 用于复制反馈
   const [notifications, setNotifications] = useState(true);
@@ -75,6 +77,7 @@ export default function SettingsPage() {
         console.error("加载家庭信息失败", error);
         setBabyName("加载失败");
         setInviteCode("加载失败");
+        setDataLoading(false);
         return;
       }
 
@@ -100,8 +103,14 @@ export default function SettingsPage() {
         setBabyName(baby.name || "未命名宝宝");
         setInviteCode(baby.invite_code || "无");
       }
+      setDataLoading(false);
     };
-    getData();
+    getData().catch((error) => {
+      console.error("设置页加载失败", error);
+      setBabyName("加载失败");
+      setInviteCode("加载失败");
+      setDataLoading(false);
+    });
   }, [router]);
 
   // ✨ 新增功能：复制邀请码
@@ -122,6 +131,10 @@ export default function SettingsPage() {
     }
     router.replace("/login");
   };
+
+  if (dataLoading) {
+    return <PageLoading fullScreen label="正在加载家庭信息…" />;
+  }
 
   return (
     <main className="island-page min-h-screen pb-24">

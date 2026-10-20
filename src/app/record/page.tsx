@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { useBaby } from "@/hooks/useBaby"; // 👈 1. 引入这个神器
 import { Divider } from "animal-island-ui";
 import { Button } from "@/components/ui/button";
+import { PageLoading } from "@/components/ui/page-loading";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -231,11 +232,7 @@ export default function RecordPage() {
 
   // 如果宝宝还在加载，或者是空的
   if (babyLoading)
-    return (
-      <div className="h-screen flex items-center justify-center">
-        加载宝宝信息...
-      </div>
-    );
+    return <PageLoading fullScreen label="正在加载宝宝信息…" />;
 
   if (!baby && !babyLoading) {
     return (

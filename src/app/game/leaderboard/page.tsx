@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { Divider } from "animal-island-ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageLoading } from "@/components/ui/page-loading";
 
 type LeaderboardEntry = {
   id: string;
@@ -21,21 +22,25 @@ export default function LeaderboardPage() {
 
   const loadEntries = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("game_leaderboard")
-      .select("id,nickname,score,moves,created_at")
-      .order("score", { ascending: false })
-      .order("moves", { ascending: true })
-      .limit(50);
+    try {
+      const { data, error } = await supabase
+        .from("game_leaderboard")
+        .select("id,nickname,score,moves,created_at")
+        .order("score", { ascending: false })
+        .order("moves", { ascending: true })
+        .limit(50);
 
-    if (error) {
-      console.error("加载排行榜失败", error.message);
+      if (error) {
+        console.error("加载排行榜失败", error.message);
+        return;
+      }
+
+      setEntries((data || []) as LeaderboardEntry[]);
+    } catch (error) {
+      console.error("加载排行榜失败", error);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setEntries((data || []) as LeaderboardEntry[]);
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -60,7 +65,7 @@ export default function LeaderboardPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <p className="text-sm text-[#9f927d]">加载中...</p>
+              <PageLoading compact label="正在加载高分榜…" />
             ) : entries.length === 0 ? (
               <p className="text-sm text-[#9f927d]">
                 还没有人登记，快去玩游戏上榜首吧！

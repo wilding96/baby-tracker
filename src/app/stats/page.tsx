@@ -8,6 +8,7 @@ import { Divider } from "animal-island-ui";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { PageLoading } from "@/components/ui/page-loading";
 import { ArrowLeft, BarChart3, Moon } from "lucide-react";
 import {
   Area,
@@ -170,10 +171,7 @@ export default function StatsPage() {
         <Divider type="wave-yellow" />
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-4 py-20">
-            <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[#6fba2c]" />
-            <p className="text-sm text-[#9f927d]">正在分析数据...</p>
-          </div>
+          <PageLoading label="正在分析数据…" />
         ) : (
           <Tabs defaultValue="feeding" className="w-full">
             <TabsList className="mb-4 grid w-full grid-cols-3 rounded-full bg-[#f0e8d8] p-1">

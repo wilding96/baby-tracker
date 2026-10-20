@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import { PageLoading } from "@/components/ui/page-loading";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label"; // 确保你有这个组件，或者用普通的 label 标签
@@ -44,7 +45,10 @@ export default function WelcomePage() {
         setStep("choice");
       }
     };
-    checkUserStatus();
+    checkUserStatus().catch((error) => {
+      console.error("检查用户状态失败", error);
+      setStep("choice");
+    });
   }, [router]);
 
   // A. 创建宝宝逻辑 (更新)
@@ -128,9 +132,7 @@ export default function WelcomePage() {
   };
 
   if (step === "check")
-    return (
-      <div className="h-screen flex items-center justify-center">加载中...</div>
-    );
+    return <PageLoading fullScreen label="正在准备你的家庭…" />;
 
   return (
     <main className="min-h-screen bg-gray-50 p-6 flex flex-col items-center justify-center">

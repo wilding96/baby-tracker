@@ -527,7 +527,7 @@ export default function Pop3DGame() {
                   <span className="hex-card__icon" aria-hidden="true">
                     <span className="hex-card__hex" />
                     <span className="hex-card__hex-in">
-                      <AugmentIcon school={c.school} />
+                      <AugmentIcon card={c} />
                     </span>
                   </span>
                   <span className="hex-card__body">
@@ -644,42 +644,111 @@ function Veil({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** 抽卡图标：按流派画线稿，不再用 ✚ ✈ ❍ 这类字符占位 */
-function AugmentIcon({ school }: { school: CardDef["school"] }) {
+/**
+ * 抽卡图标：每张卡一个专属徽记，画出它具体加强的东西。
+ * 只按流派分会有两张僚机卡长得一模一样——这正是上一版的问题。
+ */
+function AugmentIcon({ card }: { card: CardDef }) {
   const base = { viewBox: "0 0 24 24", "aria-hidden": true } as const;
-  switch (school) {
-    case "weapon":
+  switch (card.id) {
+    // 主武器强化：准星
+    case "wpn":
       return (
         <svg {...base}>
-          <circle cx="12" cy="12" r="6" />
-          <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+          <circle cx="12" cy="12" r="3.2" />
+          <path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5" />
         </svg>
       );
-    case "wing":
+    // 主武器进化：光束分叉
+    case "wpnX":
       return (
         <svg {...base}>
-          <path d="M3 11l18-8-8 18-2.5-7.5L3 11z" />
+          <path d="M12 21V8" />
+          <path d="M12 8L7 3M12 8l5-5M12 8V2" />
         </svg>
       );
+    // 僚机·攻击型：三机编队
+    case "wingA":
+      return (
+        <svg {...base}>
+          <path d="M12 3l4 7-4-2-4 2 4-7z" />
+          <path d="M5 14l3 5-3-1.5L2 19l3-5z" />
+          <path d="M19 14l3 5-3-1.5L16 19l3-5z" />
+        </svg>
+      );
+    // 僚机·支援型：卫星 + 护盾加号
+    case "wingS":
+      return (
+        <svg {...base}>
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 9.6v4.8M9.6 12h4.8" />
+          <ellipse cx="12" cy="12" rx="9" ry="3.4" transform="rotate(-28 12 12)" />
+        </svg>
+      );
+    // 僚机核心升级：僚机 + 向上箭头
+    case "wingX":
+      return (
+        <svg {...base}>
+          <path d="M12 14l4.5 7-4.5-2.2L7.5 21 12 14z" />
+          <path d="M12 3v6M9 6l3-3 3 3" />
+        </svg>
+      );
+    // 护盾：盾 + 加号
     case "shield":
       return (
         <svg {...base}>
-          <path d="M12 2l7 3v5.5c0 4.6-3 8-7 9.5-4-1.5-7-4.9-7-9.5V5l7-3z" />
-          <path d="M9 12l2 2 4-4" />
+          <path d="M12 2.5l7 3V11c0 4.7-3 8.2-7 9.8-4-1.6-7-5.1-7-9.8V5.5l7-3z" />
+          <path d="M12 8.5v6M9 11.5h6" />
         </svg>
       );
-    case "life":
+    // 永续护盾：盾 + 回环箭头
+    case "shieldX":
+      return (
+        <svg {...base}>
+          <path d="M12 2.5l7 3V11c0 4.7-3 8.2-7 9.8-4-1.6-7-5.1-7-9.8V5.5l7-3z" />
+          <path d="M8.8 12.2a3.2 3.2 0 015.6-1.8" />
+          <path d="M14.4 7.6v2.8h-2.8" />
+        </svg>
+      );
+    // 强化装甲：心 + 加号
+    case "hp":
       return (
         <svg {...base}>
           <path d="M20.8 5.6a5.2 5.2 0 00-7.4 0L12 7l-1.4-1.4a5.2 5.2 0 10-7.4 7.4L12 21l8.8-8a5.2 5.2 0 000-7.4z" />
-          <path d="M3.5 12h4l1.5-3 2.5 6 2-4h6" />
+          <path d="M12 9.2v5.6M9.2 12h5.6" />
         </svg>
       );
+    // 生命核心：心 + 星芒
+    case "hpX":
+      return (
+        <svg {...base}>
+          <path d="M20.8 5.6a5.2 5.2 0 00-7.4 0L12 7l-1.4-1.4a5.2 5.2 0 10-7.4 7.4L12 21l8.8-8a5.2 5.2 0 000-7.4z" />
+          <path d="M12 8.4l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9.9-2.3z" />
+        </svg>
+      );
+    // 核弹补给：炸弹 + 加号
     case "nuke":
       return (
         <svg {...base}>
-          <circle cx="12" cy="13" r="6.5" />
-          <path d="M9 3h6M12 3v3.5M17 6.5l2-1.5" />
+          <circle cx="11" cy="14" r="5.6" />
+          <path d="M11 11v6M8 14h6" />
+          <path d="M14.6 8.6l2-2M16.6 6.6l1.6 1.6" />
+        </svg>
+      );
+    // 核弹扩容：双弹
+    case "nukeX":
+      return (
+        <svg {...base}>
+          <circle cx="9" cy="14.5" r="4.6" />
+          <circle cx="16.6" cy="12.6" r="3.4" />
+          <path d="M12.4 5.6v3M10.9 7.1h3" />
+        </svg>
+      );
+    default:
+      return (
+        <svg {...base}>
+          <circle cx="12" cy="12" r="3.2" />
+          <path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5" />
         </svg>
       );
   }

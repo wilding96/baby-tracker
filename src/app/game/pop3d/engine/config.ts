@@ -359,14 +359,17 @@ export const ENEMY_KINDS: Record<EnemyKind, EnemyKindDef> = {
     xspeed: 0,
     waveAmp: 4.2,
     waveSpeed: 2.1,
-    fireCd: 0, // 不反击，靠数量与走位施压
-    bulletSpeed: 0,
-    bulletDmg: 0,
+    fireCd: 0, // 不走常规射速：只在正弦摆动到端点时打一发
+    // 之前这里是 0/0，导致"长条弹"以零速度生成、伤害为零，
+    // 子弹永远停在开火位置并占满对象池——这是"子弹卡死在死亡位置"的真凶。
+    bulletSpeed: 20,
+    bulletDmg: 2,
     contactDmg: 12,
     color: PAL.green,
   },
   gunner: {
-    hp: 110,
+    // 大炮台要撑到至少打出一轮弹幕；110 血在中期不到 1 秒就被融掉
+    hp: 280,
     speed: 8,
     radius: 2.4,
     scale: 1.6,
@@ -402,8 +405,8 @@ export const WAVES: readonly WaveDef[] = [
   { at: 20, until: 38, kind: "drone", interval: 1.0, count: 2, pattern: "line" },
   { at: 24, until: 38, kind: "gunner", interval: 3.4, count: 1, pattern: "random" },
   // 30 秒先放两架单侧编织机做预告，避免 38 秒从 5 颗弹直接跳到 40+
-  { at: 32, until: 38, kind: "weaver", interval: 3.2, count: 1, pattern: "sides" },
-  { at: 38, until: 58, kind: "weaver", interval: 1.5, count: 2, pattern: "sides" },
+  { at: 32, until: 38, kind: "weaver", interval: 6.0, count: 1, pattern: "sides" },
+  { at: 38, until: 58, kind: "weaver", interval: 2.6, count: 2, pattern: "sides" },
   { at: 40, until: 58, kind: "drone", interval: 1.4, count: 2, pattern: "line" },
   { at: 52, until: 58, kind: "gunner", interval: 4.0, count: 1, pattern: "random" },
 ] as const;
@@ -421,7 +424,7 @@ export const RANK = {
 
 // ── Boss ──
 export const BOSS = {
-  hp: 3200,
+  hp: 3600,
   /** 每选 1 张卡，Boss 血量按此比例上浮：满 build 下 Boss 才仍是场战斗 */
   hpPerLevel: 0.18,
   radius: 5.4,

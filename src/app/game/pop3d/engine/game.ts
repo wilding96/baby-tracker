@@ -23,7 +23,6 @@ import {
   EBULLET,
   ELEMENTS,
   ELEMENT_MOD,
-  ENERGY,
   ENEMY_KINDS,
   FIELD,
   FX,
@@ -419,7 +418,10 @@ export function createEngine({
 
     // 局外「装填加速」：射击间隔 -6%/级（里程碑制下能量不再触发抽卡，原能量加成改到这里）
     mods.fireCd = PLAYER.fireCd * info.cdMul * (1 - meta.upgrades.energy * 0.06);
-    mods.bulletCount = info.bulletCount + (world.weaponLv - 1);
+    // 主武器等级只跟「主武器强化」卡走：拿僚机/护盾卡不会再让子弹突然跳级
+    const wpnLv = Math.min(WEAPON_MAX_LV - 1, c("wpn"));
+    mods.bulletCount = info.bulletCount + wpnLv;
+    world.weaponLv = 1 + wpnLv;
     // 散射角度带机型倍率：小鱼干摊得开，激光笔集中
     mods.spreadAngle = 0.05 * info.spreadMul;
     mods.pierce = 0;
@@ -447,12 +449,12 @@ export function createEngine({
 
   function openCardOffer(): void {
     world.level += 1;
-    if (world.level % ENERGY.levelsPerWeaponUp === 0 && world.weaponLv < WEAPON_MAX_LV) {
-      world.weaponLv += 1;
-    }
     recomputeMods();
     // 炫彩卡每局只出一次（出现在它该出现的那次三选一里，跳过就没了）
-    offer = rollOffer(world.cards, 3, cardPool, { prismatic: !world.prismaticTaken });
+    offer = rollOffer(world.cards, 3, cardPool, {
+      prismatic: !world.prismaticTaken,
+      guaranteeWpn: world.level === 1,
+    });
     if (offer.some((c) => c.tier === "prismatic")) world.prismaticTaken = true;
     spawnPop(player.pos.x, player.pos.z - 3, WORD_LEVEL, 1.6);
     audio?.card();
@@ -1012,7 +1014,12 @@ export function createEngine({
     e.maxHp = e.hp;
     // 开局首发别等太久：否则无人机还没开火就飞出屏幕，前 20 秒会几乎没有弹幕。
     // 22 秒后恢复原节奏，避免把后期难度一起抬高。
-    const firstDelay = world.time < 22 ? rand(0.35, 0.8) : rand(0.6, 1.3);
+    const firstDelay =
+      e.kind === "gunner"
+        ? rand(0.15, 0.35) // 大炮台先开火再挨打，否则还没出手就被融掉
+        : world.time < 22
+          ? rand(0.35, 0.8)
+          : rand(0.6, 1.3);
     e.cd = def.fireCd > 0 ? firstDelay * (def.fireCd / diff) : 0;
     e.shots = 0;
     e.flash = 0;
@@ -1135,9 +1142,14 @@ export function createEngine({
       }
       // weaver 没有常规射速：它在正弦摆动**到端点**时打一发高速长条弹
       if (e.kind === "weaver" && e.w > 0 && e.z > -FIELD.halfH + 4) {
+        e.cd -= dt;
         const s0 = Math.sin((e.t - dt) * e.w);
         const s1 = Math.sin(e.t * e.w);
-        if (s0 * s1 < 0) fireEnemy(e);
+        // 加 2.2 秒冷却：否则每架每 1.5 秒一发，整波会变成一堵弹墙
+        if (s0 * s1 < 0 && e.cd <= 0) {
+          e.cd = 2.2;
+          fireEnemy(e);
+        }
       }
     }
   }
@@ -1154,8 +1166,8 @@ export function createEngine({
     boss.hp = bossHp;
     boss.maxHp = bossHp;
     boss.phase = 1;
-    boss.fanCd = 1.2;
-    boss.ringCd = 2.2;
+    boss.fanCd = 0.6;
+    boss.ringCd = 1.5;
     boss.aimCd = 2.6;
     boss.spiralCd = 0;
     boss.spiralAngle = 0;

@@ -18,17 +18,22 @@ export function rollOffer(
   cards: Record<string, number>,
   n = 3,
   pool: readonly CardDef[] = CARDS,
-  opts: { prismatic?: boolean } = {},
+  opts: { prismatic?: boolean; guaranteeWpn?: boolean } = {},
 ): CardDef[] {
   const fresh = pool.filter((c) => (cards[c.id] ?? 0) < c.max);
   const out: CardDef[] = [];
+  // 第一次三选一必带主武器强化：主炮升级只能靠这张卡，不能让玩家错过
+  if (opts.guaranteeWpn) {
+    const wpn = fresh.find((c) => c.id === "wpn");
+    if (wpn) out.push(wpn);
+  }
   if (opts.prismatic) {
     const prismatics = fresh.filter((c) => c.tier === "prismatic");
     if (prismatics.length > 0) {
       out.push(prismatics[Math.floor(Math.random() * prismatics.length)]);
     }
   }
-  const commons = fresh.filter((c) => c.tier === "common");
+  const commons = fresh.filter((c) => c.tier === "common" && !out.includes(c));
   out.push(...pickOffer(commons, {}, Math.max(0, n - out.length), Math.random));
   return out;
 }

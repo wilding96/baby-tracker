@@ -222,7 +222,7 @@ export default function Pop3DGame() {
           }
           if (scoreRef.current) scoreRef.current.textContent = String(h.score);
           if (timeRef.current) timeRef.current.textContent = formatTime(h.time);
-          if (lvRef.current) lvRef.current.textContent = `Lv ${h.level}`;
+          if (lvRef.current) lvRef.current.textContent = `卡 ${h.level}`;
           if (energyRef.current) energyRef.current.style.width = `${Math.round(h.energyPct * 100)}%`;
           if (elemRef.current) elemRef.current.textContent = h.element ? ELEMENT_ICON[h.element] : "—";
           if (reviveRef.current) reviveRef.current.textContent = h.revivesLeft > 0 ? `×${h.revivesLeft}` : "—";
@@ -368,7 +368,7 @@ export default function Pop3DGame() {
           {/* 等级 / 能量 / 属性 / 备用机体 */}
           <div className="pointer-events-none absolute left-1/2 top-14 flex -translate-x-1/2 items-center gap-2 font-mono text-[10px] text-[#FFF8E7]">
             <span ref={lvRef} className="rounded-none border-2 border-[#101010] bg-[#FFF8E7] px-1.5 py-0.5 text-[#101010] shadow-[3px_3px_0_#101010]">
-              Lv 0
+              卡 0
             </span>
             <div className="h-2 w-24 overflow-hidden rounded-none border-2 border-[#101010] bg-[#FFF8E7]">
               <div ref={energyRef} className="h-full w-0 bg-[#00C2FF]" />

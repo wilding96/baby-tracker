@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useGameAudio } from "@/hooks/useGameAudio";
 import { createEngine } from "./engine/game";
-import { ELEMENT_ICON, ELEMENT_NAME, META_UPGRADES, SCHOOL_NAME, SHIPS, SHIP_INFO } from "./engine/config";
+import { CARD_BY_ID, ELEMENT_ICON, ELEMENT_NAME, META_UPGRADES, SCHOOL_NAME, SHIPS, SHIP_INFO } from "./engine/config";
 import { buyUpgrade, loadMeta, saveMeta, upgradeInfo } from "./engine/meta";
 import { createRenderer } from "./render/scene";
 import { createPaperRenderer } from "./render/paper";
@@ -72,6 +72,8 @@ export default function Pop3DGame() {
 
   const [phase, setPhase] = useState<Phase>("menu");
   const [offer, setOffer] = useState<CardDef[]>([]);
+  const [canReroll, setCanReroll] = useState(false);
+  const [build, setBuild] = useState<{ id: string; stacks: number }[]>([]);
   const [ship, setShip] = useState<ShipType>("nova");
   const [meta, setMeta] = useState<MetaData>(() => ({ ...EMPTY_META, upgrades: { ...EMPTY_META.upgrades } }));
   const [stats, setStats] = useState<RunStats | null>(null);
@@ -252,9 +254,11 @@ export default function Pop3DGame() {
           }
           if (warnRef.current) warnRef.current.style.display = h.warn ? "block" : "none";
         },
-        onPhase: (next: Phase, nextOffer: CardDef[]) => {
+        onPhase: (next, nextOffer, info) => {
           setPhase(next);
           setOffer(nextOffer);
+          setCanReroll(info?.canReroll ?? false);
+          setBuild(info?.build ?? []);
         },
         onRunEnd: (s: RunStats) => {
           const m = metaRef.current;
@@ -532,10 +536,26 @@ export default function Pop3DGame() {
             <p className="hex-draft__kicker">Hextech Augment</p>
             <h2 className="hex-draft__title">选择强化</h2>
             <p className="hex-draft__sub">三选一 · 构筑本局流派</p>
+            {build.length > 0 && (
+              <div className="hex-build">
+                {build.map((b) => {
+                  const def = CARD_BY_ID[b.id];
+                  if (!def) return null;
+                  return (
+                    <span key={b.id} className="hex-build__chip">
+                      <b>{def.icon}</b>
+                      {def.name}
+                      <em>×{b.stacks}</em>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <div className="hex-draft__list">
             {offer.map((c) => {
               const prisma = c.tier === "prismatic";
+              const stacks = build.find((b) => b.id === c.id)?.stacks ?? 0;
               return (
                 <button
                   key={c.id}
@@ -550,6 +570,9 @@ export default function Pop3DGame() {
                     engineRef.current?.chooseCard(c.id);
                   }}
                 >
+                  <span className="hex-card__stack" aria-label={`已选 ${stacks} 层`}>
+                    {stacks}/{c.max}
+                  </span>
                   <span className="hex-card__icon" aria-hidden="true">
                     <span className="hex-card__hex" />
                     <span className="hex-card__hex-in">
@@ -569,7 +592,17 @@ export default function Pop3DGame() {
               );
             })}
           </div>
-          <p className="hex-draft__hint">点击卡面装备</p>
+          <div className="hex-draft__footer">
+            <button
+              type="button"
+              className="hex-reroll"
+              disabled={!canReroll}
+              onClick={() => engineRef.current?.reroll()}
+            >
+              {canReroll ? "重掷一次" : "本局已重掷"}
+            </button>
+            <p className="hex-draft__hint">点击卡面装备</p>
+          </div>
         </div>
       )}
 

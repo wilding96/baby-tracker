@@ -270,6 +270,8 @@ export interface Boss {
   ringCd: number;
   aimCd: number;
   spiralCd: number;
+  /** 阶段专属招式的冷却（每个阶段一个记忆点） */
+  signatureCd: number;
   spiralAngle: number;
   flash: number;
   weak: Element;
@@ -334,6 +336,8 @@ export interface World {
   ship: ShipType;
   /** 已获得的卡 → 层数 */
   cards: Record<string, number>;
+  /** 本局剩余重掷次数（每次三选一可重掷一次） */
+  rerollsLeft: number;
   revivesLeft: number;
   revivesUsed: number;
   player: Player;
@@ -422,7 +426,11 @@ export interface Renderer {
 export interface EngineCallbacks {
   onStats?: (stats: FrameStats) => void;
   onHud?: (hud: HudState) => void;
-  onPhase?: (phase: Phase, offer: CardDef[]) => void;
+  onPhase?: (
+    phase: Phase,
+    offer: CardDef[],
+    info?: { canReroll: boolean; build: { id: string; stacks: number }[] },
+  ) => void;
   onRunEnd?: (stats: RunStats) => void;
 }
 
@@ -464,6 +472,8 @@ export interface EngineHandle {
   newRun(ship: ShipType, meta: MetaData): void;
   toMenu(): void;
   chooseCard(id: string): void;
+  /** 重掷当前三选一（每局一次） */
+  reroll(): void;
   /** 释放一颗核弹 */
   useNuke(): void;
   useRevive(): void;

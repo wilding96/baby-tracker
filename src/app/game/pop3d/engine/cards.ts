@@ -18,9 +18,11 @@ export function rollOffer(
   cards: Record<string, number>,
   n = 3,
   pool: readonly CardDef[] = CARDS,
-  opts: { prismatic?: boolean; guaranteeWpn?: boolean } = {},
+  opts: { prismatic?: boolean; guaranteeWpn?: boolean; exclude?: readonly string[] } = {},
 ): CardDef[] {
-  const fresh = pool.filter((c) => (cards[c.id] ?? 0) < c.max);
+  const fresh = pool.filter(
+    (c) => (cards[c.id] ?? 0) < c.max && !opts.exclude?.includes(c.id),
+  );
   const out: CardDef[] = [];
   // 第一次三选一必带主武器强化：主炮升级只能靠这张卡，不能让玩家错过
   if (opts.guaranteeWpn) {

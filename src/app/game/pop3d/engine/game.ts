@@ -274,6 +274,7 @@ export function createEngine({
     ringCd: 0,
     aimCd: 0,
     spiralCd: 0,
+    signatureCd: 0,
     spiralAngle: 0,
     flash: 0,
     weak: "fire",
@@ -292,6 +293,7 @@ export function createEngine({
     weaponLv: 1,
     ship: "nova",
     cards: {},
+    rerollsLeft: 1,
     revivesLeft: 0,
     revivesUsed: 0,
     player,
@@ -378,7 +380,13 @@ export function createEngine({
   // ── 相位与 HUD ──
 
   function emitPhase(): void {
-    callbacks?.onPhase?.(world.phase, world.phase === "card" ? offer : []);
+    const build = Object.entries(world.cards)
+      .filter(([, stacks]) => stacks > 0)
+      .map(([id, stacks]) => ({ id, stacks }));
+    callbacks?.onPhase?.(world.phase, world.phase === "card" ? offer : [], {
+      canReroll: world.rerollsLeft > 0,
+      build,
+    });
   }
 
   function setPhase(next: Phase): void {
@@ -517,6 +525,23 @@ export function createEngine({
     offer = [];
     setPhase("playing");
     pushHud();
+  }
+
+  /** 重掷当前三选一：每局一次，排除刚才看到的三张 */
+  function reroll(): void {
+    if (world.phase !== "card" || world.rerollsLeft <= 0) return;
+    world.rerollsLeft -= 1;
+    const exclude = offer
+      .map((c) => c.id)
+      .filter((id) => !(world.level === 1 && id === "wpn"));
+    offer = rollOffer(world.cards, 3, cardPool, {
+      prismatic: !world.prismaticTaken,
+      guaranteeWpn: world.level === 1,
+      exclude,
+    });
+    if (offer.some((c) => c.tier === "prismatic")) world.prismaticTaken = true;
+    audio?.click();
+    emitPhase();
   }
 
   // ── 移动 ──
@@ -1002,9 +1027,9 @@ export function createEngine({
     entry: EntryMode = "top",
     indexInWave = 0,
     gapZ = 1.6,
-  ): void {
+  ): number {
     const index = world.enemies.slots.acquire();
-    if (index < 0) return;
+    if (index < 0) return -1;
     const def = ENEMY_KINDS[kind];
     const diff = difficulty();
     const e = world.enemies.items[index];
@@ -1064,6 +1089,7 @@ export function createEngine({
     e.flash = 0;
     e.burn = 0;
     e.slow = 0;
+    return index;
   }
 
   // 复用同一个数组，避免每次生成都新建（生成路径零分配）
@@ -1236,6 +1262,7 @@ export function createEngine({
     boss.ringCd = 1.5;
     boss.aimCd = 2.6;
     boss.spiralCd = 0;
+    boss.signatureCd = 1.5;
     boss.spiralAngle = 0;
     boss.flash = 0;
     boss.burn = 0;
@@ -1285,6 +1312,47 @@ export function createEngine({
     spawnEnemyBullet("laser", boss.x, boss.z, Math.cos(a) * BOSS.spiralSpeed, Math.sin(a) * BOSS.spiralSpeed, BOSS.spiralDmg);
   }
 
+  /** 一阶段专属：竖向弹幕幕布横扫，留一个可躲的纵向缺口 */
+  function fireBossSweep(): void {
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const startX = -dir * (FIELD.halfW + 1.5);
+    const gapZ = rand(-FIELD.halfH * 0.45, FIELD.halfH * 0.25);
+    for (let z = -FIELD.halfH + 3; z <= FIELD.halfH - 3; z += 2.2) {
+      if (Math.abs(z - gapZ) < 3.2) continue;
+      spawnEnemyBullet("ball", startX, z, dir * 11, 0, BOSS.fanDmg * 0.65);
+    }
+    spawnPop(boss.x, boss.z + 5, WORD_WARN, 1.6);
+    addShake(JUICE.shakeKill);
+  }
+
+  /** 二阶段专属：横向弹墙压下来，随机留一个缺口 */
+  function fireBossWall(): void {
+    const gapX = rand(-FIELD.halfW * 0.55, FIELD.halfW * 0.55);
+    for (let x = -FIELD.halfW + 2; x <= FIELD.halfW - 2; x += 2.2) {
+      if (Math.abs(x - gapX) < 3.4) continue;
+      spawnEnemyBullet("ball", x, boss.z + 2, 0, 8, BOSS.fanDmg * 0.65);
+    }
+    spawnPop(boss.x, boss.z + 5, WORD_WARN, 1.6);
+    addShake(JUICE.shakeKill);
+  }
+
+  /** 三阶段专属：从 Boss 两侧召唤两架小机 */
+  function summonBossMinions(): void {
+    for (const side of [-1, 1]) {
+      const idx = spawnEnemy("drone", boss.x + side * 6, "top");
+      if (idx < 0) continue;
+      const e = world.enemies.items[idx];
+      e.x0 = e.x = boss.x + side * 6;
+      e.z = boss.z + 1.5;
+      e.entryDone = true;
+      e.vx = 0;
+      e.vz = 9;
+      e.cd = 0.7;
+    }
+    spawnPop(boss.x, boss.z + 5, WORD_WARN, 1.6);
+    addShake(JUICE.shakeKill);
+  }
+
   function updateBoss(dt: number): void {
     if (!boss.active) return;
     boss.t += dt;
@@ -1327,6 +1395,7 @@ export function createEngine({
       boss.ringCd = 1.7;
       boss.aimCd = 1.9;
       boss.spiralCd = 0.45;
+      boss.signatureCd = 1.2;
       pushHud();
     }
 
@@ -1360,6 +1429,20 @@ export function createEngine({
       if (boss.aimCd <= 0) {
         boss.aimCd = p.aimCd;
         fireBossAim();
+      }
+    }
+    // ── 阶段专属招式：每个阶段一个能记住的招式 ──
+    boss.signatureCd -= dt;
+    if (boss.signatureCd <= 0) {
+      if (boss.phase === 1) {
+        fireBossSweep();
+        boss.signatureCd = 7.5;
+      } else if (boss.phase === 2) {
+        fireBossWall();
+        boss.signatureCd = 6.5;
+      } else {
+        summonBossMinions();
+        boss.signatureCd = 7;
       }
     }
   }
@@ -2113,6 +2196,7 @@ export function createEngine({
     world.level = 0;
     world.weaponLv = 1;
     world.cards = {};
+    world.rerollsLeft = 1;
     world.revivesLeft = meta.upgrades.revive;
     world.revivesUsed = 0;
 
@@ -2167,6 +2251,7 @@ export function createEngine({
     newRun,
     toMenu,
     chooseCard,
+    reroll,
     useNuke,
     useRevive,
     giveUp,

@@ -1003,7 +1003,10 @@ export function createEngine({
     e.scale = def.scale;
     e.hp = def.hp * diff * scale.enemyHp;
     e.maxHp = e.hp;
-    e.cd = def.fireCd > 0 ? rand(0.6, 1.3) * (def.fireCd / diff) : 0;
+    // 开局首发别等太久：否则无人机还没开火就飞出屏幕，前 20 秒会几乎没有弹幕。
+    // 22 秒后恢复原节奏，避免把后期难度一起抬高。
+    const firstDelay = world.time < 22 ? rand(0.35, 0.8) : rand(0.6, 1.3);
+    e.cd = def.fireCd > 0 ? firstDelay * (def.fireCd / diff) : 0;
     e.shots = 0;
     e.flash = 0;
     e.burn = 0;
@@ -1066,8 +1069,10 @@ export function createEngine({
       spawnEnemyBullet("long", e.x, e.z + 1.0, Math.cos(base) * speed * 1.7, Math.sin(base) * speed * 1.7, def.bulletDmg);
       return;
     }
-    if (e.shots % 3 === 0) {
-      // drone 每三炮来一次三连点射
+    // 开局 20 秒内：每架无人机首发三连，前段不至于一颗一颗地挤牙膏。
+    // 20 秒后回到原节奏（每三炮一次三连），不把中后期一起加难。
+    const openingVolley = e.shots === 1 && world.time < 20;
+    if (openingVolley || e.shots % 3 === 0) {
       for (let k = -1; k <= 1; k += 1) {
         const a = base + k * 0.22;
         spawnEnemyBullet("ball", e.x, e.z + 1.2, Math.cos(a) * speed, Math.sin(a) * speed, def.bulletDmg);
@@ -1108,10 +1113,16 @@ export function createEngine({
         set.slots.release(i); // 漏过去的敌机直接离场
         continue;
       }
-      if (def.fireCd > 0 && e.z > -FIELD.halfH + 6) {
+      // 前 20 秒：无人机一出生就能开火（玩家火力往往在屏幕顶部就把它们打掉）。
+      // 20 秒后恢复原判定，避免把中后期难度一起抬高。
+      const earlyDrone = e.kind === "drone" && world.time < 20;
+      const fireGate = earlyDrone ? -FIELD.halfH - 1 : -FIELD.halfH + 6;
+      if (def.fireCd > 0 && e.z > fireGate) {
         e.cd -= dt;
         if (e.cd <= 0) {
-          e.cd = def.fireCd / difficulty();
+          // 无人机开局更积极：0 秒 0.62× → 20 秒 1.0×，平滑回到原射速
+          const ramp = e.kind === "drone" && world.time < 20 ? 0.62 + 0.38 * (world.time / 20) : 1;
+          e.cd = (def.fireCd * ramp) / difficulty();
           fireEnemy(e);
         }
       }

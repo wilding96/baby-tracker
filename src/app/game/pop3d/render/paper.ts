@@ -431,15 +431,26 @@ export function createPaperRenderer(
     }
 
     // ── 敌机：三种机型三张贴图（亮色配色，深底上不需要垫底）──
+    // 朝向按贴图轮廓逐个校准，不能统一加 180°：
+    //   enemy.png  宽尾在上、尖头在下 —— 已经朝向玩家，保持原样
+    //   weaver.png 尖头在上、机翼在下 —— 需要整体转 180°
+    //   gunner.png 宽机身、下方炮口 —— 本来就朝下，只做小幅跟踪转向
     for (let i = 0; i < world.enemies.slots.capacity; i += 1) {
       if (!world.enemies.slots.alive[i]) continue;
       const e = world.enemies.items[i];
       if (e.kind === "weaver") {
         // weaver 走正弦，按横向速度压一下机翼
         const bank = Math.cos(e.t * e.w) * 0.22;
-        sprite(sprites.weaver, e.x, e.z, e.scale * 4.6, { flash: e.flash > 0, rot: bank });
+        sprite(sprites.weaver, e.x, e.z, e.scale * 4.6, { flash: e.flash > 0, rot: Math.PI + bank });
       } else if (e.kind === "gunner") {
-        sprite(sprites.gunner, e.x, e.z, e.scale * 4.2, { flash: e.flash > 0 });
+        // 炮台：小幅转向玩家（俯视下转向 = 最直观的"活着"）。
+        // 只转 ±20°：贴图本身朝下，整圈跟踪会把它翻过来。
+        const dx = world.player.pos.x - e.x;
+        const dz = world.player.pos.z - e.z;
+        sprite(sprites.gunner, e.x, e.z, e.scale * 4.2, {
+          flash: e.flash > 0,
+          rot: Math.atan2(-dx, dz) * 0.35,
+        });
       } else {
         sprite(sprites.enemy, e.x, e.z, e.scale * 4.4, { flash: e.flash > 0 });
       }
@@ -595,7 +606,11 @@ export function createPaperRenderer(
         ctx.restore();
         calls += 2;
       }
-      sprite(sprites.boss, boss.x, boss.z, 12 * grow * rage, { flash: boss.flash > 0 });
+      // Boss 轮廓基本对称，只加一点缓慢的悬浮偏航（不是整圈自转）
+      sprite(sprites.boss, boss.x, boss.z, 12 * grow * rage, {
+        flash: boss.flash > 0,
+        rot: Math.sin(world.time * 0.6) * 0.05,
+      });
       // 核心：黄星芒（阶段切换/受击时会白闪）
       const cr = len(1.9);
       ctx.save();

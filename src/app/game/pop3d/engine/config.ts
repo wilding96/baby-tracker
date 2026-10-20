@@ -402,12 +402,21 @@ export const RUN = {
  */
 export const WAVES: readonly WaveDef[] = [
   { at: 0, until: 20, kind: "drone", interval: 1.3, count: 1, pattern: "random" },
+  // 侧翼切入：从左右两侧飞入，进场后转为下落
+  { at: 14, until: 20, kind: "drone", interval: 3.6, count: 1, pattern: "random", entry: "left" },
+  { at: 17, until: 23, kind: "drone", interval: 3.6, count: 1, pattern: "random", entry: "right" },
   { at: 20, until: 38, kind: "drone", interval: 1.0, count: 2, pattern: "line" },
+  // 角落俯冲：从上方左右角外斜着扎进来
+  { at: 26, until: 34, kind: "drone", interval: 3.2, count: 1, pattern: "random", entry: "cornerLeft" },
+  { at: 29, until: 36, kind: "drone", interval: 3.2, count: 1, pattern: "random", entry: "cornerRight" },
   { at: 24, until: 38, kind: "gunner", interval: 3.4, count: 1, pattern: "random" },
   // 30 秒先放两架单侧编织机做预告，避免 38 秒从 5 颗弹直接跳到 40+
   { at: 32, until: 38, kind: "weaver", interval: 6.0, count: 1, pattern: "sides" },
   { at: 38, until: 58, kind: "weaver", interval: 2.6, count: 2, pattern: "sides" },
-  { at: 40, until: 58, kind: "drone", interval: 1.4, count: 2, pattern: "line" },
+  { at: 40, until: 58, kind: "drone", interval: 1.8, count: 2, pattern: "line" },
+  // 横向穿越：两架一组从一侧横穿到另一侧，只带很小的下坠
+  { at: 42, until: 50, kind: "drone", interval: 3.6, count: 2, pattern: "column", entry: "crossLeft", gapZ: 1.8 },
+  { at: 46, until: 54, kind: "drone", interval: 3.6, count: 2, pattern: "column", entry: "crossRight", gapZ: 1.8 },
   { at: 52, until: 58, kind: "gunner", interval: 4.0, count: 1, pattern: "random" },
 ] as const;
 

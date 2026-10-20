@@ -65,6 +65,7 @@ import type {
   EnemyKind,
   EnemyBullet,
   EnemyBulletKind,
+  EntryMode,
   EntitySet,
   EngineHandle,
   EngineOptions,
@@ -167,6 +168,8 @@ function makeEnemies(capacity: number): EntitySet<Enemy> {
   for (let i = 0; i < capacity; i += 1) {
     items.push({
       kind: "drone",
+      entry: "top",
+      entryDone: true,
       x: 0,
       z: 0,
       x0: 0,
@@ -993,19 +996,55 @@ export function createEngine({
   }
 
   // ── 敌机 ──
-  function spawnEnemy(kind: EnemyKind, x: number): void {
+  function spawnEnemy(
+    kind: EnemyKind,
+    x: number,
+    entry: EntryMode = "top",
+    indexInWave = 0,
+    gapZ = 1.6,
+  ): void {
     const index = world.enemies.slots.acquire();
     if (index < 0) return;
     const def = ENEMY_KINDS[kind];
     const diff = difficulty();
     const e = world.enemies.items[index];
     e.kind = kind;
-    e.x0 = clamp(x, -FIELD.halfW + def.radius, FIELD.halfW - def.radius);
-    e.x = e.x0;
-    e.z = -FIELD.halfH - 2.5;
+    e.entry = entry;
     e.t = 0;
-    e.vx = rand(-def.xspeed, def.xspeed);
-    e.vz = def.speed;
+
+    if (entry === "left" || entry === "right") {
+      // 侧翼切入：从屏幕左右外侧飞进来，进入场地后转为下落
+      const dir = entry === "left" ? 1 : -1;
+      e.x0 = -dir * (FIELD.halfW + 3);
+      e.z = rand(-FIELD.halfH * 0.7, -FIELD.halfH * 0.1);
+      e.vx = dir * def.speed * 1.15;
+      e.vz = def.speed * 0.2;
+      e.entryDone = false;
+    } else if (entry === "cornerLeft" || entry === "cornerRight") {
+      // 角落俯冲：从上方角外斜着扎进来，进场后转为垂直下落
+      const dir = entry === "cornerLeft" ? 1 : -1;
+      e.x0 = -dir * (FIELD.halfW + 2);
+      e.z = -FIELD.halfH - 2.5;
+      e.vx = dir * def.speed * 0.9;
+      e.vz = def.speed * 0.9;
+      e.entryDone = false;
+    } else if (entry === "crossLeft" || entry === "crossRight") {
+      // 横向穿越：从一侧横穿到另一侧，只带很小的下坠
+      const dir = entry === "crossLeft" ? 1 : -1;
+      e.x0 = -dir * (FIELD.halfW + 3);
+      e.z = -FIELD.halfH * 0.5 + indexInWave * gapZ;
+      e.vx = dir * def.speed * 1.4;
+      e.vz = def.speed * 0.12;
+      e.entryDone = true;
+    } else {
+      // 原逻辑：顶边刷新、向下飞
+      e.x0 = clamp(x, -FIELD.halfW + def.radius, FIELD.halfW - def.radius);
+      e.z = -FIELD.halfH - 2.5;
+      e.vx = rand(-def.xspeed, def.xspeed);
+      e.vz = def.speed;
+      e.entryDone = true;
+    }
+    e.x = e.x0;
     e.amp = def.waveAmp > 0 ? rand(def.waveAmp * 0.7, def.waveAmp * 1.2) : 0;
     e.w = def.waveSpeed > 0 ? rand(def.waveSpeed * 0.8, def.waveSpeed * 1.2) : 0;
     e.r = def.radius;
@@ -1032,7 +1071,9 @@ export function createEngine({
 
   function spawnWave(w: WaveDef): void {
     const n = resolveSpawnXs(w.pattern, w.count, FIELD.halfW, Math.random, spawnXs);
-    for (let k = 0; k < n; k += 1) spawnEnemy(w.kind, spawnXs[k]);
+    for (let k = 0; k < n; k += 1) {
+      spawnEnemy(w.kind, spawnXs[k], w.entry, k, w.gapZ);
+    }
   }
 
   function updateWaves(dt: number): void {
@@ -1116,22 +1157,47 @@ export function createEngine({
 
       const speedMul = e.slow > 0 ? STATUS.chillMul : 1;
       e.t += dt;
-      e.x0 = clamp(e.x0 + e.vx * dt * speedMul, -FIELD.halfW + e.r, FIELD.halfW - e.r);
+      const entering = !e.entryDone;
+      const crossing = e.entry === "crossLeft" || e.entry === "crossRight";
+      const nextX0 = e.x0 + e.vx * dt * speedMul;
+      // 入场阶段与横穿阶段不夹紧，否则敌机会被瞬间推到场地边缘
+      e.x0 = entering || crossing ? nextX0 : clamp(nextX0, -FIELD.halfW + e.r, FIELD.halfW - e.r);
+      e.z += e.vz * dt * speedMul;
+
+      if (entering) {
+        if ((e.entry === "left" || e.entry === "right") && Math.abs(e.x0) <= FIELD.halfW - 3) {
+          // 侧翼已经进场 → 结束横飞，转为正常下落
+          e.entryDone = true;
+          e.vx = 0;
+          e.vz = def.speed;
+        } else if (
+          (e.entry === "cornerLeft" || e.entry === "cornerRight") &&
+          e.z >= -FIELD.halfH + 4
+        ) {
+          // 俯冲到达场上部 → 结束斜向，转为垂直下落
+          e.entryDone = true;
+          e.vx = 0;
+        }
+      }
+
       e.x =
         e.amp > 0
-          ? clamp(e.x0 + Math.sin(e.t * e.w) * e.amp, -FIELD.halfW + e.r, FIELD.halfW - e.r)
+          ? entering || crossing
+            ? e.x0 + Math.sin(e.t * e.w) * e.amp
+            : clamp(e.x0 + Math.sin(e.t * e.w) * e.amp, -FIELD.halfW + e.r, FIELD.halfW - e.r)
           : e.x0;
-      e.z += e.vz * dt * speedMul;
       if (e.flash > 0) e.flash -= dt;
-      if (e.z > FIELD.halfH + 3) {
-        set.slots.release(i); // 漏过去的敌机直接离场
+      if (e.z > FIELD.halfH + 3 || Math.abs(e.x0) > FIELD.halfW + 6) {
+        set.slots.release(i); // 飞出底部或横向飞出场地
         continue;
       }
       // 前 20 秒：无人机一出生就能开火（玩家火力往往在屏幕顶部就把它们打掉）。
       // 20 秒后恢复原判定，避免把中后期难度一起抬高。
       const earlyDrone = e.kind === "drone" && world.time < 20;
       const fireGate = earlyDrone ? -FIELD.halfH - 1 : -FIELD.halfH + 6;
-      if (def.fireCd > 0 && e.z > fireGate) {
+      // 侧翼/穿越在场地外时不发弹：避免从屏幕外打来没有预警的子弹
+      const insideField = Math.abs(e.x) <= FIELD.halfW - 2;
+      if (def.fireCd > 0 && e.z > fireGate && insideField) {
         e.cd -= dt;
         if (e.cd <= 0) {
           // 无人机开局更积极：0 秒 0.62× → 20 秒 1.0×，平滑回到原射速

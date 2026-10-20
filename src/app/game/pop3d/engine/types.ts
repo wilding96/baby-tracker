@@ -203,6 +203,10 @@ export interface EnemyKindDef {
 
 export interface Enemy {
   kind: EnemyKind;
+  /** 入场方式：顶边 / 左右侧翼 / 角落俯冲 / 横向穿越 */
+  entry: EntryMode;
+  /** 入场阶段是否结束（侧翼与俯冲进入场地后才切回正常下落） */
+  entryDone: boolean;
   x: number;
   z: number;
   x0: number; // 摆动基准横坐标
@@ -227,6 +231,16 @@ export interface Enemy {
 
 export type SpawnPattern = "random" | "line" | "sides" | "column";
 
+/** 入场方向：top 为原逻辑，其余是新增的侧翼 / 俯冲 / 穿越 */
+export type EntryMode =
+  | "top"
+  | "left"
+  | "right"
+  | "cornerLeft"
+  | "cornerRight"
+  | "crossLeft"
+  | "crossRight";
+
 export interface WaveDef {
   at: number; // 开始时间（秒）
   until: number; // 结束时间（秒）
@@ -234,6 +248,10 @@ export interface WaveDef {
   interval: number; // 生成间隔（秒）
   count: number; // 每次生成几架
   pattern: SpawnPattern;
+  /** 入场方式，缺省 top */
+  entry?: EntryMode;
+  /** 穿越编队的纵向间距（世界单位） */
+  gapZ?: number;
 }
 
 // ── Boss ──

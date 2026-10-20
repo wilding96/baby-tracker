@@ -679,7 +679,7 @@ export function createPaperRenderer(
         });
       } else {
         // 无人机按横向漂移轻微侧倾，别像贴纸一样直上直下
-        const bank = Math.max(-0.18, Math.min(0.18, e.vx * 0.08));
+        const bank = Math.max(-0.32, Math.min(0.32, e.vx * 0.08));
         sprite(sprites.enemy, e.x, e.z, e.scale * 4.4, { flash: e.flash > 0, rot: bank });
       }
     }

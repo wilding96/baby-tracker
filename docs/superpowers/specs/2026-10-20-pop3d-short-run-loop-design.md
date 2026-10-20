@@ -29,7 +29,7 @@
 | 实际频率 | 150 秒约 8 次，平均 18–20 秒一次 |
 | Boss 血量 | `2800 × (1 + 0.22 × 选卡数)` |
 | 局外 | 4 项永久强化（约 10 级）、最高分、星尘、局数 |
-| 难度曲线 | **死代码**：`difficulty()` 已定义但从未调用，`RUN.duration` / `rampFrom` / `rampTo` 随之失效 |
+| 局内难度曲线 | `difficulty()` 按本局时间从 1.0 线性拉到 1.8，作用于敌机血量与开火间隔（`RUN.duration` / `rampFrom` / `rampTo` 都参与其中） |
 
 ### 为什么"一次性"
 
@@ -66,7 +66,7 @@
 | 20s | **抽卡 ①** | 第一次变强 |
 | 20–38s | W2：无人机横排 + 炮台 | 弹幕开始出现 |
 | 38s | **抽卡 ②** | 拿到应对手段 |
-| 38–58s | W3：编织机两翼 + 无人机横排 + 炮台 | 密度峰值 |
+| 38–58s | W3：编织机两翼 + 无人机横排 + 结尾炮台 | 密度峰值 |
 | 58s | **抽卡 ③** | 决战前最后一次补强 |
 | 60s | Boss WARNING（停帧 + 运镜 + 预警音） | 高潮起点 |
 | 62–100s | Boss 三阶段 | 收尾 |
@@ -79,19 +79,25 @@ export const RUN = {
   duration: 100,
   bossAt: 60,
   cardAt: [20, 38, 58] as const,
+  rampFrom: 1.0,
+  rampTo: 1.35, // 局内爬升终点（原为 1.8）
+  rampEnd: 58, // 爬到 58 秒封顶，Boss 战不再加码
 };
 
 export const WAVES = [
   { at: 0,  until: 20, kind: "drone",  interval: 1.3, count: 1, pattern: "random" },
   { at: 20, until: 38, kind: "drone",  interval: 1.0, count: 2, pattern: "line" },
   { at: 24, until: 38, kind: "gunner", interval: 3.4, count: 1, pattern: "random" },
-  { at: 38, until: 58, kind: "weaver", interval: 0.9, count: 2, pattern: "sides" },
-  { at: 40, until: 58, kind: "drone",  interval: 1.1, count: 2, pattern: "line" },
-  { at: 50, until: 58, kind: "gunner", interval: 3.0, count: 1, pattern: "random" },
+  { at: 38, until: 58, kind: "weaver", interval: 1.2, count: 2, pattern: "sides" },
+  { at: 40, until: 58, kind: "drone",  interval: 1.4, count: 2, pattern: "line" },
+  { at: 52, until: 58, kind: "gunner", interval: 4.0, count: 1, pattern: "random" },
 ] as const;
 ```
 
-预估生成约 134 架，和现在的密度相当，但压缩在 58 秒内，节奏更紧。
+预估生成约 115 架，压缩在 58 秒内。
+
+> **调参记录（2026-10-20）**：初版第三波用 0.9 / 1.1 / 50s，自动驾驶 8 局里有 2 局在 46 秒被击落、根本见不到 Boss。
+> 削到 1.2 / 1.4 / 52s 后，8 局 7 胜 1 负，死亡点推到 53.7 秒。这条是实机分布，不是拍脑袋。
 
 ---
 
@@ -109,6 +115,7 @@ export const WAVES = [
 - `gainEnergy` 不再触发抽卡。
 - HUD 的 `energyPct` 改为**到下一张卡的进度**（按时间推进），语义仍是"快升级了"。
 - HUD 以 10Hz 推送，保证进度条平滑；DOM 写入量可以忽略。
+- **局外"能量引擎"随之失效**（它原本只加能量获取速度），改成"装填加速：射击间隔 -6%/级"，存档键仍是 `energy`，不破坏旧档。
 
 ### 为什么不用"只调能量曲线"
 
@@ -125,7 +132,10 @@ export const WAVES = [
 | `BOSS.hp` | 2800 | **3200** |
 | `BOSS.hpPerLevel` | 0.22 | **0.18** |
 
-3 卡时血量约 `3200 × 1.54 ≈ 4928`，目标是**战斗落在 25–35 秒**。若实测偏短或偏长，只调 `BOSS.hp` 一个数。
+3 卡时血量约 `3200 × 1.54 ≈ 4928`，目标是**战斗落在 20–35 秒**。
+
+> 实测（自动驾驶 8 局，取胜利的 7 局）：Boss 战 11–46 秒，整局 71–106 秒。
+> 方差主要来自抽到的卡（自动驾驶固定选第一张），人类玩家按 build 选牌会更稳定。
 
 ---
 
@@ -155,6 +165,14 @@ export const RANK = {
 
 档位不设上限，但出怪与弹速有硬上限，避免高档位变成不可玩。
 
+### 与局内难度曲线的关系
+
+原有 `difficulty()` 表示"同一局内越打越难"，`rank` 表示"跨局越来越难"，两者作用在不同维度：
+
+- 局内曲线保留，但终点从 `1.8` 收到 `1.35`，止点从 180 秒收到 58 秒——单局变短后，原来的爬升幅度会在杂兵段末就过于陡峭
+- `rank` 在局内曲线之外再做乘算（敌血、出怪间隔、弹速、Boss 血、星尘）
+- 这样第 0 档的新手和高档玩家的压力差异来自档位，同一局内部的爬升仍然可感知
+
 ---
 
 ## 7. 存档与结算
@@ -175,8 +193,8 @@ export const RANK = {
 
 | 文件 | 改动 |
 | --- | --- |
-| `engine/config.ts` | `RUN` 重写；`WAVES` 重排；`BOSS` 两个数值；新增 `RANK` |
-| `engine/game.ts` | 里程碑发牌；删掉死掉的 `difficulty()`；接入档位缩放；Boss 血量乘档位；10Hz HUD |
+| `engine/config.ts` | `RUN` 重写（含 `rampEnd`）；`WAVES` 重排；`BOSS` 两个数值；新增 `RANK` |
+| `engine/game.ts` | 里程碑发牌；局内曲线收到 1.35 / 58 秒；接入档位缩放；Boss 血量乘档位；10Hz HUD |
 | `engine/types.ts` | `MetaData.rank`；`RunStats.rank` |
 | `engine/meta.ts` | `rank` 读写与默认值 |
 | `page.tsx` | 入口档位文案；结算展示档位 |
@@ -195,7 +213,7 @@ export const RANK = {
 
 ### 实机
 
-- `?auto=1` 跑完整局：Boss 在 60 秒登场，通关落在 90–110 秒。
+- `?auto=1` 跑完整局：Boss 在 60 秒登场，通关落在 70–110 秒。
 - Boss 前恰好弹 3 次卡，恢复后不重复弹。
 - 连续两局 build 不完全相同。
 - 胜利后档位 +1，下一局敌人变强、星尘变多。

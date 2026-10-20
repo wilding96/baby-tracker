@@ -379,30 +379,46 @@ export const ENEMY_KINDS: Record<EnemyKind, EnemyKindDef> = {
 };
 
 // ── 本局节奏：波次表 ──
-// 允许重叠 → 制造"难度有起伏"（90~118s 只留稀疏散射，是刻意的低谷）。
+// 允许重叠 → 制造密度起伏；三段之间由 RUN.cardAt 插入抽卡。
 export const RUN = {
-  duration: 180, // 参考整局时长（秒）
-  bossAt: 150, // Boss 登场时间（秒）
-  rampFrom: 1.0, // 难度系数起点
-  rampTo: 1.8, // 难度系数终点
+  duration: 100, // 参考整局时长（秒）
+  bossAt: 60, // Boss 登场时间（秒）
+  /** 里程碑发牌：三次三选一落在三段杂兵的交界（秒） */
+  cardAt: [20, 38, 58] as const,
+  rampFrom: 1.0, // 局内难度系数起点
+  rampTo: 1.35, // 局内难度系数终点（原为 1.8，单局变短后收敛）
+  rampEnd: 58, // 爬到 58 秒封顶，Boss 战不再继续加码
 } as const;
 
+/**
+ * 短局波次：0–58 秒三段，中间由 RUN.cardAt 插入抽卡。
+ * 58–60 秒留白，给 Boss Warning 一个呼吸点。
+ */
 export const WAVES: readonly WaveDef[] = [
   { at: 0, until: 20, kind: "drone", interval: 1.3, count: 1, pattern: "random" },
-  { at: 20, until: 42, kind: "drone", interval: 1.0, count: 2, pattern: "line" },
-  { at: 42, until: 66, kind: "weaver", interval: 0.85, count: 2, pattern: "sides" },
-  { at: 66, until: 90, kind: "drone", interval: 0.8, count: 3, pattern: "line" },
-  { at: 90, until: 118, kind: "gunner", interval: 2.8, count: 1, pattern: "random" },
-  { at: 100, until: 128, kind: "weaver", interval: 0.75, count: 3, pattern: "sides" },
-  { at: 118, until: 150, kind: "drone", interval: 0.7, count: 3, pattern: "line" },
-  { at: 132, until: 150, kind: "gunner", interval: 2.6, count: 2, pattern: "sides" },
+  { at: 20, until: 38, kind: "drone", interval: 1.0, count: 2, pattern: "line" },
+  { at: 24, until: 38, kind: "gunner", interval: 3.4, count: 1, pattern: "random" },
+  { at: 38, until: 58, kind: "weaver", interval: 1.2, count: 2, pattern: "sides" },
+  { at: 40, until: 58, kind: "drone", interval: 1.4, count: 2, pattern: "line" },
+  { at: 52, until: 58, kind: "gunner", interval: 4.0, count: 1, pattern: "random" },
 ] as const;
+
+// ── 难度档位：rank = 已通关次数，0 起 ──
+export const RANK = {
+  enemyHp: 0.08, // 每档敌人血量 +8%
+  spawnRate: 0.03, // 每档出怪间隔 -3%
+  bulletSpeed: 0.02, // 每档敌弹速度 +2%
+  bossHp: 0.1, // 每档 Boss 血量 +10%
+  stardust: 0.15, // 每档星尘收益 +15%
+  spawnMin: 0.7, // 出怪间隔下限（原值的 70%）
+  bulletMax: 1.2, // 敌弹速度上限（原值的 120%）
+} as const;
 
 // ── Boss ──
 export const BOSS = {
-  hp: 2800,
+  hp: 3200,
   /** 每选 1 张卡，Boss 血量按此比例上浮：满 build 下 Boss 才仍是场战斗 */
-  hpPerLevel: 0.22,
+  hpPerLevel: 0.18,
   radius: 5.4,
   enterZ: -17,
   swayX: 9,
@@ -511,7 +527,7 @@ export interface MetaUpgradeDef {
 export const META_UPGRADES: readonly MetaUpgradeDef[] = [
   { key: "life", label: "强化装甲", desc: "初始最大生命 +25", max: 3, cost: (l) => 60 + l * 60 },
   { key: "power", label: "火力强化", desc: "子弹伤害 +8%", max: 3, cost: (l) => 70 + l * 70 },
-  { key: "energy", label: "能量引擎", desc: "能量获取 +12%", max: 3, cost: (l) => 70 + l * 70 },
+  { key: "energy", label: "装填加速", desc: "射击间隔 -6%", max: 3, cost: (l) => 70 + l * 70 },
   { key: "revive", label: "备用机体", desc: "额外复活 1 次", max: 1, cost: () => 260 },
 ] as const;
 

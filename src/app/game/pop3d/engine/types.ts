@@ -50,6 +50,8 @@ export interface MetaData {
   stardust: number;
   highScore: number;
   runs: number;
+  /** 已通关次数，从 0 起；每胜利一次 +1，决定难度档位 */
+  rank: number;
   upgrades: {
     life: number;
     power: number;
@@ -62,6 +64,8 @@ export interface RunStats {
   score: number;
   kills: number;
   level: number;
+  /** 本局结束时的档位（胜利结算时尚未 +1） */
+  rank: number;
   seconds: number;
   revives: number;
   stardust: number;
@@ -306,8 +310,6 @@ export interface World {
   level: number; // 已选卡次数
   weaponLv: number; // 主武器等级 1~4
   ship: ShipType;
-  energy: number;
-  energyNeed: number;
   /** 已获得的卡 → 层数 */
   cards: Record<string, number>;
   revivesLeft: number;
@@ -454,5 +456,6 @@ export const EMPTY_META: MetaData = {
   stardust: 0,
   highScore: 0,
   runs: 0,
+  rank: 0,
   upgrades: { life: 0, power: 0, energy: 0, revive: 0 },
 };

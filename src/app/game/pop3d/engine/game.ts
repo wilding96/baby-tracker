@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { cardDef, rollOffer } from "./cards";
+import { cardProgress, rankScale } from "./progression";
 import {
   UP_ANGLE,
   SHIP_BULLET,
@@ -103,7 +104,6 @@ interface Mods {
   shieldX: boolean;
   hpX: boolean;
   nukeX: boolean;
-  energyMul: number;
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -285,8 +285,6 @@ export function createEngine({
     level: 0,
     weaponLv: 1,
     ship: "nova",
-    energy: 0,
-    energyNeed: ENERGY.base,
     cards: {},
     revivesLeft: 0,
     revivesUsed: 0,
@@ -322,6 +320,12 @@ export function createEngine({
   let meta: MetaData = cloneMeta(EMPTY_META);
   let ship: ShipType = "nova";
   let offer: CardDef[] = [];
+  /** 档位倍率：开局按 meta.rank 算一次，整局不变 */
+  let scale = rankScale(0);
+  /** 下一个待触发的抽卡里程碑下标 */
+  let nextCard = 0;
+  /** HUD 节流：进度条需要随时间平滑推进，不能只在事件时推 */
+  let hudAcc = 0;
 
   const mods: Mods = {
     fireCd: PLAYER.fireCd,
@@ -341,7 +345,6 @@ export function createEngine({
     shieldX: false,
     hpX: false,
     nukeX: false,
-    energyMul: 1,
   };
 
   const minX = -FIELD.halfW + PLAYER.margin;
@@ -384,7 +387,7 @@ export function createEngine({
       score: world.score,
       time: world.time,
       level: world.level,
-      energyPct: world.energyNeed > 0 ? Math.min(1, world.energy / world.energyNeed) : 0,
+      energyPct: cardProgress(world.time),
       element: mods.element,
       shield: world.shield,
       shieldMax: world.shieldMax,
@@ -399,7 +402,7 @@ export function createEngine({
 
   /** 难度系数：随本局时间从 rampFrom 线性拉到 rampTo */
   function difficulty(): number {
-    const t = Math.min(world.time / RUN.duration, 1);
+    const t = Math.min(world.time / RUN.rampEnd, 1);
     return RUN.rampFrom + (RUN.rampTo - RUN.rampFrom) * t;
   }
 
@@ -410,7 +413,8 @@ export function createEngine({
     const info = SHIP_INFO[ship];
     const metaPower = 1 + meta.upgrades.power * 0.08;
 
-    mods.fireCd = PLAYER.fireCd * info.cdMul;
+    // 局外「装填加速」：射击间隔 -6%/级（里程碑制下能量不再触发抽卡，原能量加成改到这里）
+    mods.fireCd = PLAYER.fireCd * info.cdMul * (1 - meta.upgrades.energy * 0.06);
     mods.bulletCount = info.bulletCount + (world.weaponLv - 1);
     // 散射角度带机型倍率：小鱼干摊得开，激光笔集中
     mods.spreadAngle = 0.05 * info.spreadMul;
@@ -433,31 +437,15 @@ export function createEngine({
     mods.chain = info.element === "electric" ? 1 : 0;
     mods.burn = info.element === "fire" ? 1 : 0;
     mods.chill = info.element === "ice" ? 1 : 0;
-    mods.energyMul = 1 + meta.upgrades.energy * 0.12;
     // 僚机编队跟着卡走（卡是数据、实体是状态；这里也覆盖开局时的清零）
     syncWingmen();
   }
 
-  function computeEnergyNeed(): number {
-    const flow = world.cards["flow"] ?? 0;
-    return Math.max(
-      50,
-      Math.round(ENERGY.base * Math.pow(ENERGY.growth, world.level) * Math.pow(0.86, flow)),
-    );
-  }
-
-  function gainEnergy(v: number): void {
-    world.energy += v * mods.energyMul;
-    if (world.energy >= world.energyNeed && world.phase === "playing") openCardOffer();
-  }
-
   function openCardOffer(): void {
-    world.energy -= world.energyNeed;
     world.level += 1;
     if (world.level % ENERGY.levelsPerWeaponUp === 0 && world.weaponLv < WEAPON_MAX_LV) {
       world.weaponLv += 1;
     }
-    world.energyNeed = computeEnergyNeed();
     recomputeMods();
     // 炫彩卡每局只出一次（出现在它该出现的那次三选一里，跳过就没了）
     offer = rollOffer(world.cards, 3, cardPool, { prismatic: !world.prismaticTaken });
@@ -520,7 +508,6 @@ export function createEngine({
     offer = [];
     setPhase("playing");
     pushHud();
-    if (world.energy >= world.energyNeed) openCardOffer(); // 一次拿够多张时连续弹
   }
 
   // ── 移动 ──
@@ -1014,7 +1001,7 @@ export function createEngine({
     e.w = def.waveSpeed > 0 ? rand(def.waveSpeed * 0.8, def.waveSpeed * 1.2) : 0;
     e.r = def.radius;
     e.scale = def.scale;
-    e.hp = def.hp * diff;
+    e.hp = def.hp * diff * scale.enemyHp;
     e.maxHp = e.hp;
     e.cd = def.fireCd > 0 ? rand(0.6, 1.3) * (def.fireCd / diff) : 0;
     e.shots = 0;
@@ -1037,9 +1024,17 @@ export function createEngine({
       if (world.time < w.at || world.time >= w.until) continue;
       waveTimers[i] -= dt;
       if (waveTimers[i] > 0) continue;
-      waveTimers[i] = w.interval;
+      waveTimers[i] = w.interval * scale.spawnInterval;
       spawnWave(w);
     }
+  }
+
+  /** 里程碑发牌：到点就开三选一，与击杀量无关 */
+  function updateMilestones(): void {
+    if (nextCard >= RUN.cardAt.length) return;
+    if (world.time < RUN.cardAt[nextCard]) return;
+    nextCard += 1;
+    openCardOffer();
   }
 
   function fireEnemy(e: Enemy): void {
@@ -1048,7 +1043,7 @@ export function createEngine({
     const len = Math.hypot(dx, dz) || 1;
     const def = ENEMY_KINDS[e.kind];
     const base = Math.atan2(dz / len, dx / len);
-    const speed = def.bulletSpeed;
+    const speed = def.bulletSpeed * scale.bulletSpeed;
     e.shots += 1;
     if (e.kind === "gunner") {
       if (e.shots % 3 === 0) {
@@ -1137,7 +1132,7 @@ export function createEngine({
     boss.z = -FIELD.halfH - 12;
     boss.t = 0;
     // 血量随选卡数上浮：否则满 build 会把 Boss 秒掉（实测满 11 张卡只撑 5 秒）
-    const bossHp = Math.round(BOSS.hp * (1 + BOSS.hpPerLevel * world.level));
+    const bossHp = Math.round(BOSS.hp * (1 + BOSS.hpPerLevel * world.level) * scale.bossHp);
     boss.hp = bossHp;
     boss.maxHp = bossHp;
     boss.phase = 1;
@@ -1341,7 +1336,7 @@ export function createEngine({
   }
 
   function endRun(won: boolean): void {
-    const stardust = stardustFor(world.score, 1);
+    const stardust = stardustFor(world.score, scale.stardust);
     const isRecord = world.score > meta.highScore;
     audio?.stopBgm();
     setPhase(won ? "victory" : "gameover");
@@ -1349,6 +1344,7 @@ export function createEngine({
       score: world.score,
       kills: world.kills,
       level: world.level,
+      rank: meta.rank,
       seconds: Math.round(world.time),
       revives: world.revivesUsed,
       stardust,
@@ -1503,7 +1499,6 @@ export function createEngine({
     if (!award) return;
     world.kills += 1;
     world.score += SCORE.perKill;
-    gainEnergy(ENERGY.perKill);
   }
 
   // ── 伤害计算 ──
@@ -1816,6 +1811,7 @@ export function createEngine({
     updateEnemyBullets(dt);
     updateEnemies(dt);
     updateWaves(dt);
+    updateMilestones();
 
     if (stress) {
       stressEmit(dt);
@@ -1877,6 +1873,13 @@ export function createEngine({
     sampleFrames += 1;
     sampleMs += deltaMs;
     reportStats(now);
+
+    // 里程碑进度条按时间走，靠 10Hz 推送保持平滑（DOM 写入量可忽略）
+    hudAcc += deltaMs;
+    if (hudAcc >= 100) {
+      hudAcc = 0;
+      pushHud();
+    }
   }
 
   // ── 事件 ──
@@ -1991,6 +1994,9 @@ export function createEngine({
     audio?.startBgm();
     ship = nextShip;
     meta = cloneMeta(nextMeta);
+    scale = rankScale(meta.rank);
+    nextCard = 0;
+    hudAcc = 0;
     offer = [];
     resetWorld();
 
@@ -2001,8 +2007,6 @@ export function createEngine({
     world.level = 0;
     world.weaponLv = 1;
     world.cards = {};
-    world.energy = 0;
-    world.energyNeed = ENERGY.base;
     world.revivesLeft = meta.upgrades.revive;
     world.revivesUsed = 0;
 

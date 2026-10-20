@@ -247,6 +247,8 @@ export default function Pop3DGame() {
             stardust: m.stardust + s.stardust,
             highScore: Math.max(m.highScore, s.score),
             runs: m.runs + 1,
+            // 只有通关才升档；失败保持当前档位
+            rank: s.won ? m.rank + 1 : m.rank,
             upgrades: { ...m.upgrades },
           };
           metaRef.current = next;
@@ -483,7 +485,7 @@ export default function Pop3DGame() {
 
           <div className="w-56">
             <button type="button" className={btnMain} onClick={startRun}>
-              开始
+              开始 · 第 {meta.rank + 1} 档
             </button>
           </div>
           <div className="w-56">
@@ -494,7 +496,9 @@ export default function Pop3DGame() {
 
           {showShop && <Shop meta={meta} onBuy={buy} />}
 
-          <p className="text-[11px] text-[#E5007E]">最高分 {meta.highScore} · 星尘 ★{meta.stardust}</p>
+          <p className="text-[11px] text-[#E5007E]">
+            第 {meta.rank + 1} 档 · 最高分 {meta.highScore} · 星尘 ★{meta.stardust}
+          </p>
         </Veil>
       )}
 
@@ -596,6 +600,14 @@ export default function Pop3DGame() {
               <Row label="得分" value={String(stats.score)} />
               <Row label="击破" value={String(stats.kills)} />
               <Row label="升级" value={`${stats.level} 次`} />
+              <Row
+                label="档位"
+                value={
+                  phase === "victory"
+                    ? `第 ${stats.rank + 1} 档 → 第 ${stats.rank + 2} 档`
+                    : `第 ${stats.rank + 1} 档`
+                }
+              />
               <Row label="复活" value={`${stats.revives} 次`} />
               <Row label="存活" value={`${stats.seconds} 秒`} />
               <Row label="星尘" value={`+${stats.stardust}`} accent />
@@ -603,7 +615,7 @@ export default function Pop3DGame() {
           </table>
           <div className="flex w-64 gap-2">
             <button type="button" className={btnMain} onClick={startRun}>
-              再来一局
+              再来一局 · 第 {meta.rank + 1} 档
             </button>
             <button type="button" className={btnGhost} onClick={() => setShowShop((v) => !v)}>
               养成

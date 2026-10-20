@@ -22,21 +22,30 @@ export function loadMeta(): MetaData {
   try {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return cloneEmpty();
-    const parsed = JSON.parse(raw) as Partial<MetaData>;
-    return {
-      stardust: num(parsed.stardust),
-      highScore: num(parsed.highScore),
-      runs: num(parsed.runs),
-      upgrades: {
-        life: num(parsed.upgrades?.life),
-        power: num(parsed.upgrades?.power),
-        energy: num(parsed.upgrades?.energy),
-        revive: num(parsed.upgrades?.revive),
-      },
-    };
+    return normalizeMeta(JSON.parse(raw));
   } catch {
     return cloneEmpty();
   }
+}
+
+/**
+ * 把任意存档对象收敛成合法 MetaData。
+ * 旧存档没有 rank 时补 0，不做版本迁移也不丢已有数据。
+ */
+export function normalizeMeta(input: unknown): MetaData {
+  const parsed = (input ?? {}) as Partial<MetaData>;
+  return {
+    stardust: num(parsed.stardust),
+    highScore: num(parsed.highScore),
+    runs: num(parsed.runs),
+    rank: num(parsed.rank),
+    upgrades: {
+      life: num(parsed.upgrades?.life),
+      power: num(parsed.upgrades?.power),
+      energy: num(parsed.upgrades?.energy),
+      revive: num(parsed.upgrades?.revive),
+    },
+  };
 }
 
 export function saveMeta(m: MetaData): void {

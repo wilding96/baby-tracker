@@ -573,6 +573,26 @@ export function createPaperRenderer(
         calls += 1;
       }
       sprite(sprites.player, p.pos.x, p.pos.z, 5.4, {});
+
+      // 判定点：白芯 + 墨边。贴图 5.4 单位、判定只有 1.0，
+      // 不画出来玩家会按翅膀边缘躲，中弹时完全不知道为什么。
+      const hitR = Math.max(1.8, len(0.16));
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(sx(p.pos.x), sy(p.pos.z), hitR, 0, Math.PI * 2);
+      ctx.fillStyle = PAL.paper;
+      ctx.fill();
+      ctx.lineWidth = Math.max(1, len(0.05));
+      ctx.strokeStyle = PAL.ink;
+      ctx.stroke();
+      // 外圈柔光：密集弹幕里也能一眼找到自己
+      ctx.beginPath();
+      ctx.arc(sx(p.pos.x), sy(p.pos.z), hitR * 2.1, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255,248,231,0.45)";
+      ctx.stroke();
+      ctx.restore();
+      calls += 2;
+
       if (p.invuln > 0) {
         ctx.save();
         ctx.globalAlpha = 0.5;

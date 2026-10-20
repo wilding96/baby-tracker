@@ -78,6 +78,8 @@ export interface InputState {
   down: boolean;
   left: boolean;
   right: boolean;
+  /** 低速模式：位移减半，用于密集弹幕下做精细走位 */
+  focus: boolean;
   /** 指针是否在画布内（在则跟随指针世界坐标） */
   pointerActive: boolean;
   pointer: Vec2;
@@ -448,6 +450,8 @@ export interface EngineHandle {
   giveUp(): void;
   setPaused(v: boolean): void;
   isPaused(): boolean;
+  /** 触屏用的低速开关 */
+  setFocus(v: boolean): void;
   /** 只读访问世界状态（调试 / 测试用） */
   world: World;
 }

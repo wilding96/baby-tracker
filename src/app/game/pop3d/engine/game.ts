@@ -222,6 +222,8 @@ const KEY_MAP: Record<string, keyof Pick<InputState, "up" | "down" | "left" | "r
 const AUTOPILOT_CANDIDATES = 9;
 /** 拖动灵敏度：手指移动 1 像素，飞机移动 1.2 像素 */
 const DRAG_SENSITIVITY = 1.2;
+/** 触摸时把飞机抬到手指上方（世界单位，约 40px），避免手指盖住判定点 */
+const TOUCH_LIFT = 4;
 export function createEngine({
   mount,
   renderer,
@@ -238,6 +240,7 @@ export function createEngine({
     down: false,
     left: false,
     right: false,
+    focus: false,
     pointerActive: false,
     pointer: { x: 0, z: 0 },
     dragActive: false,
@@ -512,6 +515,8 @@ export function createEngine({
 
   // ── 移动 ──
   function movePlayer(dt: number): void {
+    // 低速模式：位移与跟随速度都减半，判定半径不变
+    const focusMul = input.focus ? 0.5 : 1;
     const kx = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const kz = (input.down ? 1 : 0) - (input.up ? 1 : 0);
 
@@ -519,12 +524,12 @@ export function createEngine({
       // 键盘优先：等速直行，屏蔽指针跟随直到松手
       input.pointerActive = false;
       const len = Math.hypot(kx, kz) || 1;
-      player.vel.x = (kx / len) * PLAYER.speed;
-      player.vel.z = (kz / len) * PLAYER.speed;
+      player.vel.x = (kx / len) * PLAYER.speed * focusMul;
+      player.vel.z = (kz / len) * PLAYER.speed * focusMul;
       player.pos.x += player.vel.x * dt;
       player.pos.z += player.vel.z * dt;
     } else if (input.pointerActive) {
-      const k = Math.min(1, PLAYER.follow * dt);
+      const k = Math.min(1, PLAYER.follow * focusMul * dt);
       player.pos.x += (input.pointer.x - player.pos.x) * k;
       player.pos.z += (input.pointer.z - player.pos.z) * k;
       player.vel.x = 0;
@@ -1900,6 +1905,11 @@ export function createEngine({
       else if (world.phase === "pause") setPhase("playing");
       return;
     }
+    // Shift = 低速（弹幕游戏惯例）
+    if (e.key === "Shift") {
+      input.focus = true;
+      return;
+    }
     const key = KEY_MAP[e.key] ?? KEY_MAP[e.key.toLowerCase()];
     if (!key) return;
     input[key] = true;
@@ -1907,6 +1917,10 @@ export function createEngine({
   }
 
   function onKeyUp(e: KeyboardEvent): void {
+    if (e.key === "Shift") {
+      input.focus = false;
+      return;
+    }
     const key = KEY_MAP[e.key] ?? KEY_MAP[e.key.toLowerCase()];
     if (!key) return;
     input[key] = false;
@@ -1928,8 +1942,9 @@ export function createEngine({
     if (!input.dragActive) return;
     const p = renderer.pointerToWorld(e.clientX, e.clientY);
     if (!p) return;
+    const lift = e.pointerType === "touch" ? TOUCH_LIFT : 0;
     input.pointer.x = input.dragPlayer.x + (p.x - input.dragPointer.x) * DRAG_SENSITIVITY;
-    input.pointer.z = input.dragPlayer.z + (p.z - input.dragPointer.z) * DRAG_SENSITIVITY;
+    input.pointer.z = input.dragPlayer.z + (p.z - input.dragPointer.z) * DRAG_SENSITIVITY - lift;
     input.pointerActive = true;
   }
 
@@ -2081,6 +2096,9 @@ export function createEngine({
     },
     isPaused() {
       return world.phase === "pause";
+    },
+    setFocus(v: boolean) {
+      input.focus = v;
     },
   };
 }

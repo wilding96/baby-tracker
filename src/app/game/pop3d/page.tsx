@@ -77,6 +77,12 @@ export default function Pop3DGame() {
   const [stats, setStats] = useState<RunStats | null>(null);
   const [showShop, setShowShop] = useState(false);
   const [muted, setMuted] = useState(false);
+  /** ?debug=1 才显示帧率/弹幕读数（只在客户端读 URL，不影响 SSR） */
+  const debug =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("debug") === "1";
+  /** 触屏低速开关（键盘用 Shift） */
+  const [focus, setFocus] = useState(false);
   /** 炫彩卡被选中时的额外演出（棱彩闪光） */
   const [prismatic, setPrismatic] = useState<string | null>(null);
 
@@ -281,7 +287,15 @@ export default function Pop3DGame() {
     audioRef.current.initAudio();
     setStats(null);
     setShowShop(false);
+    setFocus(false);
+    engineRef.current?.setFocus(false);
     engineRef.current?.newRun(ship, metaRef.current);
+  };
+
+  const toggleFocus = () => {
+    const next = !focus;
+    setFocus(next);
+    engineRef.current?.setFocus(next);
   };
 
   const toggleMute = () => {
@@ -399,22 +413,24 @@ export default function Pop3DGame() {
             <span ref={bossWeakRef} className="font-mono text-[10px] font-bold text-[#FFD400]" />
           </div>
 
-          <div className="pointer-events-none absolute left-3 top-3 rounded-lg border-2 border-[#101010] bg-[#FFF8E7]/95 px-2 py-1 font-mono text-[10px] text-[#101010] shadow-[2px_2px_0_#0057FF]">
-            <div>
-              FPS <span ref={fpsRef} className="tabular-nums">–</span>
+          {debug && (
+            <div className="pointer-events-none absolute left-3 top-3 rounded-lg border-2 border-[#101010] bg-[#FFF8E7]/95 px-2 py-1 font-mono text-[10px] text-[#101010] shadow-[2px_2px_0_#0057FF]">
+              <div>
+                FPS <span ref={fpsRef} className="tabular-nums">–</span>
+              </div>
+              <div>
+                <span ref={msRef} className="tabular-nums">–</span> ms
+              </div>
+              <div>
+                弹幕 <span ref={bulletsRef} className="tabular-nums">0</span>
+              </div>
+              <div>
+                DC <span ref={callsRef} className="tabular-nums">–</span>
+              </div>
             </div>
-            <div>
-              <span ref={msRef} className="tabular-nums">–</span> ms
-            </div>
-            <div>
-              弹幕 <span ref={bulletsRef} className="tabular-nums">0</span>
-            </div>
-            <div>
-              DC <span ref={callsRef} className="tabular-nums">–</span>
-            </div>
-          </div>
+          )}
 
-          <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-[#101010] bg-[#FFF8E7]/95 px-3 py-1 text-[11px] text-[#101010]">
+          <div className="keyboard-hint pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-[#101010] bg-[#FFF8E7]/95 px-3 py-1 text-[11px] text-[#101010]">
             WASD / 方向键 移动 · 鼠标跟随 · 自动开火 · <kbd className="rounded border border-[#101010] bg-[#FFD400] px-1">ESC</kbd> 暂停
           </div>
 
@@ -435,6 +451,16 @@ export default function Pop3DGame() {
               className="rounded-lg border-2 border-[#101010] bg-[#FFF8E7]/95 px-2 py-1 text-xs font-bold text-[#101010] shadow-[2px_2px_0_#101010]"
             >
               ⏸ 暂停
+            </button>
+            <button
+              type="button"
+              onClick={toggleFocus}
+              aria-pressed={focus}
+              className={`rounded-lg border-2 border-[#101010] px-2 py-1 text-xs font-bold text-[#101010] shadow-[2px_2px_0_#101010] ${
+                focus ? "bg-[#FFD400]" : "bg-[#FFF8E7]/95"
+              }`}
+            >
+              🐢 {focus ? "慢速中" : "慢速"}
             </button>
             <button
               type="button"

@@ -131,7 +131,7 @@ export const CAMERA = {
 // ── 玩家机 ──
 export const PLAYER = {
   speed: 30, // 键盘速度（世界单位/秒）
-  follow: 14, // 指针跟随插值系数，越大越跟手
+  follow: 24, // 指针跟随插值系数，越大越跟手
   radius: 1.0, // 判定半径（小判定，弹幕游戏惯例）
   margin: 2.4, // 离场地边缘的余量
   spawnZ: FIELD.halfH - 6.4, // 出生点（靠近屏幕底部）
@@ -398,7 +398,9 @@ export const WAVES: readonly WaveDef[] = [
   { at: 0, until: 20, kind: "drone", interval: 1.3, count: 1, pattern: "random" },
   { at: 20, until: 38, kind: "drone", interval: 1.0, count: 2, pattern: "line" },
   { at: 24, until: 38, kind: "gunner", interval: 3.4, count: 1, pattern: "random" },
-  { at: 38, until: 58, kind: "weaver", interval: 1.2, count: 2, pattern: "sides" },
+  // 30 秒先放两架单侧编织机做预告，避免 38 秒从 5 颗弹直接跳到 40+
+  { at: 32, until: 38, kind: "weaver", interval: 3.2, count: 1, pattern: "sides" },
+  { at: 38, until: 58, kind: "weaver", interval: 1.5, count: 2, pattern: "sides" },
   { at: 40, until: 58, kind: "drone", interval: 1.4, count: 2, pattern: "line" },
   { at: 52, until: 58, kind: "gunner", interval: 4.0, count: 1, pattern: "random" },
 ] as const;

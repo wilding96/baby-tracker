@@ -197,6 +197,13 @@
   }
 }
 
+/* 触屏设备不显示键鼠操作提示 */
+@media (pointer: coarse) {
+  .keyboard-hint {
+    display: none;
+  }
+}
+
 /* ── 海克斯风抽卡（参考 LOL 斗魂竞技场的强化卡）── */
 .hex-draft {
   position: absolute;
